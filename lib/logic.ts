@@ -98,7 +98,9 @@ export function generateClassDates(
 
     if (allowedDays.has(dayName)) {
       if (!isHoliday(dateStr, holidays) && !isEvent(dateStr, events)) {
-        dates.push(dateStr);
+        // Use local date string construction to avoid timezone shifts
+        const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        dates.push(localDateStr);
       }
     }
   }

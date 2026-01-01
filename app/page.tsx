@@ -63,13 +63,13 @@ function getDatesForMonth(
     if (allowedDays.has(currentDayName)) {
       const isHoliday = holidays.some(h => h.date === dateStr);
       if (!isHoliday) {
-        dates.push(dateStr);
+        // Use local date string construction to avoid timezone shifts
+        const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        dates.push(localDateStr);
       }
     }
   }
   
-  // Sort dates because makeups might be out of order if we just pushed them? 
-  // Actually the loop is chronological, so it's fine.
   return dates;
 }
 
@@ -462,8 +462,9 @@ export default function Home() {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
       if (targetPlan) {
         allPlans = allPlans.filter(l => {
-          const d = new Date(l.date);
-          return d.getMonth() === targetPlan.month && d.getFullYear() === targetPlan.year;
+          // Parse YYYY-MM-DD manually to avoid UTC conversion issues
+          const [y, m, d] = l.date.split('-').map(Number);
+          return (m - 1) === targetPlan.month && y === targetPlan.year;
         });
         
         // Auto-print logic for single month
@@ -474,9 +475,12 @@ export default function Home() {
         
         // Use a slight delay to allow rendering before print
         setTimeout(() => {
-            window.print();
+            if (allPlans.length === 0) {
+                alert('No lessons generated for this month. Please check if there are valid class days and books assigned.');
+            } else {
+                window.print();
+            }
             // Reset title after print dialog closes (or timeout)
-            // Note: In some browsers execution pauses during print dialog.
             setTimeout(() => document.title = 'Plan Generator', 1000);
         }, 500);
       }
