@@ -219,8 +219,9 @@ export default function Home() {
     });
     
     // If we found matching books, return them. 
-    // Otherwise (e.g. class name doesn't match any book level), return ALL books to be safe.
-    return matches.length > 0 ? matches : books;
+    // Otherwise, we return an empty array to strictly enforce filtering.
+    // The dropdown rendering logic ensures the *currently selected book* is always visible.
+    return matches;
   }, [books, className]);
 
   const bookFlow = useMemo(() => {
