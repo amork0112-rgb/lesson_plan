@@ -908,7 +908,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end sticky bottom-0 z-10">
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end">
             <button
               onClick={() => handleGenerate()}
               className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 font-medium shadow-md hover:shadow-lg transition-all active:scale-95 text-lg"
@@ -922,10 +922,15 @@ export default function Home() {
 
       {/* Output / Printable Area */}
       {isGenerated && (
-        <div id="results" className="mt-12 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200">
+        <div id="results" className="mt-12 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200 scroll-mt-8">
           <div className="p-8 border-b border-gray-200 flex justify-between items-center bg-gray-50 no-print">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Generated Schedule</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {generatedPlan.length > 0 && 
+                 Object.keys(generatedPlan.reduce((acc, l) => ({...acc, [`${new Date(l.date).getMonth()}`]: true}), {})).length === 1 
+                 ? `Generated Schedule - ${MONTH_NAMES[new Date(generatedPlan[0].date).getMonth()]} ${new Date(generatedPlan[0].date).getFullYear()}`
+                 : "Generated Schedule (All Months)"}
+              </h2>
               <p className="text-sm text-gray-500">{generatedPlan.length} sessions scheduled</p>
             </div>
             <button 
