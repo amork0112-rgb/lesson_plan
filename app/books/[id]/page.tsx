@@ -13,10 +13,22 @@ import {
   GraduationCap,
   Clock,
   MoreVertical,
-  LayoutList
+  LayoutList,
+  Pencil,
+  X
 } from 'lucide-react';
 import { Book, LessonUnit, UnitType } from '@/types';
 import { generateBookUnits } from '@/lib/logic';
+
+const CATEGORIES = [
+  { id: 'c_reading', label: 'Reading' },
+  { id: 'c_listening', label: 'Listening' },
+  { id: 'c_speaking', label: 'Speaking' },
+  { id: 'c_writing', label: 'Writing' },
+  { id: 'c_grammar', label: 'Grammar' },
+  { id: 'c_voca', label: 'Voca' },
+  { id: 'others', label: 'Others' }
+];
 
 export default function BookDetailPage() {
   const { id } = useParams();
@@ -27,6 +39,10 @@ export default function BookDetailPage() {
   const [units, setUnits] = useState<LessonUnit[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+
+  // Edit Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<Partial<Book>>({});
 
   // Initialize book data
   useEffect(() => {
@@ -48,7 +64,7 @@ export default function BookDetailPage() {
     }
   }, [id, books, router]);
 
-  // Save changes
+  // Save changes (Sequence)
   const handleSave = () => {
     if (!book) return;
     
@@ -62,6 +78,61 @@ export default function BookDetailPage() {
     });
     setUnits(resequenced);
     setIsDirty(false);
+  };
+
+  // Edit Modal Handlers
+  const handleEditOpen = () => {
+    if (!book) return;
+    setEditFormData({
+      name: book.name,
+      category: book.category,
+      total_units: book.total_units,
+      unit_type: book.unit_type,
+      days_per_unit: book.days_per_unit || 1,
+      review_units: book.review_units || 0,
+      total_sessions: book.total_sessions
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSave = () => {
+    if (!book || !editFormData.name) return;
+
+    // Check if structure changed
+    const structureChanged = 
+        editFormData.total_units !== book.total_units ||
+        editFormData.unit_type !== book.unit_type ||
+        editFormData.days_per_unit !== book.days_per_unit ||
+        editFormData.review_units !== book.review_units;
+
+    const updatedBook = {
+        ...book,
+        ...editFormData,
+        total_units: Number(editFormData.total_units),
+        days_per_unit: Number(editFormData.days_per_unit),
+        review_units: Number(editFormData.review_units || 0),
+        total_sessions: Number(editFormData.total_sessions || editFormData.total_units)
+    } as Book;
+
+    if (structureChanged) {
+        if (confirm('Changing book structure will reset custom unit ordering. Continue?')) {
+            const newUnits = generateBookUnits(updatedBook);
+            updateBook(book.id, { 
+                ...updatedBook, 
+                units: newUnits,
+                total_sessions: newUnits.length 
+            });
+            setBook({ ...updatedBook, total_sessions: newUnits.length });
+            setUnits(newUnits);
+        } else {
+            return;
+        }
+    } else {
+        updateBook(book.id, updatedBook);
+        setBook(updatedBook);
+    }
+    
+    setIsEditModalOpen(false);
   };
 
   // Add Review
@@ -170,11 +241,20 @@ export default function BookDetailPage() {
             </button>
             <div className="flex justify-between items-start">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">{book.name}</h1>
+                    <div className="flex items-center gap-3 mb-2">
+                        <h1 className="text-3xl font-bold text-slate-900">{book.name}</h1>
+                        <button 
+                            onClick={handleEditOpen}
+                            className="text-slate-400 hover:text-indigo-600 p-1.5 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Edit Book Details"
+                        >
+                            <Pencil className="h-5 w-5" />
+                        </button>
+                    </div>
                     <div className="flex items-center gap-4 text-slate-500 text-sm">
                         <span className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-200">
                             <LayoutList className="h-4 w-4" />
-                            {book.category}
+                            {CATEGORIES.find(c => c.id === book.category)?.label || book.category}
                         </span>
                         <span className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-200">
                             <Clock className="h-4 w-4" />
@@ -307,6 +387,7 @@ export default function BookDetailPage() {
                 </div>
 
                 {/* Used By Classes Card */}
+                {/* 
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                     <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <GraduationCap className="h-4 w-4" />
@@ -334,7 +415,7 @@ export default function BookDetailPage() {
                                         </div>
                                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-2">
                                             <div className="bg-indigo-500 h-full w-[0%]" style={{ width: '0%' }}></div> 
-                                            {/* Progress bar could be real if we query lesson plans */}
+                                            
                                         </div>
                                         <div className="flex justify-between text-xs text-slate-400 mt-1">
                                             <span>0 / {units.length} sessions used</span>
@@ -349,9 +430,120 @@ export default function BookDetailPage() {
                         </div>
                     )}
                 </div>
+                */}
             </div>
         </div>
       </div>
+
+      {/* Edit Book Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-indigo-600" />
+                Edit Book Details
+              </h2>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Book Name</label>
+                <input
+                  placeholder="e.g. Reading Master 1"
+                  value={editFormData.name}
+                  onChange={e => setEditFormData({...editFormData, name: e.target.value})}
+                  className="w-full border-b border-slate-200 py-2 focus:border-slate-900 focus:outline-none bg-transparent text-lg"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-8">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Category</label>
+                  <select
+                    value={editFormData.category}
+                    onChange={e => setEditFormData({...editFormData, category: e.target.value})}
+                    className="w-full border-b border-slate-200 py-2 focus:border-slate-900 focus:outline-none bg-transparent"
+                  >
+                    {CATEGORIES.map(c => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl space-y-4">
+                  <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
+                      <LayoutList className="h-4 w-4" />
+                      <span>Structure Settings</span>
+                  </div>
+                  <p className="text-xs text-amber-700">
+                      Warning: Changing these settings will reset any custom unit ordering.
+                  </p>
+                  
+                  <div className="grid grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit Type</label>
+                        <select
+                            value={editFormData.unit_type}
+                            onChange={e => setEditFormData({...editFormData, unit_type: e.target.value as UnitType})}
+                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                        >
+                            <option value="unit">Unit</option>
+                            <option value="day">Day</option>
+                            <option value="lesson">Lesson</option>
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            Total {editFormData.unit_type === 'day' ? 'Days' : 'Units'}
+                        </label>
+                        <input
+                            type="number"
+                            value={editFormData.total_units}
+                            onChange={e => setEditFormData({...editFormData, total_units: parseInt(e.target.value)})}
+                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Days Per Unit</label>
+                        <input
+                            type="number"
+                            min="1"
+                            value={editFormData.days_per_unit || 1}
+                            onChange={e => setEditFormData({...editFormData, days_per_unit: parseInt(e.target.value)})}
+                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                        />
+                    </div>
+                  </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-6 py-2 text-slate-600 hover:bg-slate-200 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleEditSave}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

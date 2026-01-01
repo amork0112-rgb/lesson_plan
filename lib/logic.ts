@@ -190,18 +190,20 @@ export function generateLessonPlan(
         plans.push(plan);
 
         // Increment Progress
-        // MVP: Assume 1 session = 1 unit for simplicity, or 1 session = 1 step
-        // "초과 시 unit +1, day = 1" -> implies multi-day units.
-        // Let's assume max days = 2 for MVP to show logic.
-        const MAX_DAYS_PER_UNIT = 2; 
-        
-        if (book.unit_type === 'unit') {
-            // Assume 1 unit per lesson for now to keep it moving fast, 
-            // unless we want to show the "day" logic.
-            // Let's just do Unit increment.
-            progress.unit++;
+        let daysPerUnit = 1;
+        if (book.days_per_unit) {
+            daysPerUnit = book.days_per_unit;
+        } else if (book.unit_type === 'day') {
+            daysPerUnit = 1;
         } else {
-             progress.unit++;
+            daysPerUnit = book.total_sessions ? Math.floor(book.total_sessions / book.total_units) : 1;
+        }
+
+        if (progress.day < daysPerUnit) {
+            progress.day++;
+        } else {
+            progress.unit++;
+            progress.day = 1;
         }
       }
     }
