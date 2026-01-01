@@ -992,8 +992,14 @@ export default function Home() {
           </div>
 
           <div className="p-8">
-            {/* Group by Month for Display */}
-            {Object.entries(generatedPlan.reduce((groups, lesson) => {
+            {generatedPlan.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                    <p className="text-lg font-medium mb-2">No lessons generated.</p>
+                    <p className="text-sm">Please check if you have assigned books and selected valid schedule days.</p>
+                </div>
+            ) : (
+                /* Group by Month for Display */
+                Object.entries(generatedPlan.reduce((groups, lesson) => {
               const d = new Date(lesson.date);
               const key = `${d.getFullYear()}-${d.getMonth()}`;
               if (!groups[key]) groups[key] = [];
@@ -1045,7 +1051,7 @@ export default function Home() {
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
       )}
