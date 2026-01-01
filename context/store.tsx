@@ -102,6 +102,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
   const deleteClass = (id: string) => setClasses(classes.filter(c => c.id !== id));
 
+  const addAllocation = (allocation: BookAllocation) => setAllocations([...allocations, allocation]);
+  const updateAllocation = (id: string, updates: Partial<BookAllocation>) => {
+    setAllocations(allocations.map(a => a.id === id ? { ...a, ...updates } : a));
+  };
+  const deleteAllocation = (id: string) => setAllocations(allocations.filter(a => a.id !== id));
+
   const updateSpecialDate = (date: string, data: SpecialDate | null) => {
     setSpecialDates(prev => {
       const next = { ...prev };
