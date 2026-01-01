@@ -465,7 +465,25 @@ export default function Home() {
           const d = new Date(l.date);
           return d.getMonth() === targetPlan.month && d.getFullYear() === targetPlan.year;
         });
+        
+        // Auto-print logic for single month
+        // We set the title temporarily for the filename
+        const monthName = MONTH_NAMES[targetPlan.month];
+        const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
+        document.title = fileName;
+        
+        // Use a slight delay to allow rendering before print
+        setTimeout(() => {
+            window.print();
+            // Reset title after print dialog closes (or timeout)
+            // Note: In some browsers execution pauses during print dialog.
+            setTimeout(() => document.title = 'Plan Generator', 1000);
+        }, 500);
       }
+    } else {
+        // Generate All
+        document.title = `LessonPlan_${className}_All_Months_${year}`;
+        setTimeout(() => document.title = 'Plan Generator', 2000);
     }
 
     setGeneratedPlan(allPlans);
@@ -908,10 +926,26 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end">
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+            <div className="text-sm text-gray-500 flex gap-4">
+                <div className="flex items-center gap-1">
+                    <Play className="h-4 w-4 text-indigo-600" />
+                    <span>Generate All: 전체 월 데이터 생성</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <Download className="h-4 w-4 text-gray-600" />
+                    <span>Download PDF: 현재 화면 저장</span>
+                </div>
+            </div>
             <button
               onClick={() => handleGenerate()}
-              className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-full hover:bg-indigo-700 font-medium shadow-md hover:shadow-lg transition-all active:scale-95 text-lg"
+              disabled={monthPlans.every(p => p.allocations.length === 0)}
+              title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "전체 커리큘럼 생성"}
+              className={`flex items-center gap-2 px-8 py-3 rounded-full font-medium shadow-md transition-all text-lg
+                ${monthPlans.every(p => p.allocations.length === 0) 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
+              `}
             >
               <Play className="h-5 w-5 fill-current" />
               Generate All
@@ -934,7 +968,12 @@ export default function Home() {
               <p className="text-sm text-gray-500">{generatedPlan.length} sessions scheduled</p>
             </div>
             <button 
-              onClick={() => window.print()}
+              onClick={() => {
+                  const fileName = `LessonPlan_${className}_${generatedPlan.length > 0 ? 'Allocated' : 'Empty'}`;
+                  document.title = fileName;
+                  window.print();
+                  setTimeout(() => document.title = 'Plan Generator', 1000);
+              }}
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
               <Download className="h-4 w-4" />
