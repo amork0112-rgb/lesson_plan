@@ -247,18 +247,20 @@ export default function ClassesPage() {
                     <p className="text-xs text-slate-500">{cls.level_group} • {cls.year}</p>
                   </div>
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <button 
+                <div className="flex gap-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
                     onClick={() => handleEdit(cls)}
-                    className="text-slate-300 hover:text-indigo-500 transition-colors"
+                    className="text-slate-300 hover:text-indigo-500 transition-colors p-1 hover:bg-indigo-50 rounded-full"
+                    title="Edit Class"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                   </button>
                   <button 
                     onClick={() => deleteClass(cls.id)}
-                    className="text-slate-300 hover:text-red-500 transition-colors"
+                    className="text-slate-300 hover:text-red-500 transition-colors p-1 hover:bg-red-50 rounded-full"
+                    title="Delete Class"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>
