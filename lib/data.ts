@@ -37,13 +37,17 @@ export const DEFAULT_HOLIDAYS: Holiday[] = [
 ];
 
 export const SAMPLE_CLASSES: Class[] = [
+  { id: 'c_m3', name: 'M3', year: 2026, level_group: 'Middle', weekly_sessions: 2, start_time: '18:10', end_time: '20:25', dismissal_time: '20:35', days: ['Mon', 'Thu'] },
   { id: 'c_m2', name: 'M2', year: 2026, level_group: 'Middle', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Tue', 'Fri'] },
   { id: 'c_m1', name: 'M1', year: 2026, level_group: 'Middle', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Tue', 'Fri'] },
   { id: 'c_f4', name: 'F4', year: 2026, level_group: 'Elementary', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Tue', 'Fri'] },
+  { id: 'c_f3', name: 'F3', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', dismissal_time: '17:25', days: ['Mon', 'Wed', 'Fri'] },
+  { id: 'c_f2', name: 'F2', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', dismissal_time: '17:25', days: ['Mon', 'Wed', 'Fri'] },
   { id: 'c_f1b', name: 'F1b', year: 2026, level_group: 'Elementary', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Tue', 'Fri'] },
   { id: 'c_f1a', name: 'F1a', year: 2026, level_group: 'Elementary', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Tue', 'Fri'] },
   { id: 'c_r3', name: 'R3a/R3b', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', dismissal_time: '17:25', days: ['Mon', 'Wed', 'Fri'] },
   { id: 'c_r1', name: 'R1a/R1b', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', dismissal_time: '17:25', days: ['Mon', 'Wed', 'Thu'] },
+  { id: 'c_a5', name: 'A5', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '16:40', end_time: '18:10', dismissal_time: '19:00', days: ['Mon', 'Wed', 'Thu'] },
   { id: 'c_a4b', name: 'A4b', year: 2026, level_group: 'Elementary', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Mon', 'Thu'] },
   { id: 'c_a4a', name: 'A4a', year: 2026, level_group: 'Elementary', weekly_sessions: 2, start_time: '16:40', end_time: '18:55', dismissal_time: '19:50', days: ['Mon', 'Thu'] },
   { id: 'c_a3', name: 'A3', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '16:40', end_time: '18:10', dismissal_time: '19:00', days: ['Mon', 'Wed', 'Thu'] },
@@ -52,6 +56,8 @@ export const SAMPLE_CLASSES: Class[] = [
   { id: 'c_a1b', name: 'A1b', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:50', end_time: '17:25', dismissal_time: '18:10', days: ['Tue', 'Wed', 'Fri'] },
   { id: 'c_a1a', name: 'A1a', year: 2026, level_group: 'Elementary', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', dismissal_time: '17:25', days: ['Tue', 'Thu', 'Fri'] },
   { id: 'c_e3', name: 'E3', year: 2026, level_group: 'Kinder', weekly_sessions: 2, start_time: '16:40', end_time: '18:00', days: ['Tue', 'Fri'] },
+  { id: 'c_g3', name: 'G3', year: 2026, level_group: 'Kinder', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', days: ['Mon', 'Wed', 'Thu'] },
+  { id: 'c_g2', name: 'G2', year: 2026, level_group: 'Kinder', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', days: ['Mon', 'Wed', 'Thu'] },
   { id: 'c_g1', name: 'G1', year: 2026, level_group: 'Kinder', weekly_sessions: 3, start_time: '15:00', end_time: '16:35', days: ['Mon', 'Wed', 'Thu'] },
   { id: 'c_e1a', name: 'E1a', year: 2026, level_group: 'Kinder', weekly_sessions: 2, start_time: '16:40', end_time: '18:00', dismissal_time: '18:10', days: ['Mon', 'Wed'] },
   { id: 'c_e1b', name: 'E1b', year: 2026, level_group: 'Kinder', weekly_sessions: 2, start_time: '16:40', end_time: '18:00', dismissal_time: '18:10', days: ['Mon', 'Wed'] },
@@ -141,15 +147,18 @@ export const SAMPLE_BOOKS: Book[] = [
   { id: 'b_f1_1', category: 'c_reading', level: 'F1', name: 'intoreading 3.1', total_units: 10, unit_type: 'unit' },
   { id: 'b_f1_2', category: 'c_grammar', level: 'F1', name: 'Grammar Engine 1', total_units: 10, unit_type: 'unit' },
   { id: 'b_f1_3', category: 'c_writing', level: 'F1', name: 'Creative Journal 1', total_units: 10, unit_type: 'unit' },
+  { id: 'b_f1_4', category: 'c_voca', level: 'F1', name: 'voca & into (에듀스프링)', total_units: 10, unit_type: 'unit' },
   // F2
   { id: 'b_f2_1', category: 'c_reading', level: 'F2', name: 'intoreading 3.3', total_units: 10, unit_type: 'unit' },
   { id: 'b_f2_2', category: 'c_reading', level: 'F2', name: 'My First Chapter Books (4 Books)', total_units: 4, unit_type: 'unit' },
   { id: 'b_f2_3', category: 'c_grammar', level: 'F2', name: 'Grammar Engine 2', total_units: 10, unit_type: 'unit' },
   { id: 'b_f2_4', category: 'c_writing', level: 'F2', name: 'Creative Journal 2', total_units: 10, unit_type: 'unit' },
+  { id: 'b_f2_5', category: 'c_voca', level: 'F2', name: 'voca & into (에듀스프링)', total_units: 10, unit_type: 'unit' },
   // F3
   { id: 'b_f3_1', category: 'c_reading', level: 'F3', name: 'intoreading 4.1', total_units: 10, unit_type: 'unit' },
   { id: 'b_f3_2', category: 'c_reading', level: 'F3', name: 'AMI Presentation Starter +Reading Success 4)', total_units: 10, unit_type: 'unit' },
   { id: 'b_f3_3', category: 'c_grammar', level: 'F3', name: 'Grammar Engine 3', total_units: 10, unit_type: 'unit' },
+  { id: 'b_f3_4', category: 'c_voca', level: 'F3', name: 'voca & into (에듀스프링)', total_units: 10, unit_type: 'unit' },
   // Middle School - M1A
   { id: 'b_m1a_1', category: 'c_reading', level: 'M1A', name: 'Subject link 5', total_units: 10, unit_type: 'unit' },
   { id: 'b_m1a_2', category: 'c_reading', level: 'M1A', name: 'Reading for Today 1 Themes', total_units: 10, unit_type: 'unit' },
@@ -158,6 +167,7 @@ export const SAMPLE_BOOKS: Book[] = [
   { id: 'b_m1a_5', category: 'c_voca', level: 'M1A', name: 'voca (에듀스프링)', total_units: 10, unit_type: 'unit' },
   { id: 'b_m1a_6', category: 'c_grammar', level: 'M1A', name: 'Grammar inside1', total_units: 10, unit_type: 'unit' },
   { id: 'b_m1a_7', category: 'c_writing', level: 'M1A', name: 'Masters Journal 1', total_units: 10, unit_type: 'unit' },
+  { id: 'b_m1a_8', category: 'c_speaking', level: 'M1A', name: 'M원리', total_units: 10, unit_type: 'unit' },
   // M1B
   { id: 'b_m1b_1', category: 'c_reading', level: 'M1B', name: 'Chapter Books (4 Books)', total_units: 4, unit_type: 'unit' },
   { id: 'b_m1b_2', category: 'c_reading', level: 'M1B', name: '<Docu-English> Reading Explorer Foundation', total_units: 10, unit_type: 'unit' },

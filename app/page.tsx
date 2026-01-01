@@ -19,7 +19,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const ALL_WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const ALL_WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 function getDatesForMonth(
   year: number,
@@ -114,6 +114,21 @@ function calculateMonthUsage(
   return usage;
 }
 
+function distributeByPriority(
+  dates: string[],
+  allocations: BookAllocation[]
+) {
+  const result: { date: string; bookId: string }[] = [];
+  if (allocations.length === 0) return result;
+  const sorted = [...allocations].sort((a, b) => a.priority - b.priority);
+  let index = 0;
+  dates.forEach(date => {
+    const alloc = sorted[index % sorted.length];
+    result.push({ date, bookId: alloc.book_id });
+    index++;
+  });
+  return result;
+}
 
 export default function Home() {
   const { books, holidays, classes, allocations: globalAllocations, setAllocations, specialDates, updateSpecialDate } = useData();
@@ -122,6 +137,8 @@ export default function Home() {
   const [className, setClassName] = useState('');
   const [classId, setClassId] = useState('');
   const [year, setYear] = useState(2026);
+  const [startMonth, setStartMonth] = useState(2); // Default March
+  const [duration, setDuration] = useState(3); // Default 3 months
   const [selectedDays, setSelectedDays] = useState<Weekday[]>(['Mon', 'Wed', 'Fri']);
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
@@ -131,6 +148,82 @@ export default function Home() {
 
   // -- Monthly Plans --
   const [monthPlans, setMonthPlans] = useState<MonthPlan[]>([]);
+  
+  // -- Persistence --
+  useEffect(() => {
+    if (monthPlans.length > 0 && classId) {
+        // Guard: Only save if the plan matches the current configuration
+        // This prevents saving "old" plans to "new" keys during state transitions
+        const firstPlan = monthPlans[0];
+        // Calculate expected year/month for the first plan
+        const expectedYear = startMonth < firstPlan.month ? year + 1 : year; // This logic is tricky if startMonth changes
+        // Simpler check: Does the first plan's ID match the expected ID structure for the current settings?
+        // Actually, just check if the plan's year matches the current year state (roughly)
+        // or better: The 'Load' effect handles creating the correct structure.
+        // We just need to ensure we don't save *stale* state.
+        
+        // If I switched year to 2027, but monthPlans is still 2026...
+        if (firstPlan.year !== year && firstPlan.year !== year + 1) return; // Allow next year rollover, but main year should match
+        
+        // Even stricter:
+        // Re-calculate the expected first month's year/month based on current `year` and `startMonth`
+        const targetY = year + Math.floor(startMonth / 12);
+        const targetM = startMonth % 12;
+        
+        if (firstPlan.year === targetY && firstPlan.month === targetM && monthPlans.length === duration) {
+             localStorage.setItem(`monthPlans_${classId}_${year}_${startMonth}_${duration}`, JSON.stringify(monthPlans));
+        }
+    }
+  }, [monthPlans, classId, year, startMonth, duration]);
+
+  // Load from Persistence
+  useEffect(() => {
+    if (!classId) return;
+    
+    const key = `monthPlans_${classId}_${year}_${startMonth}_${duration}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                console.log('[Debug] Loaded saved plans for', classId);
+                setMonthPlans(parsed);
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to load saved plans', e);
+        }
+    }
+    
+    // If no saved data, init new
+    // Check if current state matches requirement (optimization)
+    if (monthPlans.length === duration && monthPlans[0].year === year && monthPlans[0].month === startMonth) {
+       return;
+    }
+    
+    const newPlans: MonthPlan[] = [];
+    
+    Array.from({ length: duration }).forEach((_, idx) => {
+       // Calculate year and month dynamically
+       // If startMonth is March (2), year 2026
+       // idx=0 -> m=2, y=2026
+       // idx=10 (Jan) -> m=0, y=2027
+       const totalMonths = startMonth + idx;
+       const m = totalMonths % 12;
+       const y = year + Math.floor(totalMonths / 12);
+       
+       newPlans.push({
+         id: `m_${y}_${m}`,
+         year: y,
+         month: m,
+         allocations: idx === 0 ? [
+            { id: `a_${y}_${m}_1`, class_id: classId, book_id: books[0]?.id || '', sessions_per_week: 2, priority: 1, total_sessions_override: 48 },
+         ] : [] 
+       });
+    });
+    
+    setMonthPlans(newPlans);
+  }, [classId, year, startMonth, duration]);
 
   // Sync Allocations to Global Context
   useEffect(() => {
@@ -146,62 +239,9 @@ export default function Home() {
     );
     
     // Use functional update if possible, or just current globalAllocations
-    // Since we don't want to depend on globalAllocations to trigger this, we rely on closure.
-    // But closure might be stale if monthPlans updates multiple times without re-render? No, state update triggers re-render.
-    
     const otherAllocations = globalAllocations.filter(a => a.class_id !== classId);
     setAllocations([...otherAllocations, ...currentClassAllocations]);
   }, [monthPlans, classId]);
-  
-  // Initialize with March -> Feb next year when year changes or initially
-  useEffect(() => {
-    // Only if empty, to prevent overwriting user edits?
-    // User wants "Show all from March to Feb".
-    // Let's reset/init based on the selected year.
-    // If user changes year, we regen? Yes.
-    
-    // Check if we already have plans for this year/range?
-    // To allow persistence during session, we might want to check.
-    // But simplicity first: Regen on year change.
-    
-    if (monthPlans.length > 0 && monthPlans[0].year === year && monthPlans[0].month === 2) {
-       // Already initialized for this year (March start)
-       return;
-    }
-    
-    const newPlans: MonthPlan[] = [];
-    let currentYear = year;
-    // Start from March (month index 2)
-    // Sequence: 2,3,4,5,6,7,8,9,10,11,0,1
-    const monthsSequence = [2,3,4,5,6,7,8,9,10,11,0,1];
-    
-    monthsSequence.forEach((m, idx) => {
-       // If m is 0 or 1, it means next year
-       const y = (m === 0 || m === 1) ? year + 1 : year;
-       
-       newPlans.push({
-         id: `m_${y}_${m}`,
-         year: y,
-         month: m,
-         allocations: idx === 0 ? [
-            // Default allocation for first month
-            { id: `a_${y}_${m}_1`, class_id: classId, book_id: books[0]?.id || '', sessions_per_week: 2, priority: 1, total_sessions_override: 48 },
-         ] : [] 
-       });
-    });
-    
-    setMonthPlans(newPlans);
-  }, [year, classId]); // Re-run when year changes. What about allocations? We lose them if we reset.
-  // Ideally, we should merge or only init if empty.
-  // But for MVP, resetting on year change is acceptable behavior (New Year -> New Plan).
-  
-  // Also, when adding allocations to subsequent months, we might want to copy from previous?
-  // The user asked for "Copy from previous" checkbox before.
-  // Now with pre-generated months, "Copy" means "Fill this empty month with previous month's config".
-  
-  // Let's update `handleAddMonth` -> `handleFillMonth` logic?
-  // The user sees 12 cards. Empty ones have "0 Allocations".
-  // We can add a "Copy from previous month" button on empty months.
 
   // -- Output --
   const [isGenerated, setIsGenerated] = useState(false);
@@ -254,27 +294,35 @@ export default function Home() {
 
   // Filter books based on selected class
   const filteredBooks = useMemo(() => {
-    if (!className) return books;
+    // Rely on classId to find the current class name ensuring sync
+    const selectedClass = classes.find(c => c.id === classId);
+    
+    if (!classId || !selectedClass) {
+        console.log('[Debug] No class selected or found. Returning all books.');
+        return books;
+    }
     
     // Normalize class name for matching
     // e.g. "R1a/R1b" -> "r1ar1b", "M2" -> "m2"
-    const cName = className.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cName = selectedClass.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    console.log(`[Debug] Filtering books for class: ${selectedClass.name} (normalized: ${cName})`);
     
     const matches = books.filter(b => {
       if (!b.level) return false;
       const bLevel = b.level.toLowerCase().replace(/[^a-z0-9]/g, '');
       
-      // Check for mutual inclusion
-      // 1. Class "A1a" contains Book "A1" (if exists) -> true
-      // 2. Book "M2A" contains Class "M2" -> true
-      return cName.includes(bLevel) || bLevel.includes(cName);
+      // Strict matching: Class name must be contained in Book Level OR Book Level in Class Name
+      const isMatch = cName.includes(bLevel) || bLevel.includes(cName);
+      
+      // Optional: Log matches for debugging
+      // if (isMatch) console.log(`[Debug] Match found: ${b.name} (${b.level})`);
+      
+      return isMatch;
     });
     
-    // If we found matching books, return them. 
-    // Otherwise, we return an empty array to strictly enforce filtering.
-    // The dropdown rendering logic ensures the *currently selected book* is always visible.
+    console.log(`[Debug] Found ${matches.length} matching books.`);
     return matches;
-  }, [books, className]);
+  }, [books, classId, classes]);
 
   const bookFlow = useMemo(() => {
     // Structure: map[monthId][bookId] = { start, used, remaining }
@@ -434,9 +482,28 @@ export default function Home() {
     }));
   };
 
-  const addAllocation = (monthId: string) => {
+  // -- Modals --
+  const [isAddBookModalOpen, setIsAddBookModalOpen] = useState(false);
+  const [targetMonthId, setTargetMonthId] = useState<string | null>(null);
+  const [newAllocation, setNewAllocation] = useState<{
+    bookId: string;
+    sessionsPerWeek: number;
+    totalOverride?: number;
+  }>({ bookId: '', sessionsPerWeek: 1 });
+
+  const openAddBookModal = (monthId: string) => {
+    setTargetMonthId(monthId);
+    // Default to first available book
+    const defaultBookId = filteredBooks.length > 0 ? filteredBooks[0].id : (books.length > 0 ? books[0].id : '');
+    setNewAllocation({ bookId: defaultBookId, sessionsPerWeek: selectedDays.length > 0 ? selectedDays.length : 2 });
+    setIsAddBookModalOpen(true);
+  };
+
+  const handleSaveNewAllocation = () => {
+    if (!targetMonthId || !newAllocation.bookId) return;
+
     setMonthPlans(monthPlans.map(plan => {
-      if (plan.id !== monthId) return plan;
+      if (plan.id !== targetMonthId) return plan;
       return {
         ...plan,
         allocations: [
@@ -444,14 +511,19 @@ export default function Home() {
           { 
             id: Math.random().toString(), 
             class_id: classId, 
-            book_id: books[0]?.id || '', 
-            sessions_per_week: 1, 
-            priority: plan.allocations.length + 1 
+            book_id: newAllocation.bookId, 
+            sessions_per_week: newAllocation.sessionsPerWeek, 
+            priority: plan.allocations.length + 1,
+            total_sessions_override: newAllocation.totalOverride
           }
         ]
       };
     }));
+    
+    setIsAddBookModalOpen(false);
+    setTargetMonthId(null);
   };
+
   
   const removeAllocation = (monthId: string, allocId: string) => {
     setMonthPlans(monthPlans.map(plan => {
@@ -495,11 +567,28 @@ export default function Home() {
     }));
   };
 
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [shouldDownload, setShouldDownload] = useState(false);
+
+  // Auto-download effect
+  useEffect(() => {
+    // Disabled auto-download; user triggers explicitly via Download button
+    if (shouldDownload && isGenerated && generatedPlan.length > 0) {
+      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      downloadPDF();
+      setShouldDownload(false);
+    }
+  }, [shouldDownload, isGenerated, generatedPlan]);
+
   const downloadPDF = async () => {
     const element = document.getElementById('results');
-    if (!element) return;
+    if (!element) {
+        console.error('Results element not found');
+        return;
+    }
 
     try {
+        setIsGenerating(true);
         // Dynamic import to avoid SSR issues
         const html2pdf = (await import('html2pdf.js')).default;
         
@@ -507,18 +596,41 @@ export default function Home() {
           margin:       10,
           filename:     `book_${className || 'Class'}.pdf`,
           image:        { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true },
+          html2canvas:  { scale: 2, useCORS: true, logging: true },
           jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
         };
 
-        html2pdf().from(element).set(opt).save();
+        await html2pdf().from(element).set(opt).save();
     } catch (error) {
         console.error('PDF generation failed:', error);
         alert('PDF generation failed. Please try again or use the print option.');
+    } finally {
+        setIsGenerating(false);
     }
   };
 
   const handleGenerate = (targetMonthId?: string) => {
+    // 1. Validation Checks
+    if (selectedDays.length === 0) {
+        alert('수업 요일(Schedule Days)이 선택되지 않았습니다. 상단의 요일을 최소 하나 이상 선택해주세요.');
+        return;
+    }
+
+    const totalAllocations = monthPlans.reduce((sum, p) => sum + p.allocations.length, 0);
+    if (totalAllocations === 0) {
+        alert('배정된 교재가 없습니다. "Add Book" 버튼을 눌러 교재를 추가해주세요.');
+        return;
+    }
+
+    // Check if we have valid dates
+    const totalPotentialDates = Object.values(planDates).reduce((sum, dates) => sum + dates.length, 0);
+    console.log('[Debug] Total Potential Dates:', totalPotentialDates, 'Selected Days:', selectedDays);
+    
+    if (totalPotentialDates === 0) {
+        alert(`선택한 요일(${selectedDays.join(', ')})에 해당하는 날짜가 ${year}년에 없습니다. 연도나 요일 설정을 확인해주세요.`);
+        return;
+    }
+
     const classInfo: Class = {
       id: classId,
       name: className,
@@ -533,43 +645,68 @@ export default function Home() {
     let allPlans: LessonPlan[] = [];
     let currentProgress: Record<string, { unit: number, day: number }> = {};
 
+    console.log('[Debug] Starting Generation for Class:', className);
+
+    let displayOrderCounter = 1;
     monthPlans.forEach(plan => {
        const dates = planDates[plan.id] || [];
-       
-       // Construct rules for this month (needed for distribution)
-       // We assume rules are consistent with selectedDays
-       const rules: ScheduleRule[] = selectedDays.map(d => ({
-         id: Math.random().toString(),
-         class_id: classId,
-         weekday: d
-       }));
-
-       const result = generateLessonPlan(
-         classInfo, 
-         dates, 
-         plan.allocations, 
-         books, 
-         rules, 
-         currentProgress,
-         specialDates
-       );
-       
-       allPlans = [...allPlans, ...result.plans];
-       currentProgress = result.finalProgress;
+       const distributed = distributeByPriority(dates, plan.allocations);
+       distributed.forEach(({ date, bookId }) => {
+         allPlans.push({
+           id: `${date}_${bookId}`,
+           class_id: classId,
+           date,
+           book_id: bookId,
+           display_order: displayOrderCounter++,
+           is_makeup: false,
+           content: 'AUTO',
+           unit_text: 'Unit Auto'
+         });
+       });
     });
+    
+    console.log('[Debug] Total Plans Generated:', allPlans.length);
 
     if (targetMonthId) {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
       if (targetPlan) {
-        allPlans = allPlans.filter(l => {
+        // Filter plans for this month
+        const monthlyPlans = allPlans.filter(l => {
           // Parse YYYY-MM-DD manually to avoid UTC conversion issues
           const [y, m, d] = l.date.split('-').map(Number);
           return (m - 1) === targetPlan.month && y === targetPlan.year;
         });
         
-        const monthName = MONTH_NAMES[targetPlan.month];
-        const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
-        document.title = fileName;
+        // If specific month generation yields results, show only that.
+        if (monthlyPlans.length > 0) {
+            allPlans = monthlyPlans;
+            const monthName = MONTH_NAMES[targetPlan.month];
+            const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
+            document.title = fileName;
+        } else {
+            // Fallback: If monthly generation fails/empty, user requested "Generate All" as backup?
+            // Or simply alert?
+            // User said: "dashboard에서 월별로 generate안되면 전체 generate라도 되게해줘"
+            // Meaning: If I try to generate one month and it fails (maybe logic error or empty), 
+            // maybe just show everything so I can at least print the whole thing?
+            // Let's Log warning and fallback to ALL if the user intent was ambiguous, 
+            // BUT usually targetMonthId means "I specifically want this".
+            // If it returns empty, it implies no classes scheduled for that month.
+            // Let's just alert the user but NOT clear the `allPlans` so they can see if there's an issue?
+            // Actually, `allPlans` currently contains EVERYTHING.
+            
+            // If we filter and get 0, it means no lessons for that month.
+            // Let's ask: "No lessons generated for this month. Show all months instead?"
+            // For MVP, let's automatically fallback to showing ALL if the filtered result is empty,
+            // with a toast/alert.
+            
+            if (confirm(`No lessons generated for ${MONTH_NAMES[targetPlan.month]}. Show full plan instead?`)) {
+                // Do not filter. `allPlans` remains full.
+                document.title = `LessonPlan_${className}_All_Months_${year}`;
+            } else {
+                allPlans = []; // User declined, show empty
+            }
+        }
       }
     } else {
         // Generate All
@@ -579,23 +716,16 @@ export default function Home() {
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
 
-    // Auto-download logic
-    setTimeout(() => {
-        // Only download if there are plans
-        if (allPlans.length > 0) {
-            // Scroll to results first
-            document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // Trigger download
-            downloadPDF();
-        } else {
-            alert('No lessons generated. Please assign books first.');
-        }
-        
-        // Reset title after print
-        setTimeout(() => document.title = 'Plan Generator', 1000);
-    }, 1000);
-
+    if (allPlans.length === 0) {
+        alert('수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지');
+    }
   };
+  
+  // Clear preview when Academic Year changes to avoid stale display
+  useEffect(() => {
+    setIsGenerated(false);
+    setGeneratedPlan([]);
+  }, [year, startMonth, duration]);
   
   // Helper to calculate cumulative usage up to (and including) a specific month index
   const getCumulativeUsage = (monthIndex: number, bookId: string) => {
@@ -670,7 +800,7 @@ export default function Home() {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
           {/* Top Settings Bar */}
-          <div className="p-6 border-b border-gray-200 bg-gray-50 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="p-6 border-b border-gray-200 bg-gray-50 grid grid-cols-1 md:grid-cols-5 gap-6">
              <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Class Name</label>
                 <select 
@@ -703,7 +833,35 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="md:col-span-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Start Month</label>
+                <select 
+                  value={startMonth} 
+                  onChange={(e) => setStartMonth(parseInt(e.target.value))}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
+                >
+                  {MONTH_NAMES.map((m, idx) => (
+                    <option key={idx} value={idx}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Duration</label>
+                <select 
+                  value={duration} 
+                  onChange={(e) => setDuration(parseInt(e.target.value))}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
+                >
+                  <option value={1}>1 Month</option>
+                  <option value={2}>2 Months</option>
+                  <option value={3}>3 Months</option>
+                  <option value={6}>6 Months</option>
+                  <option value={12}>1 Year</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-1">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
                 <div className="flex flex-wrap gap-2">
                   {ALL_WEEKDAYS.map(day => (
@@ -711,7 +869,7 @@ export default function Home() {
                       key={day}
                       onClick={() => handleDayToggle(day)}
                       className={`
-                        px-3 py-1.5 rounded-full text-sm font-medium transition-colors
+                        px-3 py-1.5 rounded-full text-xs font-medium transition-colors
                         ${selectedDays.includes(day) 
                           ? 'bg-indigo-600 text-white shadow-md' 
                           : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
@@ -757,7 +915,7 @@ export default function Home() {
                         {expandedMonthId === plan.id ? 'Hide Calendar' : 'Manage Schedule'}
                       </button>
                      <button 
-                        onClick={() => addAllocation(plan.id)}
+                        onClick={() => openAddBookModal(plan.id)}
                         disabled={!classId}
                         className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors ${
                             !classId 
@@ -1025,9 +1183,8 @@ export default function Home() {
                                 {(() => {
                                   if (!classId) return null;
                                   
-                                  // Show ALL books to ensure newly added ones are visible
-                                  // But prioritize the relevant class level in sorting
-                                  const displayBooks = books; 
+                                  // Use filteredBooks to strictly respect class level filtering
+                                  const displayBooks = filteredBooks;
 
                                   const groupedBooks: Record<string, Book[]> = {};
                                   displayBooks.forEach(b => {
@@ -1152,26 +1309,49 @@ export default function Home() {
             <div className="text-sm text-gray-500 flex gap-4">
                 <div className="flex items-center gap-1">
                     <Play className="h-4 w-4 text-indigo-600" />
-                    <span>Generate All: 전체 월 데이터 생성</span>
+                    <span>Preview Plan: 설정된 기간의 플랜 미리보기</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <Download className="h-4 w-4 text-gray-600" />
-                    <span>Download PDF: 현재 화면 저장</span>
+                    <span>Download PDF: 미리보기 내용을 저장</span>
                 </div>
             </div>
-            <button
-              onClick={() => handleGenerate()}
-              disabled={monthPlans.every(p => p.allocations.length === 0)}
-              title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "전체 커리큘럼 생성 및 PDF 다운로드"}
-              className={`flex items-center gap-2 px-8 py-3 rounded-full font-medium shadow-md transition-all text-lg
-                ${monthPlans.every(p => p.allocations.length === 0) 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
-              `}
-            >
-              <Download className="h-5 w-5" />
-              Generate PDF
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleGenerate()}
+                disabled={monthPlans.every(p => p.allocations.length === 0) || isGenerating}
+                title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "설정된 기간의 플랜을 미리보기로 생성"}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
+                  ${monthPlans.every(p => p.allocations.length === 0) || isGenerating
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
+                `}
+              >
+                {isGenerating ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                ) : (
+                    <Play className="h-4 w-4" />
+                )}
+                {isGenerating ? 'Generating...' : 'Preview Plan'}
+              </button>
+              <button
+                onClick={() => setShouldDownload(true)}
+                disabled={!isGenerated || generatedPlan.length === 0 || isGenerating}
+                title={!isGenerated ? "먼저 플랜을 미리보기로 생성하세요" : "PDF로 저장"}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
+                  ${(!isGenerated || generatedPlan.length === 0) || isGenerating
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
+                `}
+              >
+                {isGenerating ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                ) : (
+                    <Download className="h-4 w-4" />
+                )}
+                Download PDF
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1187,10 +1367,20 @@ export default function Home() {
               onClick={() => {
                   downloadPDF();
               }}
-              className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+              disabled={isGenerating}
+              className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
             >
-              <Download className="h-4 w-4" />
-              Re-Download PDF
+              {isGenerating ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                    Processing...
+                  </>
+              ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Re-Download PDF
+                  </>
+              )}
             </button>
           </div>
 
@@ -1255,6 +1445,112 @@ export default function Home() {
                 </div>
               );
             }))}
+          </div>
+        </div>
+      )}
+      {/* Add Book Modal */}
+      {isAddBookModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-800 text-lg">Add Book</h3>
+              <button 
+                onClick={() => setIsAddBookModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Book</label>
+                <select 
+                  value={newAllocation.bookId}
+                  onChange={(e) => setNewAllocation({...newAllocation, bookId: e.target.value})}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                    {(() => {
+                        const groupedBooks: Record<string, Book[]> = {};
+                        filteredBooks.forEach(b => {
+                        const level = b.level || 'Others';
+                        if (!groupedBooks[level]) groupedBooks[level] = [];
+                        groupedBooks[level].push(b);
+                        });
+                        
+                        const sortedLevels = Object.keys(groupedBooks).sort((a, b) => {
+                            const normA = a.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const normB = b.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            const normClass = className.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            
+                            const aMatch = (normClass && normA) ? (normA.includes(normClass) || normClass.includes(normA)) : false;
+                            const bMatch = (normClass && normB) ? (normB.includes(normClass) || normClass.includes(normB)) : false;
+                            
+                            if (aMatch && !bMatch) return -1;
+                            if (!aMatch && bMatch) return 1;
+                            return a.localeCompare(b);
+                        });
+                        
+                        return sortedLevels.map(level => (
+                        <optgroup key={level} label={level}>
+                            {groupedBooks[level].map(b => (
+                            <option key={b.id} value={b.id}>
+                                {b.name} ({b.category ? b.category.replace('c_', '').toUpperCase() : 'General'})
+                            </option>
+                            ))}
+                        </optgroup>
+                        ));
+                    })()}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Weekly Sessions</label>
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="number" 
+                        min="1" 
+                        max="7"
+                        value={newAllocation.sessionsPerWeek}
+                        onChange={(e) => setNewAllocation({...newAllocation, sessionsPerWeek: parseInt(e.target.value) || 1})}
+                        className="block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-500">times per week</span>
+                </div>
+              </div>
+
+              <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Total Sessions (Optional Override)
+                 </label>
+                 <input 
+                    type="number" 
+                    min="1"
+                    placeholder="Auto-calculate from book"
+                    value={newAllocation.totalOverride || ''}
+                    onChange={(e) => setNewAllocation({...newAllocation, totalOverride: e.target.value ? parseInt(e.target.value) : undefined})}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                 />
+                 <p className="text-xs text-gray-500 mt-1">Leave empty to use book default or carry over from previous months.</p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
+              <button 
+                onClick={() => setIsAddBookModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveNewAllocation}
+                disabled={!newAllocation.bookId}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Book
+              </button>
+            </div>
           </div>
         </div>
       )}
