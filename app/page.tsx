@@ -495,6 +495,29 @@ export default function Home() {
     }));
   };
 
+  const downloadPDF = async () => {
+    const element = document.getElementById('results');
+    if (!element) return;
+
+    try {
+        // Dynamic import to avoid SSR issues
+        const html2pdf = (await import('html2pdf.js')).default;
+        
+        const opt = {
+          margin:       10,
+          filename:     `book_${className || 'Class'}.pdf`,
+          image:        { type: 'jpeg' as const, quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+        };
+
+        html2pdf().from(element).set(opt).save();
+    } catch (error) {
+        console.error('PDF generation failed:', error);
+        alert('PDF generation failed. Please try again or use the print option.');
+    }
+  };
+
   const handleGenerate = (targetMonthId?: string) => {
     const classInfo: Class = {
       id: classId,
@@ -556,22 +579,22 @@ export default function Home() {
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
 
-    // Auto-print logic
+    // Auto-download logic
     setTimeout(() => {
-        // Only print if there are plans
+        // Only download if there are plans
         if (allPlans.length > 0) {
-            window.print();
+            // Scroll to results first
+            document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Trigger download
+            downloadPDF();
         } else {
             alert('No lessons generated. Please assign books first.');
         }
         
         // Reset title after print
         setTimeout(() => document.title = 'Plan Generator', 1000);
-    }, 500);
+    }, 1000);
 
-    setTimeout(() => {
-      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
   };
   
   // Helper to calculate cumulative usage up to (and including) a specific month index
@@ -1002,12 +1025,9 @@ export default function Home() {
                                 {(() => {
                                   if (!classId) return null;
                                   
-                                  // Use filtered books, but ensure current book is included
-                                  let displayBooks = filteredBooks;
-                                  const currentBook = books.find(b => b.id === alloc.book_id);
-                                  if (currentBook && !displayBooks.find(b => b.id === currentBook.id)) {
-                                     displayBooks = [...displayBooks, currentBook];
-                                  }
+                                  // Show ALL books to ensure newly added ones are visible
+                                  // But prioritize the relevant class level in sorting
+                                  const displayBooks = books; 
 
                                   const groupedBooks: Record<string, Book[]> = {};
                                   displayBooks.forEach(b => {
@@ -1016,8 +1036,20 @@ export default function Home() {
                                     groupedBooks[level].push(b);
                                   });
                                   
-                                  // Sort levels (custom order or alphabetical)
-                                  const sortedLevels = Object.keys(groupedBooks).sort();
+                                  // Sort levels: Current class level first, then others alphabetical
+                                  const sortedLevels = Object.keys(groupedBooks).sort((a, b) => {
+                                      // Normalize for comparison
+                                      const normA = a.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                      const normB = b.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                      const normClass = className.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                      
+                                      const aMatch = (normClass && normA) ? (normA.includes(normClass) || normClass.includes(normA)) : false;
+                                      const bMatch = (normClass && normB) ? (normB.includes(normClass) || normClass.includes(normB)) : false;
+                                      
+                                      if (aMatch && !bMatch) return -1;
+                                      if (!aMatch && bMatch) return 1;
+                                      return a.localeCompare(b);
+                                  });
                                   
                                   return sortedLevels.map(level => (
                                     <optgroup key={level} label={level}>
@@ -1153,10 +1185,7 @@ export default function Home() {
             </div>
             <button 
               onClick={() => {
-                  const fileName = `LessonPlan_${className}_${generatedPlan.length > 0 ? 'Allocated' : 'Empty'}`;
-                  document.title = fileName;
-                  window.print();
-                  setTimeout(() => document.title = 'Plan Generator', 1000);
+                  downloadPDF();
               }}
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
