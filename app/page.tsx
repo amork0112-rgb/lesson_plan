@@ -195,6 +195,7 @@ export default function Home() {
   // -- Output --
   const [generatedPlan, setGeneratedPlan] = useState<LessonPlan[]>([]);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [previewPlans, setPreviewPlans] = useState<Record<string, LessonPlan[]>>({}); // Store individual month previews
   const [showGuide, setShowGuide] = useState(true);
 
   // -- Computed Usage & Flow --
@@ -465,6 +466,16 @@ export default function Home() {
           const d = new Date(l.date);
           return d.getMonth() === targetPlan.month && d.getFullYear() === targetPlan.year;
         });
+        
+        // Update preview state for this month only
+        setPreviewPlans(prev => ({
+          ...prev,
+          [targetMonthId]: allPlans
+        }));
+        
+        // Open the preview section for this month if not already open?
+        // Actually we just render it if data exists.
+        return; // Stop here, don't trigger global generate state or scroll
       }
     }
 
@@ -653,6 +664,55 @@ export default function Home() {
                    </div>
                 </div>
                 
+                {/* Preview View */}
+                {previewPlans[plan.id] && (
+                  <div className="p-6 border-b border-gray-100 bg-white">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-bold text-gray-800">Generated Preview</h4>
+                      <div className="flex gap-2">
+                        <button 
+                            onClick={() => {
+                                // Simple print for this section? 
+                                // Ideally we would print just this table.
+                                // But for now let's just allow viewing.
+                                const newPreview = {...previewPlans};
+                                delete newPreview[plan.id];
+                                setPreviewPlans(newPreview);
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 border rounded-lg hover:bg-gray-50"
+                        >
+                            Close
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto border rounded-lg max-h-96 overflow-y-auto">
+                      <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b sticky top-0">
+                            <tr>
+                              <th className="px-4 py-2 font-semibold border-r bg-gray-50">Date</th>
+                              <th className="px-4 py-2 font-semibold border-r bg-gray-50">Day</th>
+                              <th className="px-4 py-2 font-semibold border-r bg-gray-50">Book</th>
+                              <th className="px-4 py-2 font-semibold border-r bg-gray-50">Content</th>
+                              <th className="px-4 py-2 font-semibold text-right bg-gray-50">Unit</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {previewPlans[plan.id].map(lesson => (
+                                <tr key={lesson.id} className="hover:bg-gray-50">
+                                    <td className="px-4 py-2 border-r">{new Date(lesson.date).toLocaleDateString()}</td>
+                                    <td className="px-4 py-2 border-r text-gray-500">{new Date(lesson.date).toLocaleDateString('en-US', { weekday: 'short' })}</td>
+                                    <td className="px-4 py-2 border-r font-medium">{books.find(b => b.id === lesson.book_id)?.name}</td>
+                                    <td className="px-4 py-2 border-r text-gray-600">{lesson.content}</td>
+                                    <td className="px-4 py-2 text-right font-mono text-gray-500">{lesson.unit_text}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {/* Calendar View */}
                 {expandedMonthId === plan.id && (
                     <div className="p-6 border-b border-gray-100 bg-gray-50">
