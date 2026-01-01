@@ -1,6 +1,12 @@
 export type Role = 'admin' | 'teacher';
 export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 export type UnitType = 'unit' | 'day' | 'lesson';
+export type SpecialDateType = 'event' | 'makeup' | 'school_event';
+
+export interface SpecialDate {
+  type: SpecialDateType;
+  name: string;
+}
 
 export interface User {
   id: string;
@@ -62,6 +68,7 @@ export interface Book {
   level?: string;
   total_units: number;
   unit_type: UnitType;
+  days_per_unit?: number; // Added: How many days per unit
   review_units?: number;
   total_sessions?: number;
   units?: LessonUnit[]; // Pre-defined structure
@@ -75,6 +82,8 @@ export interface BookAllocation {
   priority: number;
   total_sessions_override?: number; // User override for this specific allocation context
   manual_used?: number; // User override for used sessions in this month
+  month?: number; // Added for global context
+  year?: number; // Added for global context
 }
 
 export interface LessonPlan {

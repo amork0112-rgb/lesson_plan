@@ -1,5 +1,5 @@
 import { 
-  Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit 
+  Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
 } from '@/types';
 
 const WEEKDAYS: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -25,27 +25,13 @@ export function generateBookUnits(book: Book): LessonUnit[] {
   let sequence = 1;
 
   for (let u = 1; u <= book.total_units; u++) {
-    // Determine number of days per unit based on unit_type
+    // Determine number of days per unit based on unit_type or explicit days_per_unit
     let daysPerUnit = 1;
-    if (book.unit_type === 'day') daysPerUnit = 1;
-    else if (book.unit_type === 'unit') daysPerUnit = 2; // Default assumption for 'unit' type? Or maybe 1?
-    // Let's look at how it was used before. Usually 'unit' implies multiple sessions or 1.
-    // However, the user provided specific logic before: 
-    // "Unit Type: 3 days" implies 3 sessions.
-    // Let's infer from existing data logic or user request.
-    // User request: "Unit 1 - Day 1, Day 2, Day 3" -> this implies 3 days per unit.
-    // But `unit_type` in Book is an enum string. Let's assume standard logic or check if we can infer.
-    
-    // In previous logic (generateLessonPlan), we had:
-    // const daysPerUnit = book.unit_type === 'day' ? 1 : (book.unit_type === 'unit' ? 2 : 3);
-    // Wait, let's check standard logic.
-    
-    if (book.unit_type === 'day') daysPerUnit = 1;
-    else {
-        // Defaulting 'unit' to 2 and maybe other types exist? 
-        // Actually, let's stick to a safe default. 
-        // If we don't know, maybe 2 is safer for 'unit'.
-        // But for 'Wonderskills' in the prompt, it has 3 days.
+    if (book.days_per_unit) {
+      daysPerUnit = book.days_per_unit;
+    } else if (book.unit_type === 'day') {
+      daysPerUnit = 1;
+    } else {
         daysPerUnit = book.total_sessions ? Math.floor(book.total_sessions / book.total_units) : 2;
     }
 
@@ -94,13 +80,12 @@ export function generateClassDates(
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dayName = WEEKDAYS[d.getDay()];
-    const dateStr = d.toISOString().split('T')[0];
+    // Use local date string for consistency
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     if (allowedDays.has(dayName)) {
       if (!isHoliday(dateStr, holidays) && !isEvent(dateStr, events)) {
-        // Use local date string construction to avoid timezone shifts
-        const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        dates.push(localDateStr);
+        dates.push(dateStr);
       }
     }
   }
@@ -146,7 +131,8 @@ export function generateLessonPlan(
   allocations: BookAllocation[],
   books: Book[],
   rules: ScheduleRule[],
-  initialProgress?: Record<string, { unit: number, day: number }>
+  initialProgress?: Record<string, { unit: number, day: number }>,
+  specialDates?: Record<string, SpecialDate>
 ): { plans: LessonPlan[], finalProgress: Record<string, { unit: number, day: number }> } {
   // Use shared distribution logic
   const weekdayToBook = calculateBookDistribution(allocations, rules);
@@ -163,6 +149,23 @@ export function generateLessonPlan(
   });
 
   dates.forEach((dateStr) => {
+    // Check for special dates (School Events)
+    const special = specialDates ? specialDates[dateStr] : undefined;
+    if (special && special.type === 'school_event') {
+        plans.push({
+            id: Math.random().toString(36).substr(2, 9),
+            class_id: classInfo.id,
+            date: dateStr,
+            book_id: 'event',
+            unit_id: 'event',
+            display_order: 1,
+            is_makeup: false,
+            unit_text: special.name,
+            book_name: 'School Event'
+        });
+        return; // Skip book assignment for this date
+    }
+
     const dateObj = new Date(dateStr);
     const dayName = WEEKDAYS[dateObj.getDay()];
     const bookId = weekdayToBook[dayName];

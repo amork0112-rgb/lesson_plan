@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
 import { generateClassDates, generateLessonPlan, calculateBookDistribution } from '@/lib/logic';
-import { Class, BookAllocation, ScheduleRule, LessonPlan, Weekday, Book } from '@/types';
+import { Class, BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Settings, Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, ChevronRight, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, HelpCircle, BookOpen, FileText } from 'lucide-react';
 
 // --- Types ---
@@ -14,14 +14,6 @@ interface MonthPlan {
   allocations: BookAllocation[];
 }
 
-type SpecialDateType = 'event' | 'makeup';
-
-interface SpecialDate {
-  type: SpecialDateType;
-  name: string;
-}
-
-// --- Helpers ---
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -42,7 +34,8 @@ function getDatesForMonth(
   const allowedDays = new Set(selectedDays);
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0];
+    // Use local date string for ALL operations to ensure consistency
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const special = specialDates[dateStr];
 
     // If it's an event (cancellation), skip it regardless of weekday
@@ -63,9 +56,7 @@ function getDatesForMonth(
     if (allowedDays.has(currentDayName)) {
       const isHoliday = holidays.some(h => h.date === dateStr);
       if (!isHoliday) {
-        // Use local date string construction to avoid timezone shifts
-        const localDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        dates.push(localDateStr);
+        dates.push(dateStr);
       }
     }
   }
@@ -125,22 +116,42 @@ function calculateMonthUsage(
 
 
 export default function Home() {
-  const { books, holidays, classes } = useData();
+  const { books, holidays, classes, allocations: globalAllocations, setAllocations, specialDates, updateSpecialDate } = useData();
   
   // -- Global Settings --
-  const [className, setClassName] = useState('A1a');
-  const [classId, setClassId] = useState('c1');
+  const [className, setClassName] = useState('');
+  const [classId, setClassId] = useState('');
   const [year, setYear] = useState(2026);
   const [selectedDays, setSelectedDays] = useState<Weekday[]>(['Mon', 'Wed', 'Fri']);
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
   
   // -- Special Dates --
-  const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   const [expandedMonthId, setExpandedMonthId] = useState<string | null>(null);
 
   // -- Monthly Plans --
   const [monthPlans, setMonthPlans] = useState<MonthPlan[]>([]);
+
+  // Sync Allocations to Global Context
+  useEffect(() => {
+    if (!classId || monthPlans.length === 0) return;
+
+    const currentClassAllocations = monthPlans.flatMap(plan => 
+        plan.allocations.map(alloc => ({
+            ...alloc,
+            month: plan.month,
+            year: plan.year,
+            class_id: classId
+        }))
+    );
+    
+    // Use functional update if possible, or just current globalAllocations
+    // Since we don't want to depend on globalAllocations to trigger this, we rely on closure.
+    // But closure might be stale if monthPlans updates multiple times without re-render? No, state update triggers re-render.
+    
+    const otherAllocations = globalAllocations.filter(a => a.class_id !== classId);
+    setAllocations([...otherAllocations, ...currentClassAllocations]);
+  }, [monthPlans, classId]);
   
   // Initialize with March -> Feb next year when year changes or initially
   useEffect(() => {
@@ -200,6 +211,47 @@ export default function Home() {
   // -- Computed Usage & Flow --
   // We calculate the flow of sessions: Start -> Used -> Remaining -> Next Start
   
+  // 1. Calculate the Fixed Session Dates for each month based on the 8/12 rule
+  // Rule: 2 days/week -> 8 sessions/month. 3 days/week -> 12 sessions/month.
+  // Excess dates flow into the next month.
+  const planDates = useMemo(() => {
+    // Ensure plans are processed chronologically
+    const sortedPlans = [...monthPlans].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+    });
+
+    // 1. Generate ALL valid dates for the entire sequence (March to Feb next year)
+    // We need to loop through all monthPlans and collect potential dates first.
+    let allPotentialDates: string[] = [];
+    
+    sortedPlans.forEach(plan => {
+        // Get all calendar valid dates for this month
+        const dates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates);
+        allPotentialDates = [...allPotentialDates, ...dates];
+    });
+    
+    // Sort dates chronologically just in case
+    allPotentialDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    
+    // 2. Determine target sessions per month
+    const targetPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
+    
+    // 3. Distribute dates
+    const distributed: Record<string, string[]> = {};
+    let currentIndex = 0;
+    
+    sortedPlans.forEach(plan => {
+        // Take the slice for this month
+        // If we run out of dates, we just take what's left (or empty)
+        const slice = allPotentialDates.slice(currentIndex, currentIndex + targetPerMonth);
+        distributed[plan.id] = slice;
+        currentIndex += targetPerMonth;
+    });
+    
+    return distributed;
+  }, [monthPlans, selectedDays, holidays, specialDates]); // Dependencies: if holidays/special dates change, we re-calc flow
+
   // Filter books based on selected class
   const filteredBooks = useMemo(() => {
     if (!className) return books;
@@ -228,12 +280,19 @@ export default function Home() {
     // Structure: map[monthId][bookId] = { start, used, remaining }
     const stats: Record<string, Record<string, { start: number, used: number, remaining: number }>> = {};
     
+    // Ensure plans are processed chronologically for correct flow
+    const sortedPlans = [...monthPlans].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+    });
+
     // Running remaining sessions from previous months
     // map[bookId] = number
     const runningRemaining: Record<string, number> = {};
 
-    monthPlans.forEach(plan => {
-      const dates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates);
+    sortedPlans.forEach(plan => {
+      // Use distributed dates for calculations
+      const dates = planDates[plan.id] || [];
       const calculatedUsages = calculateMonthUsage(dates, plan.allocations, classId);
       
       const planStats: Record<string, { start: number, used: number, remaining: number }> = {};
@@ -287,7 +346,7 @@ export default function Home() {
     });
     
     return stats;
-  }, [monthPlans, selectedDays, holidays, classId, books, specialDates]);
+  }, [monthPlans, planDates, selectedDays, holidays, classId, books, specialDates]);
 
   // -- Handlers --
 
@@ -336,19 +395,30 @@ export default function Home() {
   };
 
   const toggleDateStatus = (dateStr: string) => {
-     setSpecialDates(prev => {
-        const current = prev[dateStr];
-        const next = { ...prev };
+     const current = specialDates[dateStr];
+     let nextData: SpecialDate | null = null;
+     
+     if (!current) {
+        nextData = { type: 'event', name: 'Event' }; // Default to Event
+     } else if (current.type === 'event') {
+        nextData = { type: 'makeup', name: 'Makeup' };
+     } else if (current.type === 'makeup') {
+        nextData = { type: 'school_event', name: 'PBL' };
+     } else if (current.type === 'school_event') {
+        // Cycle through school event types
+        const eventOrder = ['PBL', '정기평가', 'PBL (Tech)', '100Days', 'Vocaton', 'PBL (Econ)'];
+        const currentIndex = eventOrder.indexOf(current.name);
         
-        if (!current) {
-           next[dateStr] = { type: 'event', name: 'Event' }; // Default to Event
-        } else if (current.type === 'event') {
-           next[dateStr] = { type: 'makeup', name: 'Makeup' };
+        if (currentIndex !== -1 && currentIndex < eventOrder.length - 1) {
+            nextData = { type: 'school_event', name: eventOrder[currentIndex + 1] };
         } else {
-           delete next[dateStr];
+            nextData = null; // End of cycle
         }
-        return next;
-     });
+     } else {
+        nextData = null;
+     }
+     
+     updateSpecialDate(dateStr, nextData);
   };
 
   const updateAllocation = (monthId: string, allocId: string, field: keyof BookAllocation, value: any) => {
@@ -441,7 +511,7 @@ export default function Home() {
     let currentProgress: Record<string, { unit: number, day: number }> = {};
 
     monthPlans.forEach(plan => {
-       const dates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays);
+       const dates = planDates[plan.id] || [];
        
        // Construct rules for this month (needed for distribution)
        // We assume rules are consistent with selectedDays
@@ -457,7 +527,8 @@ export default function Home() {
          plan.allocations, 
          books, 
          rules, 
-         currentProgress
+         currentProgress,
+         specialDates
        );
        
        allPlans = [...allPlans, ...result.plans];
@@ -473,31 +544,30 @@ export default function Home() {
           return (m - 1) === targetPlan.month && y === targetPlan.year;
         });
         
-        // Auto-print logic for single month
-        // We set the title temporarily for the filename
         const monthName = MONTH_NAMES[targetPlan.month];
         const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
         document.title = fileName;
-        
-        // Remove auto-print to allow user to view results first
-        // setTimeout(() => {
-        //     if (allPlans.length === 0) {
-        //         alert('No lessons generated for this month. Please check if there are valid class days and books assigned.');
-        //     } else {
-        //         window.print();
-        //     }
-        //     // Reset title after print dialog closes (or timeout)
-        //     setTimeout(() => document.title = 'Plan Generator', 1000);
-        // }, 500);
       }
     } else {
         // Generate All
         document.title = `LessonPlan_${className}_All_Months_${year}`;
-        setTimeout(() => document.title = 'Plan Generator', 2000);
     }
 
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
+
+    // Auto-print logic
+    setTimeout(() => {
+        // Only print if there are plans
+        if (allPlans.length > 0) {
+            window.print();
+        } else {
+            alert('No lessons generated. Please assign books first.');
+        }
+        
+        // Reset title after print
+        setTimeout(() => document.title = 'Plan Generator', 1000);
+    }, 500);
 
     setTimeout(() => {
       document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -642,7 +712,7 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
-                        {getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates).length} Sessions
+                        {planDates[plan.id]?.length || 0} Sessions
                       </span>
                    </div>
                    <div className="flex items-center gap-2">
@@ -665,7 +735,12 @@ export default function Home() {
                       </button>
                      <button 
                         onClick={() => addAllocation(plan.id)}
-                        className="text-xs font-medium bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full hover:bg-indigo-100 flex items-center gap-1 transition-colors"
+                        disabled={!classId}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors ${
+                            !classId 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                        }`}
                       >
                         <Plus className="h-3 w-3" /> Add Book
                       </button>
@@ -673,7 +748,12 @@ export default function Home() {
                       {index > 0 && plan.allocations.length === 0 && (
                           <button
                             onClick={() => handleCopyPrevious(plan.id)}
-                            className="text-xs font-medium bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full hover:bg-gray-200 flex items-center gap-1 transition-colors"
+                            disabled={!classId}
+                            className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors ${
+                                !classId
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
                           >
                             <Copy className="h-3 w-3" /> Copy Previous
                           </button>
@@ -693,73 +773,168 @@ export default function Home() {
                             {(() => {
                                 const year = plan.year;
                                 const month = plan.month;
-                                const firstDay = new Date(year, month, 1).getDay();
-                                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                const firstOfMonth = new Date(year, month, 1);
+                                const endOfMonth = new Date(year, month + 1, 0);
+                                
+                                const assignedDates = planDates[plan.id] || [];
+                                // Sort assigned dates chronologically
+                                const assignedDatesObj = assignedDates.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+                                
+                                const firstAssigned = assignedDatesObj.length > 0 ? assignedDatesObj[0] : firstOfMonth;
+                                const lastAssigned = assignedDatesObj.length > 0 ? assignedDatesObj[assignedDatesObj.length - 1] : endOfMonth;
+                                
+                                // Effective Range: Include assigned dates even if outside current month
+                                const effectiveStart = firstAssigned < firstOfMonth ? firstAssigned : firstOfMonth;
+                                const effectiveEnd = lastAssigned > endOfMonth ? lastAssigned : endOfMonth;
+                                
+                                // Grid Start (Align to Sunday)
+                                const startDayOfWeek = effectiveStart.getDay();
+                                const gridStart = new Date(effectiveStart);
+                                gridStart.setDate(gridStart.getDate() - startDayOfWeek);
+                                
                                 const days = [];
+                                let current = new Date(gridStart);
                                 
-                                // Empty slots for previous month
-                                for (let i = 0; i < firstDay; i++) {
-                                    days.push(<div key={`empty-${i}`} className="h-10"></div>);
-                                }
-                                
-                                for (let d = 1; d <= daysInMonth; d++) {
-                                    const dateObj = new Date(year, month, d);
-                                    const dateStr = dateObj.toISOString().split('T')[0];
-                                    const special = specialDates[dateStr];
+                                // Generate continuous grid
+                                // Loop until we pass effectiveEnd AND complete the week
+                                let iterations = 0;
+                                while ((current <= effectiveEnd || days.length % 7 !== 0) && iterations < 100) {
+                                    iterations++;
+                                    // Use local date string to match getDatesForMonth and avoid timezone issues
+                                    const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+                                    const d = current.getDate();
                                     
-                                    // Global Holiday Logic
+                                    const isPrevMonth = current < firstOfMonth;
+                                    const isNextMonth = current > endOfMonth;
+                                    const isCurrentMonth = !isPrevMonth && !isNextMonth;
+                                    
+                                    const isAssigned = assignedDates.includes(dateStr);
+                                    
+                                    // Holiday/Special checks
+                                    const special = specialDates[dateStr];
                                     const globalHoliday = holidays.find(h => h.date === dateStr);
-                                    // Check if this holiday applies to current class (empty = all, or included in list)
                                     const isRelevantHoliday = globalHoliday && 
                                         (!globalHoliday.affected_classes || globalHoliday.affected_classes.length === 0 || globalHoliday.affected_classes.includes(classId));
                                     
-                                    // Determine status
-                                    let statusClass = 'bg-white border-gray-200 text-gray-400';
-                                    const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dateObj.getDay()] as Weekday;
-                                    const isRegularDay = selectedDays.includes(dayName);
-                                    
-                                    // Today check
-                                    const todayStr = new Date().toISOString().split('T')[0];
-                                    const isToday = dateStr === todayStr;
+                                    let content = null;
 
-                                    if (special?.type === 'event') {
-                                        statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
-                                    } else if (special?.type === 'makeup') {
-                                        statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
-                                    } else if (isRelevantHoliday) {
-                                        statusClass = 'bg-red-50 border-red-200 text-red-600 font-bold'; // Auto-holiday style
-                                    } else if (isRegularDay) {
-                                        statusClass = 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium';
-                                    }
+                                    if (isAssigned) {
+                                        if (isPrevMonth) {
+                                            // Rollover from Previous Month
+                                            content = (
+                                                <div key={dateStr} className="h-10 rounded-lg border flex flex-col items-center justify-center text-sm bg-indigo-50 border-indigo-200 text-indigo-700 font-medium ring-2 ring-indigo-300 ring-offset-1 z-10" title="Rollover from previous month">
+                                                    {d}
+                                                    <span className="text-[9px] leading-none opacity-75">Prev</span>
+                                                </div>
+                                            );
+                                        } else {
+                                            // Standard or Spillover to Next Month
+                                            let statusClass = 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium';
+                                            let title = 'Class Day';
+                                            let label = null;
 
-                                    if (isToday) {
-                                        statusClass += ' ring-2 ring-offset-1 ring-indigo-500';
+                                            if (special?.type === 'event') {
+                                                statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
+                                                title = 'EVENT';
+                                                label = 'X';
+                                            } else if (special?.type === 'makeup') {
+                                                statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
+                                                title = 'MAKEUP';
+                                                label = '+';
+                                            } else if (special?.type === 'school_event') {
+                                                statusClass = 'bg-blue-100 border-blue-200 text-blue-700 font-bold';
+                                                title = special.name;
+                                                if (special.name.includes('PBL')) label = 'PBL';
+                                                else if (special.name.includes('정기')) label = 'TEST';
+                                                else if (special.name.includes('100')) label = '100';
+                                                else if (special.name.includes('Voc')) label = 'VOC';
+                                                else label = special.name.substring(0, 3);
+                                            } else if (isRelevantHoliday) {
+                                                statusClass = 'bg-red-50 border-red-200 text-red-600 font-bold';
+                                                title = globalHoliday.name;
+                                                label = 'H';
+                                            }
+                                            
+                                            const today = new Date();
+                                            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                                            if (dateStr === todayStr) statusClass += ' ring-2 ring-offset-1 ring-indigo-500';
+
+                                            content = (
+                                                <button
+                                                    key={dateStr}
+                                                    onClick={() => toggleDateStatus(dateStr)}
+                                                    className={`h-10 rounded-lg border flex flex-col items-center justify-center text-sm transition-all hover:shadow-md ${statusClass}`}
+                                                    title={title}
+                                                >
+                                                    {d}
+                                                    {isNextMonth && <span className="text-[9px] leading-none opacity-75">Next</span>}
+                                                    {label && <span className="text-[10px] leading-none">{label}</span>}
+                                                </button>
+                                            );
+                                        }
+                                    } else {
+                                        // Not assigned
+                                        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][current.getDay()] as Weekday;
+                                        const isClassDay = selectedDays.includes(dayName);
+
+                                        if (isCurrentMonth && isClassDay) {
+                                            // Active Month + Valid Class Day = Clickable White Box
+                                            let statusClass = 'bg-white border-gray-200 text-gray-400';
+                                            let title = 'No Class';
+                                            let label = null;
+
+                                            if (special?.type === 'event') {
+                                                statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
+                                                title = 'EVENT';
+                                                label = 'X';
+                                            } else if (special?.type === 'makeup') {
+                                                statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
+                                                title = 'MAKEUP';
+                                                label = '+';
+                                            } else if (special?.type === 'school_event') {
+                                                statusClass = 'bg-blue-100 border-blue-200 text-blue-700 font-bold';
+                                                title = special.name;
+                                                if (special.name.includes('PBL')) label = 'PBL';
+                                                else if (special.name.includes('정기')) label = 'TEST';
+                                                else if (special.name.includes('100')) label = '100';
+                                                else if (special.name.includes('Voc')) label = 'VOC';
+                                                else label = special.name.substring(0, 3);
+                                            } else if (isRelevantHoliday) {
+                                                statusClass = 'bg-red-50 border-red-200 text-red-600 font-bold';
+                                                title = globalHoliday.name;
+                                                label = 'H';
+                                            }
+
+                                            content = (
+                                                <button
+                                                    key={dateStr}
+                                                    onClick={() => toggleDateStatus(dateStr)}
+                                                    className={`h-10 rounded-lg border flex flex-col items-center justify-center text-sm transition-all hover:shadow-md ${statusClass}`}
+                                                    title={title}
+                                                >
+                                                    {d}
+                                                    {label && <span className="text-[10px] leading-none">{label}</span>}
+                                                </button>
+                                            );
+                                        } else {
+                                            // Non-Class Day OR Not Current Month = Gray Box (Disabled)
+                                            // If it's a holiday on a non-class day, maybe show it?
+                                            // For simplicity/clarity: Gray out everything that isn't a class day.
+                                            let extraClass = '';
+                                            if (isCurrentMonth && !isClassDay) {
+                                                extraClass = 'bg-gray-100 text-gray-300'; // Darker gray for non-class days in current month
+                                            } else {
+                                                extraClass = 'bg-gray-50/50 text-gray-300'; // Lighter for other months
+                                            }
+                                            
+                                            content = <div key={`empty-${dateStr}`} className={`h-10 flex items-center justify-center text-xs rounded-lg ${extraClass}`}>{d}</div>;
+                                        }
                                     }
                                     
-                                    // Determine Title / Label
-                                    let title = isRegularDay ? 'Class Day' : 'No Class';
-                                    let label = null;
-                                    
-                                    if (special) {
-                                        title = special.type.toUpperCase();
-                                        label = special.type === 'event' ? 'X' : '+';
-                                    } else if (isRelevantHoliday) {
-                                        title = globalHoliday.name;
-                                        label = 'H';
-                                    }
-
-                                    days.push(
-                                        <button
-                                            key={dateStr}
-                                            onClick={() => toggleDateStatus(dateStr)}
-                                            className={`h-10 rounded-lg border flex flex-col items-center justify-center text-sm transition-all hover:shadow-md ${statusClass}`}
-                                            title={title}
-                                        >
-                                            {d}
-                                            {label && <span className="text-[10px] leading-none">{label}</span>}
-                                        </button>
-                                    );
+                                    days.push(content);
+                                    current.setDate(current.getDate() + 1);
                                 }
+                                
                                 return days;
                             })()}
                         </div>
@@ -767,6 +942,7 @@ export default function Home() {
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div> Class Day</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div> Event (No Class)</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div> Makeup (Extra Class)</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div> School Event</div>
                         </div>
                     </div>
                 )}
@@ -790,7 +966,7 @@ export default function Home() {
                          
                          const stats = bookFlow[plan.id]?.[alloc.book_id] || { start: 0, used: 0, remaining: 0 };
                          const { start, used, remaining } = stats;
-                         const calculatedUsed = calculateMonthUsage(getDatesForMonth(plan.year, plan.month, selectedDays, holidays), plan.allocations, classId)[alloc.book_id] || 0;
+                         const calculatedUsed = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId)[alloc.book_id] || 0;
                          
                          // Color Logic
                          let remainingColor = 'text-green-600 font-bold';
@@ -819,9 +995,13 @@ export default function Home() {
                               <select 
                                 value={alloc.book_id}
                                 onChange={(e) => updateAllocation(plan.id, alloc.id, 'book_id', e.target.value)}
-                                className="block w-full rounded border-gray-200 text-sm p-1.5 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                                disabled={!classId}
+                                className={`block w-full rounded border-gray-200 text-sm p-1.5 focus:ring-indigo-500 focus:border-indigo-500 ${!classId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
                               >
+                                {!classId && <option value="">Select a Class First</option>}
                                 {(() => {
+                                  if (!classId) return null;
+                                  
                                   // Use filtered books, but ensure current book is included
                                   let displayBooks = filteredBooks;
                                   const currentBook = books.find(b => b.id === alloc.book_id);
@@ -950,15 +1130,15 @@ export default function Home() {
             <button
               onClick={() => handleGenerate()}
               disabled={monthPlans.every(p => p.allocations.length === 0)}
-              title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "전체 커리큘럼 생성"}
+              title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "전체 커리큘럼 생성 및 PDF 다운로드"}
               className={`flex items-center gap-2 px-8 py-3 rounded-full font-medium shadow-md transition-all text-lg
                 ${monthPlans.every(p => p.allocations.length === 0) 
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                   : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
               `}
             >
-              <Play className="h-5 w-5 fill-current" />
-              Generate All
+              <Download className="h-5 w-5" />
+              Generate PDF
             </button>
           </div>
         </div>
@@ -969,12 +1149,6 @@ export default function Home() {
         <div id="results" className="mt-12 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200 scroll-mt-8">
           <div className="p-8 border-b border-gray-200 flex justify-between items-center bg-gray-50 no-print">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {generatedPlan.length > 0 && 
-                 Object.keys(generatedPlan.reduce((acc, l) => ({...acc, [`${new Date(l.date).getMonth()}`]: true}), {})).length === 1 
-                 ? `Generated Schedule - ${MONTH_NAMES[new Date(generatedPlan[0].date).getMonth()]} ${new Date(generatedPlan[0].date).getFullYear()}`
-                 : "Generated Schedule (All Months)"}
-              </h2>
               <p className="text-sm text-gray-500">{generatedPlan.length} sessions scheduled</p>
             </div>
             <button 
@@ -987,7 +1161,7 @@ export default function Home() {
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
               <Download className="h-4 w-4" />
-              Download PDF
+              Re-Download PDF
             </button>
           </div>
 
@@ -1036,13 +1210,13 @@ export default function Home() {
                               {new Date(lesson.date).toLocaleDateString('en-US', { weekday: 'short' })}
                             </td>
                             <td className="px-4 py-3 text-gray-700 font-medium border-r">
-                              {books.find(b => b.id === lesson.book_id)?.name}
+                              {lesson.book_id === 'event' ? 'School Event' : books.find(b => b.id === lesson.book_id)?.name}
                             </td>
                             <td className="px-4 py-3 text-gray-600 border-r">
-                              {lesson.content}
+                              {lesson.book_id === 'event' ? lesson.unit_text : lesson.content}
                             </td>
                             <td className="px-4 py-3 text-right text-gray-500 font-mono">
-                              {lesson.unit_text}
+                              {lesson.book_id === 'event' ? '-' : lesson.unit_text}
                             </td>
                           </tr>
                         ))}

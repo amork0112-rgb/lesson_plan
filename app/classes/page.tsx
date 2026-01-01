@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useData } from '@/context/store';
-import { Plus, Trash2, Search, Users, Clock, Calendar } from 'lucide-react';
+import { Plus, Trash2, Search, Users, Clock, Calendar, BookOpen } from 'lucide-react';
 import { Class, Weekday } from '@/types';
 
 const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ClassesPage() {
-  const { classes, addClass, updateClass, deleteClass } = useData();
+  const { classes, addClass, updateClass, deleteClass, allocations, books } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -284,6 +284,23 @@ export default function ClassesPage() {
                        (Out: {cls.dismissal_time})
                     </span>
                   )}
+                </div>
+                
+                <div className="flex items-start gap-2 text-sm text-slate-600 pt-2 border-t border-slate-50">
+                  <BookOpen className="h-4 w-4 text-slate-400 mt-0.5" />
+                  <div className="flex gap-1 flex-wrap">
+                     {Array.from(new Set(allocations.filter(a => a.class_id === cls.id).map(a => a.book_id))).map(bookId => {
+                         const book = books.find(b => b.id === bookId);
+                         return book ? (
+                            <span key={book.id} className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium border border-indigo-100">
+                               {book.name}
+                            </span>
+                         ) : null;
+                     })}
+                     {allocations.filter(a => a.class_id === cls.id).length === 0 && (
+                        <span className="text-slate-400 text-xs italic">No books assigned</span>
+                     )}
+                  </div>
                 </div>
               </div>
             </div>
