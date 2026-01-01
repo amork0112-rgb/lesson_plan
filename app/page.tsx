@@ -241,7 +241,13 @@ export default function Home() {
       plan.allocations.forEach(alloc => {
         const bookId = alloc.book_id;
         const book = books.find(b => b.id === bookId);
-        const defaultTotal = book?.total_sessions || 0;
+        // Fallback for total sessions if missing in data
+        let defaultTotal = book?.total_sessions || 0;
+        if (defaultTotal === 0 && book?.total_units) {
+            // Estimate based on unit type
+            const multiplier = book.unit_type === 'day' ? 1 : 2;
+            defaultTotal = book.total_units * multiplier;
+        }
         
         // 1. Determine Start (Total available for this month)
         let start = 0;
@@ -473,16 +479,16 @@ export default function Home() {
         const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
         document.title = fileName;
         
-        // Use a slight delay to allow rendering before print
-        setTimeout(() => {
-            if (allPlans.length === 0) {
-                alert('No lessons generated for this month. Please check if there are valid class days and books assigned.');
-            } else {
-                window.print();
-            }
-            // Reset title after print dialog closes (or timeout)
-            setTimeout(() => document.title = 'Plan Generator', 1000);
-        }, 500);
+        // Remove auto-print to allow user to view results first
+        // setTimeout(() => {
+        //     if (allPlans.length === 0) {
+        //         alert('No lessons generated for this month. Please check if there are valid class days and books assigned.');
+        //     } else {
+        //         window.print();
+        //     }
+        //     // Reset title after print dialog closes (or timeout)
+        //     setTimeout(() => document.title = 'Plan Generator', 1000);
+        // }, 500);
       }
     } else {
         // Generate All
