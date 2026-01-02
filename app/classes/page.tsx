@@ -5,7 +5,7 @@ import { useData } from '@/context/store';
 import { Plus, Trash2, Search, Users, Clock, Calendar, BookOpen } from 'lucide-react';
 import { Class, Weekday } from '@/types';
 
-const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 export default function ClassesPage() {
   const { classes, addClass, updateClass, deleteClass, allocations, books } = useData();
@@ -19,10 +19,12 @@ export default function ClassesPage() {
     year: 2026,
     level_group: 'Elementary',
     weekly_sessions: 3,
+    sessions_per_month: 24,
     start_time: '14:00',
     end_time: '15:30',
     dismissal_time: '',
-    days: ['Mon', 'Wed', 'Fri']
+    days: ['Mon', 'Wed', 'Fri'],
+    scp_type: null
   });
 
   const filteredClasses = classes.filter(c => 
@@ -44,10 +46,12 @@ export default function ClassesPage() {
         year: newClass.year,
         level_group: newClass.level_group,
         weekly_sessions: newClass.days?.length || 0,
+        sessions_per_month: 24,
         start_time: newClass.start_time,
         end_time: newClass.end_time,
         dismissal_time: newClass.dismissal_time,
-        days: newClass.days
+        days: newClass.days,
+        scp_type: newClass.scp_type ?? null
       });
     } else {
       addClass({
@@ -56,10 +60,12 @@ export default function ClassesPage() {
         year: newClass.year || 2026,
         level_group: newClass.level_group || 'Elementary',
         weekly_sessions: newClass.days?.length || 0,
+        sessions_per_month: 24,
         start_time: newClass.start_time || '14:00',
         end_time: newClass.end_time || '15:30',
         dismissal_time: newClass.dismissal_time,
-        days: newClass.days || []
+        days: newClass.days || [],
+        scp_type: newClass.scp_type ?? null
       } as Class);
     }
     
@@ -70,10 +76,12 @@ export default function ClassesPage() {
       year: 2026,
       level_group: 'Elementary',
       weekly_sessions: 3,
+      sessions_per_month: 24,
       start_time: '14:00',
       end_time: '15:30',
       dismissal_time: '',
-      days: ['Mon', 'Wed', 'Fri']
+      days: ['Mon', 'Wed', 'Fri'],
+      scp_type: null
     });
   };
 
@@ -202,6 +210,22 @@ export default function ClassesPage() {
                 ))}
               </div>
             </div>
+            
+            <div className="mb-8">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">SCP Type (Optional)</label>
+              <select
+                value={newClass.scp_type ?? ''}
+                onChange={e => setNewClass({...newClass, scp_type: e.target.value ? e.target.value as Class['scp_type'] : null})}
+                className="w-full border-b border-slate-200 py-2 focus:border-slate-900 focus:outline-none bg-transparent transition-colors"
+              >
+                <option value="">None</option>
+                <option value="red">Red</option>
+                <option value="orange">Orange</option>
+                <option value="yellow">Yellow</option>
+                <option value="blue">Blue</option>
+                <option value="green">Green</option>
+              </select>
+            </div>
 
             <div className="flex justify-end gap-3">
               <button 
@@ -285,6 +309,13 @@ export default function ClassesPage() {
                     </span>
                   )}
                 </div>
+                {typeof cls.scp_type !== 'undefined' && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <span className="text-xs font-medium px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full">
+                      SCP: {cls.scp_type ? cls.scp_type.charAt(0).toUpperCase() + cls.scp_type.slice(1) : 'None'}
+                    </span>
+                  </div>
+                )}
                 
                 <div className="flex items-start gap-2 text-sm text-slate-600 pt-2 border-t border-slate-50">
                   <BookOpen className="h-4 w-4 text-slate-400 mt-0.5" />

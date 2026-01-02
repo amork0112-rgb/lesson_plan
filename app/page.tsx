@@ -156,10 +156,8 @@ export default function Home() {
   const [selectedDays, setSelectedDays] = useState<Weekday[]>(['Mon', 'Wed', 'Fri']);
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
-  // -- SCP Settings --
-  const [scpEnabled, setScpEnabled] = useState(false);
-  const [scpLevel, setScpLevel] = useState('Blue');
-  
+  // -- SCP Settings are per Class (scp_type), no global UI toggle
+
   // -- Special Dates --
   const [expandedMonthId, setExpandedMonthId] = useState<string | null>(null);
 
@@ -648,15 +646,18 @@ export default function Home() {
         return;
     }
 
+    const selectedClass = classes.find(c => c.id === classId);
     const classInfo: Class = {
       id: classId,
       name: className,
       year,
-      level_group: 'Root',
+      level_group: selectedClass?.level_group || 'Root',
       weekly_sessions: selectedDays.length,
+      sessions_per_month: 24,
       start_time: startTime,
       end_time: endTime,
-      days: selectedDays
+      days: selectedDays,
+      scp_type: selectedClass?.scp_type ?? null
     };
 
     let allPlans: LessonPlan[] = [];
@@ -691,18 +692,19 @@ export default function Home() {
          }
        }
         // Append SCP homework (not counted in book sessions)
-        if (scpEnabled && scpLevel) {
-          const level = scpLevel;
+        if (classInfo.scp_type) {
+          const level = classInfo.scp_type;
+          const cap = level.charAt(0).toUpperCase() + level.slice(1);
           allPlans.push({
             id: `${date}_scp_${scpDayCounter}`,
             class_id: classId,
             date,
             period: 99,
-            book_id: `scp_${level.toLowerCase()}`,
-            book_name: `SCP ${level}`,
+            book_id: `scp_${level}`,
+            book_name: `SCP ${cap}`,
             display_order: displayOrderCounter++,
             is_makeup: false,
-            content: `SCP ${level} Day ${scpDayCounter++}`
+            content: `SCP ${cap} Day ${scpDayCounter++}`
           });
         }
       });
@@ -932,34 +934,6 @@ export default function Home() {
 
           {/* Monthly Plans List */}
           <div className="p-6 space-y-8 bg-gray-50/50">
-            {/* SCP Controls */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Enable SCP</label>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    checked={scpEnabled} 
-                    onChange={(e) => setScpEnabled(e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                  />
-                  <span className="text-sm text-gray-600">Include homework per date</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">SCP Level</label>
-                <select 
-                  value={scpLevel}
-                  onChange={(e) => setScpLevel(e.target.value)}
-                  disabled={!scpEnabled}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50 disabled:opacity-50"
-                >
-                  {['Blue', 'Yellow', 'Green', 'Red'].map(level => (
-                    <option key={level} value={level}>{level}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
             {monthPlans.map((plan, index) => (
               <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">

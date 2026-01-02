@@ -21,10 +21,12 @@ export interface Class {
   year: number;
   level_group: string;
   weekly_sessions: number;
+  sessions_per_month: number;
   start_time: string;
   end_time: string;
   dismissal_time?: string; // 하원 시간
   days: Weekday[];
+  scp_type?: 'red' | 'orange' | 'yellow' | 'blue' | 'green' | null;
 }
 
 export interface ScheduleRule {
