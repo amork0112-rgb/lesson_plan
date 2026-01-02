@@ -1,6 +1,7 @@
 import { 
   Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
 } from '@/types';
+import { parseLocalDate } from './date';
 
 const WEEKDAYS: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -186,89 +187,4 @@ export function calculateBookDistribution(
   return weekdayToBook;
 }
 
-export function generateLessonPlan(
-  classInfo: Class,
-  dates: string[],
-  allocations: BookAllocation[],
-  books: Book[],
-  rules: ScheduleRule[],
-  initialProgress?: Record<string, { unit: number, day: number }>,
-  specialDates?: Record<string, SpecialDate>
-): { plans: LessonPlan[], finalProgress: Record<string, { unit: number, day: number }> } {
-  // Use shared distribution logic
-  const weekdayToBook = calculateBookDistribution(allocations, rules);
-
-  // 3. Generate Plan
-  const plans: LessonPlan[] = [];
-  const bookProgress: Record<string, { unit: number, day: number }> = initialProgress ? { ...initialProgress } : {};
-  
-  // Initialize progress for new books if not in initialProgress
-  books.forEach(b => {
-    if (!bookProgress[b.id]) {
-      bookProgress[b.id] = { unit: 1, day: 1 };
-    }
-  });
-
-  dates.forEach((dateStr) => {
-    // Check for special dates (School Events)
-    const special = specialDates ? specialDates[dateStr] : undefined;
-    if (special && special.type === 'school_event') {
-        plans.push({
-            id: Math.random().toString(36).substr(2, 9),
-            class_id: classInfo.id,
-            date: dateStr,
-            book_id: 'event',
-            unit_id: 'event',
-            display_order: 1,
-            is_makeup: false,
-            unit_text: special.name,
-            book_name: 'School Event'
-        });
-        return; // Skip book assignment for this date
-    }
-
-    const dateObj = new Date(dateStr);
-    const dayName = WEEKDAYS[dateObj.getDay()];
-    const bookId = weekdayToBook[dayName];
-
-    if (bookId) {
-      const book = books.find(b => b.id === bookId);
-      if (book) {
-        const progress = bookProgress[bookId];
-        
-        // Create Plan Item
-        const plan: LessonPlan = {
-          id: Math.random().toString(36).substr(2, 9),
-          class_id: classInfo.id,
-          date: dateStr,
-          book_id: book.id,
-          unit_id: `u_${progress.unit}`, // Mock ID
-          display_order: 1,
-          is_makeup: false,
-          unit_text: `${book.unit_type === 'unit' ? 'Unit' : 'Day'} ${progress.unit}`,
-          book_name: book.name
-        };
-        plans.push(plan);
-
-        // Increment Progress
-        let daysPerUnit = 1;
-        if (book.days_per_unit) {
-            daysPerUnit = book.days_per_unit;
-        } else if (book.unit_type === 'day') {
-            daysPerUnit = 1;
-        } else {
-            daysPerUnit = book.total_sessions ? Math.floor(book.total_sessions / book.total_units) : 1;
-        }
-
-        if (progress.day < daysPerUnit) {
-            progress.day++;
-        } else {
-            progress.unit++;
-            progress.day = 1;
-        }
-      }
-    }
-  });
-
-  return { plans, finalProgress: bookProgress };
-}
+ 

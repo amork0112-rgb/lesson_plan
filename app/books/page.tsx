@@ -21,9 +21,10 @@ export default function BooksPage() {
   const router = useRouter();
   const { books, addBook, allocations, classes, addAllocation, deleteAllocation } = useData();
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('overview');
   
   const tabs = [
+    { id: 'overview', label: 'Annual Lineup' },
     { id: 'all', label: 'All Books' },
     ...classes.map(c => ({ id: c.id, label: c.name }))
   ];
@@ -237,6 +238,18 @@ export default function BooksPage() {
         {/* Tabs */}
         <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
           <button
+            onClick={() => setActiveTab('overview')}
+            className={cn(
+              "px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap",
+              activeTab === 'overview'
+                ? "bg-slate-900 text-white shadow-md" 
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            )}
+          >
+            Annual Lineup
+          </button>
+          
+          <button
             onClick={() => setActiveTab('all')}
             className={cn(
               "px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap",
@@ -267,18 +280,66 @@ export default function BooksPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="mb-8 relative max-w-lg">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-          <input
-            type="text"
-            placeholder="Search books..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl shadow-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-shadow"
-          />
-        </div>
+        {activeTab !== 'overview' && (
+          <div className="mb-8 relative max-w-lg">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
+            <input
+              type="text"
+              placeholder="Search books..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl shadow-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-shadow"
+            />
+          </div>
+        )}
 
-        {activeTab === 'all' ? (
+        {activeTab === 'overview' ? (
+          /* OVERVIEW: Annual Lineup per Class */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map(cls => {
+              const classAllocations = allocations
+                .filter(a => a.class_id === cls.id)
+                .sort((a, b) => a.priority - b.priority)
+                .map(a => ({
+                  ...a,
+                  book: books.find(b => b.id === a.book_id)
+                }))
+                .filter(x => x.book);
+              
+              return (
+                <div key={cls.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <GraduationCap className="h-5 w-5 text-slate-400" />
+                      <div>
+                        <div className="font-semibold text-slate-900">{cls.name}</div>
+                        <div className="text-xs text-slate-500">{cls.year} • {cls.days.join(' ')}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500">Mar–Feb</div>
+                  </div>
+                  <div className="p-4">
+                    {classAllocations.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {classAllocations.map((alloc, idx) => (
+                          <span 
+                            key={alloc.id} 
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 text-sm"
+                          >
+                            <span className="font-medium truncate max-w-[140px]">{alloc.book!.name}</span>
+                            <span className="text-xs text-indigo-500">#{idx + 1}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 text-sm py-6 text-center">No lineup. Assign books to this class.</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : activeTab === 'all' ? (
           /* ALL BOOKS TABLE VIEW */
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <table className="w-full text-left border-collapse">

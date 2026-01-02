@@ -24,18 +24,30 @@ function getDaysPerUnit(book?: Book) {
 
 export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
   const { classId, monthPlans, planDates, selectedDays, books, scpType } = input;
+  if (!Array.isArray(books) || books.length === 0) return [];
   const slotsPerDay = getSlotsPerDay(selectedDays);
   let displayOrder = 1;
   let scpDay = 1;
 
   const lessons: LessonPlan[] = [];
+  const globalProgress: Record<string, { unit: number; day: number }> = {};
 
-  monthPlans.forEach(plan => {
-    const dates = planDates[plan.id] || [];
-    const allocations = [...plan.allocations].sort((a, b) => a.priority - b.priority);
+  const sortedPlans = [...monthPlans].sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return a.month - b.month;
+  });
 
-    const progress: Record<string, { unit: number; day: number }> = {};
-    allocations.forEach(a => (progress[a.book_id] = { unit: 1, day: 1 }));
+  sortedPlans.forEach(plan => {
+    if (!plan || !Array.isArray(plan.allocations) || plan.allocations.length === 0) return;
+    const dates = planDates[plan.id];
+    if (!Array.isArray(dates) || dates.length === 0) return;
+    const allocations = [...plan.allocations].filter(a => a && a.book_id).sort((a, b) => a.priority - b.priority);
+
+    allocations.forEach(a => {
+      if (!globalProgress[a.book_id]) {
+        globalProgress[a.book_id] = { unit: 1, day: 1 };
+      }
+    });
 
     let rrIndex = 0;
 
@@ -48,6 +60,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
         let picked: BookAllocation | null = null;
         for (let i = 0; i < allocations.length; i++) {
           const cand = allocations[(rrIndex + i) % allocations.length];
+          if (!cand.book_id) continue;
           if (!usedToday.has(cand.book_id)) {
             picked = cand;
             rrIndex = (rrIndex + i + 1) % allocations.length;
@@ -58,8 +71,9 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
         if (!picked) break;
 
         const book = books.find(b => b.id === picked!.book_id);
+        if (!book) continue;
         const dpu = getDaysPerUnit(book);
-        const p = progress[picked!.book_id];
+        const p = globalProgress[picked!.book_id];
 
         lessons.push({
           id: `${date}_${picked!.book_id}_${period}`,
@@ -69,7 +83,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
           display_order: displayOrder++,
           is_makeup: false,
           book_id: picked!.book_id,
-          book_name: book?.name || 'Unknown',
+          book_name: book.name,
           content: `Unit ${p.unit} Day ${p.day}`
         });
 

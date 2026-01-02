@@ -73,7 +73,17 @@
 @media print {
   @page {
     size: A4;
-    margin: 10mm;
+    margin: 0;
+  }
+  
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  #pdf-root {
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
   body {

@@ -2,27 +2,15 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
-import { generateClassDates, generateLessonPlan, calculateBookDistribution } from '@/lib/logic';
+import { generateClassDates, calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
+import { parseLocalDate } from '@/lib/date';
 import PdfLayout from '@/components/PdfLayout';
 import { Class, BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
-import { Settings, Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, ChevronRight, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, HelpCircle, BookOpen, FileText } from 'lucide-react';
+import { Settings, Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, ChevronRight, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, HelpCircle, BookOpen, FileText, GripVertical } from 'lucide-react';
 
 async function exportPdf(element: HTMLElement, filename: string) {
-  const mod = await import('html2pdf.js');
-  const html2pdf = (mod as any).default || mod;
-  const prevDisplay = element.style.display;
-  element.style.display = 'block';
-  try {
-    await html2pdf().from(element).set({
-      margin: 10,
-      filename,
-      html2canvas: { scale: 2 },
-      jsPDF: { format: 'a4', orientation: 'portrait' }
-    }).save();
-  } finally {
-    element.style.display = prevDisplay;
-  }
+  window.print();
 }
 
 // --- Types ---
@@ -109,7 +97,7 @@ function calculateMonthUsage(
   const weekdaysInMonth = new Set<Weekday>();
   dates.forEach(d => {
     const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dateObj = new Date(d);
+    const dateObj = parseLocalDate(d);
     weekdaysInMonth.add(dayMap[dateObj.getDay()] as Weekday);
   });
   
@@ -124,7 +112,7 @@ function calculateMonthUsage(
   const usage: Record<string, number> = {};
   dates.forEach(d => {
     const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dateObj = new Date(d);
+    const dateObj = parseLocalDate(d);
     const dayName = dayMap[dateObj.getDay()];
     const bookId = distribution[dayName];
     if (bookId) {
@@ -135,21 +123,7 @@ function calculateMonthUsage(
   return usage;
 }
 
-function distributeByPriority(
-  dates: string[],
-  allocations: BookAllocation[]
-) {
-  const result: { date: string; bookId: string }[] = [];
-  if (allocations.length === 0) return result;
-  const sorted = [...allocations].sort((a, b) => a.priority - b.priority);
-  let index = 0;
-  dates.forEach(date => {
-    const alloc = sorted[index % sorted.length];
-    result.push({ date, bookId: alloc.book_id });
-    index++;
-  });
-  return result;
-}
+ 
 
 function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates: Record<string, string[]>) {
   const dates = planDates[planId] || [];
@@ -162,16 +136,9 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
   };
 }
 
-function pad(n: number, width: number) {
-  const s = n.toString();
-  return s.length >= width ? s : new Array(width - s.length + 1).join('0') + s;
-}
+ 
 
-function getDaysPerUnitForBook(book: Book) {
-  if (book.days_per_unit && book.days_per_unit > 0) return book.days_per_unit;
-  if (book.unit_type === 'day') return 1;
-  return 3;
-}
+ 
 
 export default function Home() {
   const { books, holidays, classes, allocations: globalAllocations, setAllocations, specialDates, updateSpecialDate } = useData();
@@ -260,9 +227,7 @@ export default function Home() {
          id: `m_${y}_${m}`,
          year: y,
          month: m,
-         allocations: idx === 0 ? [
-            { id: `a_${y}_${m}_1`, class_id: classId, book_id: books[0]?.id || '', sessions_per_week: 2, priority: 1, total_sessions_override: 48 },
-         ] : [] 
+         allocations: [] 
        });
     });
     
@@ -291,6 +256,11 @@ export default function Home() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<LessonPlan[]>([]);
   const [showGuide, setShowGuide] = useState(true);
+  const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
+  const [addingDateId, setAddingDateId] = useState<string | null>(null);
+  const [addingBookId, setAddingBookId] = useState<string>('');
+  const [addingUnit, setAddingUnit] = useState<number>(1);
+  const [addingDay, setAddingDay] = useState<number>(1);
 
   // -- Computed Usage & Flow --
   // We calculate the flow of sessions: Start -> Used -> Remaining -> Next Start
@@ -316,7 +286,7 @@ export default function Home() {
     });
     
     // Sort dates chronologically just in case
-    allPotentialDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    allPotentialDates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
     
     // 2. Determine target sessions per month
     const targetPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
@@ -335,6 +305,8 @@ export default function Home() {
     
     return distributed;
   }, [monthPlans, selectedDays, holidays, specialDates]); // Dependencies: if holidays/special dates change, we re-calc flow
+
+  // (removed) monthly curriculum grid helpers
 
   // Filter books based on selected class
   const filteredBooks = useMemo(() => {
@@ -650,7 +622,7 @@ export default function Home() {
     if (shouldDownload && isGenerated && generatedPlan.length > 0) {
       const element = document.getElementById('pdf-root');
       if (element) {
-        exportPdf(element, 'lesson_plan.pdf');
+        requestAnimationFrame(() => exportPdf(element, 'lesson_plan.pdf'));
       }
       setShouldDownload(false);
     }
@@ -756,7 +728,13 @@ export default function Home() {
 
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
-    setShouldDownload(true);
+    setShouldDownload(!targetMonthId);
+    requestAnimationFrame(() => {
+      const el = document.getElementById('preview-root');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
 
     if (allPlans.length === 0) {
         alert('수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지');
@@ -769,14 +747,7 @@ export default function Home() {
     setGeneratedPlan([]);
   }, [year, startMonth, duration]);
   
-  // Helper to calculate cumulative usage up to (and including) a specific month index
-  const getCumulativeUsage = (monthIndex: number, bookId: string) => {
-    // This is now legacy or can be adapted if needed, but we rely on bookFlow for UI.
-    // However, the PDF generator might need cumulative logic?
-    // Actually the PDF generator runs generateLessonPlan logic.
-    // Let's keep this but maybe unused for now in the main table.
-    return 0; 
-  };
+ 
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -843,7 +814,7 @@ export default function Home() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
           {/* Top Settings Bar */}
           <div className="p-6 border-b border-gray-200 bg-gray-50 grid grid-cols-1 md:grid-cols-5 gap-6">
-             <div>
+              <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Class Name</label>
                 <select 
                   value={classId} 
@@ -855,6 +826,25 @@ export default function Home() {
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {ALL_WEEKDAYS.map(day => (
+                      <button
+                        key={day}
+                        onClick={() => handleDayToggle(day)}
+                        className={`
+                          px-3 py-1.5 rounded-full text-xs font-medium transition-colors
+                          ${selectedDays.includes(day) 
+                            ? 'bg-indigo-600 text-white shadow-md' 
+                            : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
+                        `}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -903,26 +893,10 @@ export default function Home() {
                 </select>
               </div>
 
-              <div className="md:col-span-1">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
-                <div className="flex flex-wrap gap-2">
-                  {ALL_WEEKDAYS.map(day => (
-                    <button
-                      key={day}
-                      onClick={() => handleDayToggle(day)}
-                      className={`
-                        px-3 py-1.5 rounded-full text-xs font-medium transition-colors
-                        ${selectedDays.includes(day) 
-                          ? 'bg-indigo-600 text-white shadow-md' 
-                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
-                      `}
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              
           </div>
+
+          {/* (removed) Monthly Curriculum Grid */}
 
           {/* Monthly Plans List */}
           <div className="p-6 space-y-8 bg-gray-50/50">
@@ -1038,7 +1012,7 @@ export default function Home() {
                                 
                                 const assignedDates = planDates[plan.id] || [];
                                 // Sort assigned dates chronologically
-                                const assignedDatesObj = assignedDates.map(d => new Date(d)).sort((a, b) => a.getTime() - b.getTime());
+                                const assignedDatesObj = assignedDates.map(d => parseLocalDate(d)).sort((a, b) => a.getTime() - b.getTime());
                                 
                                 const firstAssigned = assignedDatesObj.length > 0 ? assignedDatesObj[0] : firstOfMonth;
                                 const lastAssigned = assignedDatesObj.length > 0 ? assignedDatesObj[assignedDatesObj.length - 1] : endOfMonth;
@@ -1548,7 +1522,7 @@ export default function Home() {
           </div>
 
           {/* Screen Preview (grid, hidden on print) */}
-          <div className="p-8 no-print">
+          <div id="preview-root" className="p-8 no-print">
             {generatedPlan.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                     <p className="text-lg font-medium mb-2">No lessons generated.</p>
@@ -1557,7 +1531,7 @@ export default function Home() {
             ) : (
                 /* Group by Month for Display */
                 Object.entries(generatedPlan.reduce((groups, lesson) => {
-              const d = new Date(lesson.date);
+              const d = parseLocalDate(lesson.date);
               const key = `${d.getFullYear()}-${d.getMonth()}`;
               if (!groups[key]) groups[key] = [];
               groups[key].push(lesson);
@@ -1567,15 +1541,15 @@ export default function Home() {
               
               return (
                 <div key={key} className={index < array.length - 1 ? "mb-12 print:break-after-page" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
-                   <div className="mb-6 text-center">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-1">{className} Lesson Plan</h1>
-                      <p className="text-gray-500 text-sm">
+                   <div className="mb-2 text-center">
+                      <h1 className="text-xl font-bold text-gray-900">{className} Lesson Plan</h1>
+                      <p className="text-gray-600 text-xs">
                         {selectedDays.join(' ')} {startTime}~{endTime} • {MONTH_NAMES[m]} {y} [
                           {(() => {
-                            const monthDates = lessons.map(l => l.date).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                            const monthDates = lessons.map(l => l.date).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
                             if (monthDates.length === 0) return '';
-                            const s = new Date(monthDates[0]);
-                            const e = new Date(monthDates[monthDates.length - 1]);
+                            const s = parseLocalDate(monthDates[0]);
+                            const e = parseLocalDate(monthDates[monthDates.length - 1]);
                             const fmt = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
                             return `${fmt(s)} ~ ${fmt(e)}`;
                           })()}
@@ -1590,45 +1564,232 @@ export default function Home() {
                          if (!byDate[l.date]) byDate[l.date] = [];
                          byDate[l.date].push(l);
                        });
-                       const uniqueDates = Object.keys(byDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                       const uniqueDates = Object.keys(byDate).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
                        const cols = 2;
                        const rows: string[][] = [];
                        for (let i = 0; i < uniqueDates.length; i += cols) {
                          rows.push(uniqueDates.slice(i, i + cols));
                        }
                        return rows.map((datesRow, ri) => (
-                        <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div key={ri} className="grid grid-cols-2 gap-2">
                           {datesRow.map((dStr, ci) => {
                             const list = (byDate[dStr] || []).sort((a, b) => {
                               const pa = typeof a.period === 'number' ? a.period : 0;
                               const pb = typeof b.period === 'number' ? b.period : 0;
                               return pa - pb;
                              });
-                             const dd = new Date(dStr);
-                             const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
-                           return (
-                              <div key={dStr} className="border rounded-lg overflow-hidden date-card">
-                                <div className="px-3 py-2 bg-gray-100 text-gray-700 font-medium">{head}</div>
-                                <div className="p-3 space-y-2">
-                                   {list.map(item => {
-                                     if (item.book_id === 'event') {
-                                       return (
-                                         <div key={item.id} className="flex items-center gap-2 text-gray-800">
-                                           <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
-                                           <span className="font-medium">{item.unit_text || 'Event'}</span>
-                                         </div>
-                                     );
-                                   }
-                                   return (
-                                     <div key={item.id} className="text-sm text-gray-700">{item.content || ''}</div>
-                                   );
-                                  })}
-                                 </div>
-                               </div>
-                             );
-                           })}
-                       </div>
-                      ));
+                              const dd = parseLocalDate(dStr);
+                              const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
+                              const parseUD = (s?: string) => {
+                                const m = s?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
+                                const u = m ? parseInt(m[1]) : undefined;
+                                const d = m ? parseInt(m[2]) : undefined;
+                                return { u, d };
+                              };
+                              const formatUD = (u?: number, d?: number, fallback?: string) => {
+                                if (typeof u === 'number' && typeof d === 'number') return `Unit ${u} Day ${d}`;
+                                return fallback || '';
+                              };
+                              const onDropCard = (srcId: string, tgtId: string) => {
+                                if (!srcId || !tgtId || srcId === tgtId) return;
+                                const src = generatedPlan.find(l => l.id === srcId);
+                                const tgt = generatedPlan.find(l => l.id === tgtId);
+                                if (!src || !tgt || src.date !== tgt.date || src.date !== dStr) return;
+                                const dateList = generatedPlan.filter(l => l.date === dStr).sort((a, b) => {
+                                  const pa = typeof a.period === 'number' ? a.period : 0;
+                                  const pb = typeof b.period === 'number' ? b.period : 0;
+                                  return pa - pb;
+                                });
+                                const ids = dateList.map(l => l.id);
+                                const si = ids.indexOf(srcId);
+                                const ti = ids.indexOf(tgtId);
+                                if (si < 0 || ti < 0) return;
+                                ids.splice(si, 1);
+                                ids.splice(ti, 0, srcId);
+                                setGeneratedPlan(prev => {
+                                  const next = prev.map(l => ({ ...l }));
+                                  const mapIdx: Record<string, number> = {};
+                                  ids.forEach((id, idx) => { mapIdx[id] = idx + 1; });
+                                  for (const l of next) {
+                                    if (l.date === dStr && typeof mapIdx[l.id] === 'number') {
+                                      l.period = mapIdx[l.id];
+                                    }
+                                  }
+                                  return next;
+                                });
+                              };
+                              return (
+                                <div key={dStr} className="border rounded-lg overflow-hidden date-card">
+                                  <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium flex items-center justify-between">
+                                    <span>{head}</span>
+                                    <button
+                                      onClick={() => {
+                                        setAddingDateId(dStr);
+                                        setAddingBookId(filteredBooks[0]?.id || '');
+                                        setAddingUnit(1);
+                                        setAddingDay(1);
+                                      }}
+                                      className="text-xs px-2 py-1 rounded bg-indigo-600 text-white"
+                                    >
+                                      Add Lesson
+                                    </button>
+                                  </div>
+                                  <div
+                                    className="p-2 space-y-1"
+                                    onDragOver={(e) => e.preventDefault()}
+                                  >
+                                    {list.map(item => {
+                                      if (item.book_id === 'event') {
+                                        return (
+                                          <div key={item.id} className="flex items-center gap-2 text-gray-800">
+                                            <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
+                                            <span className="font-medium">{item.unit_text || 'Event'}</span>
+                                          </div>
+                                        );
+                                      }
+                                      const { u, d } = parseUD(item.content);
+                                      const hasUD = typeof u === 'number' && typeof d === 'number';
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          draggable
+                                          onDragStart={(e) => {
+                                            setDraggingLessonId(item.id);
+                                            e.dataTransfer.setData('text/plain', item.id);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                          }}
+                                          onDrop={(e) => {
+                                            const srcId = e.dataTransfer.getData('text/plain') || draggingLessonId || '';
+                                            onDropCard(srcId, item.id);
+                                            setDraggingLessonId(null);
+                                          }}
+                                          className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 bg-white shadow-sm"
+                                        >
+                                          <GripVertical className="h-3 w-3 text-slate-400 cursor-move" />
+                                          <div className="flex-1">
+                                            <div className="text-sm font-bold text-slate-900">{item.book_name}</div>
+                                            <div className="mt-1 flex items-center gap-2">
+                                              {hasUD ? (
+                                                <>
+                                                  <span className="text-sm text-slate-500">Unit</span>
+                                                  <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={u}
+                                                    onChange={(e) => {
+                                                      const nu = parseInt(e.target.value) || 1;
+                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(nu, d, item.content) } : l));
+                                                    }}
+                                                    className="w-14 px-2 py-1 border rounded text-xs"
+                                                  />
+                                                  <span className="text-sm text-slate-500">Day</span>
+                                                  <input
+                                                    type="number"
+                                                    min={1}
+                                                    value={d}
+                                                    onChange={(e) => {
+                                                      const nd = parseInt(e.target.value) || 1;
+                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(u, nd, item.content) } : l));
+                                                    }}
+                                                    className="w-14 px-2 py-1 border rounded text-xs"
+                                                  />
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <span className="text-sm text-slate-500">Content</span>
+                                                  <input
+                                                    type="text"
+                                                    value={item.content || ''}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value;
+                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: val } : l));
+                                                    }}
+                                                    className="flex-1 px-2 py-1 border rounded text-xs"
+                                                  />
+                                                </>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              setGeneratedPlan(prev => prev.filter(l => l.id !== item.id));
+                                            }}
+                                            className="text-slate-500 hover:text-red-600"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                    {addingDateId === dStr && (
+                                      <div className="mt-2 p-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50">
+                                        <div className="flex items-center gap-2">
+                                          <select
+                                            value={addingBookId}
+                                            onChange={(e) => setAddingBookId(e.target.value)}
+                                            className="px-2 py-1 border rounded text-xs"
+                                          >
+                                            {filteredBooks.map(b => (
+                                              <option key={b.id} value={b.id}>{b.name}</option>
+                                            ))}
+                                          </select>
+                                          <span className="text-sm text-slate-600">Unit</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={addingUnit}
+                                            onChange={(e) => setAddingUnit(parseInt(e.target.value) || 1)}
+                                            className="w-14 px-2 py-1 border rounded text-xs"
+                                          />
+                                          <span className="text-sm text-slate-600">Day</span>
+                                          <input
+                                            type="number"
+                                            min={1}
+                                            value={addingDay}
+                                            onChange={(e) => setAddingDay(parseInt(e.target.value) || 1)}
+                                            className="w-14 px-2 py-1 border rounded text-xs"
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              if (!addingBookId) return;
+                                              const book = books.find(b => b.id === addingBookId);
+                                              if (!book) return;
+                                              const nextPeriod = (byDate[dStr] || []).length + 1;
+                                              const nextOrder = (generatedPlan.reduce((max, l) => Math.max(max, l.display_order || 0), 0)) + 1;
+                                              const nid = `${dStr}_manual_${addingBookId}_${Date.now()}`;
+                                              const nl: LessonPlan = {
+                                                id: nid,
+                                                class_id: classId,
+                                                date: dStr,
+                                                period: nextPeriod,
+                                                display_order: nextOrder,
+                                                is_makeup: false,
+                                                book_id: addingBookId,
+                                                book_name: book.name,
+                                                content: `Unit ${addingUnit} Day ${addingDay}`
+                                              };
+                                              setGeneratedPlan(prev => [...prev, nl]);
+                                              setAddingDateId(null);
+                                            }}
+                                            className="px-2 py-1 rounded bg-indigo-600 text-white text-xs"
+                                          >
+                                            Add
+                                          </button>
+                                          <button
+                                            onClick={() => setAddingDateId(null)}
+                                            className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 text-xs"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                       ));
                     })()}
                   </div>
                </div>
