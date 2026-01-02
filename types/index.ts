@@ -103,3 +103,11 @@ export interface LessonPlan {
   content?: string;
   unit_range?: string;
 }
+
+export interface LessonRow {
+  date: string;
+  weekday_kr: string;
+  book_name: string;
+  content: string;
+  is_scp?: boolean;
+}

@@ -3,8 +3,27 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
 import { generateClassDates, generateLessonPlan, calculateBookDistribution } from '@/lib/logic';
+import { generateLessons } from '@/lib/lessonEngine';
+import PdfLayout from '@/components/PdfLayout';
 import { Class, BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Settings, Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, ChevronRight, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, HelpCircle, BookOpen, FileText } from 'lucide-react';
+
+async function exportPdf(element: HTMLElement, filename: string) {
+  const mod = await import('html2pdf.js');
+  const html2pdf = (mod as any).default || mod;
+  const prevDisplay = element.style.display;
+  element.style.display = 'block';
+  try {
+    await html2pdf().from(element).set({
+      margin: 10,
+      filename,
+      html2canvas: { scale: 2 },
+      jsPDF: { format: 'a4', orientation: 'portrait' }
+    }).save();
+  } finally {
+    element.style.display = prevDisplay;
+  }
+}
 
 // --- Types ---
 interface MonthPlan {
@@ -134,14 +153,24 @@ function distributeByPriority(
 
 function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates: Record<string, string[]>) {
   const dates = planDates[planId] || [];
-  const slotsPerDay = selectedDays.length === 2 ? 3 : 2;
-  const used = dates.length * slotsPerDay;
+  const used = dates.length;
   return {
-    target: 24,
+    target: selectedDays.length === 2 ? 8 : 12,
     used,
-    remaining: 24 - used,
-    overflow: used - 24,
+    remaining: (selectedDays.length === 2 ? 8 : 12) - used,
+    overflow: used - (selectedDays.length === 2 ? 8 : 12),
   };
+}
+
+function pad(n: number, width: number) {
+  const s = n.toString();
+  return s.length >= width ? s : new Array(width - s.length + 1).join('0') + s;
+}
+
+function getDaysPerUnitForBook(book: Book) {
+  if (book.days_per_unit && book.days_per_unit > 0) return book.days_per_unit;
+  if (book.unit_type === 'day') return 1;
+  return 3;
 }
 
 export default function Home() {
@@ -508,10 +537,10 @@ export default function Home() {
 
   const openAddBookModal = (monthId: string) => {
     setTargetMonthId(monthId);
-    // Default to first available book
     const defaultBookId = filteredBooks.length > 0 ? filteredBooks[0].id : (books.length > 0 ? books[0].id : '');
     setNewAllocation({ bookId: defaultBookId, sessionsPerWeek: selectedDays.length > 0 ? selectedDays.length : 2 });
-    setIsAddBookModalOpen(true);
+    setInlineAddMonthId(monthId);
+    setIsAddBookModalOpen(false);
   };
 
   const handleSaveNewAllocation = () => {
@@ -537,8 +566,38 @@ export default function Home() {
     
     setIsAddBookModalOpen(false);
     setTargetMonthId(null);
+    setInlineAddMonthId(null);
   };
 
+  const cancelInlineAdd = () => {
+    setInlineAddMonthId(null);
+    setTargetMonthId(null);
+  };
+
+  const getPlansForMonth = (monthId: string): LessonPlan[] => {
+    const allLessons = generateLessons({
+      classId,
+      monthPlans,
+      planDates,
+      selectedDays,
+      books,
+      scpType: classes.find(c => c.id === classId)?.scp_type ?? null
+    });
+    const targetPlan = monthPlans.find(p => p.id === monthId);
+    if (!targetPlan) return [];
+    return allLessons.filter(l => {
+      const [y, m] = l.date.split('-').map(Number);
+      return y === targetPlan.year && (m - 1) === targetPlan.month;
+    });
+  };
+
+  const saveMonthlyPlan = (monthId: string) => {
+    const monthly = getPlansForMonth(monthId);
+    const target = monthPlans.find(p => p.id === monthId);
+    if (!target) return;
+    localStorage.setItem(`savedPlan_${classId}_${target.year}_${target.month}`, JSON.stringify(monthly));
+    alert('해당 월 플랜을 저장했습니다.');
+  };
   
   const removeAllocation = (monthId: string, allocId: string) => {
     setMonthPlans(monthPlans.map(plan => {
@@ -584,44 +643,23 @@ export default function Home() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [shouldDownload, setShouldDownload] = useState(false);
+  const [inlineAddMonthId, setInlineAddMonthId] = useState<string | null>(null);
 
   // Auto-download effect
   useEffect(() => {
-    // Disabled auto-download; user triggers explicitly via Download button
     if (shouldDownload && isGenerated && generatedPlan.length > 0) {
-      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      downloadPDF();
+      const element = document.getElementById('pdf-root');
+      if (element) {
+        exportPdf(element, 'lesson_plan.pdf');
+      }
       setShouldDownload(false);
     }
   }, [shouldDownload, isGenerated, generatedPlan]);
 
-  const downloadPDF = async () => {
-    const element = document.getElementById('results');
-    if (!element) {
-        console.error('Results element not found');
-        return;
-    }
-
-    try {
-        setIsGenerating(true);
-        // Dynamic import to avoid SSR issues
-        const html2pdf = (await import('html2pdf.js')).default;
-        
-        const opt = {
-          margin:       10,
-          filename:     `book_${className || 'Class'}.pdf`,
-          image:        { type: 'jpeg' as const, quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true, logging: true },
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-        };
-
-        await html2pdf().from(element).set(opt).save();
-    } catch (error) {
-        console.error('PDF generation failed:', error);
-        alert('PDF generation failed. Please try again or use the print option.');
-    } finally {
-        setIsGenerating(false);
-    }
+  const downloadPDF = () => {
+    const element = document.getElementById('pdf-root');
+    if (!element) return;
+    exportPdf(element, 'lesson_plan.pdf');
   };
 
   const handleGenerate = (targetMonthId?: string) => {
@@ -660,66 +698,19 @@ export default function Home() {
       scp_type: selectedClass?.scp_type ?? null
     };
 
-    let allPlans: LessonPlan[] = [];
-    let currentProgress: Record<string, { unit: number, day: number }> = {};
-
-    console.log('[Debug] Starting Generation for Class:', className);
-
-    let displayOrderCounter = 1;
-    let scpDayCounter = 1;
-    const slotsPerDay = selectedDays.length === 2 ? 3 : 2; // 2days/week -> 3교시, 3days/week -> 2교시 = 월 24회
-    monthPlans.forEach(plan => {
-       const dates = planDates[plan.id] || [];
-       const sorted = [...plan.allocations].sort((a, b) => a.priority - b.priority);
-       let idx = 0;
-       dates.forEach(date => {
-         for (let slot = 0; slot < slotsPerDay; slot++) {
-           if (sorted.length > 0) {
-             const alloc = sorted[idx % sorted.length];
-             const bookName = books.find(b => b.id === alloc.book_id)?.name || 'Unknown';
-             allPlans.push({
-               id: `${date}_${alloc.book_id}_${slot + 1}`,
-               class_id: classId,
-               date,
-               book_id: alloc.book_id,
-               display_order: displayOrderCounter++,
-               is_makeup: false,
-               period: slot + 1,
-               book_name: bookName,
-               content: `Unit Day ${slot + 1}`
-             });
-             idx++;
-         }
-       }
-        // Append SCP homework (not counted in book sessions)
-        if (classInfo.scp_type) {
-          const level = classInfo.scp_type;
-          const cap = level.charAt(0).toUpperCase() + level.slice(1);
-          allPlans.push({
-            id: `${date}_scp_${scpDayCounter}`,
-            class_id: classId,
-            date,
-            period: 99,
-            book_id: `scp_${level}`,
-            book_name: `SCP ${cap}`,
-            display_order: displayOrderCounter++,
-            is_makeup: false,
-            content: `SCP ${cap} Day ${scpDayCounter++}`
-          });
-        }
-      });
-     });
-    
-    console.log('[Debug] Total Plans Generated:', allPlans.length);
+    const allLessons = generateLessons({
+      classId,
+      monthPlans,
+      planDates,
+      selectedDays,
+      books,
+      scpType: classes.find(c => c.id === classId)?.scp_type ?? null
+    });
+    let allPlans: LessonPlan[] = allLessons;
 
     if (targetMonthId) {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
       if (targetPlan) {
-        const slotStatus = getMonthlySlotStatus(targetPlan.id, selectedDays, planDates);
-        if (slotStatus.used !== 24) {
-          alert('이 달의 24회 수업이 모두 채워지지 않았습니다.');
-          return;
-        }
         // Filter plans for this month
         const monthlyPlans = allPlans.filter(l => {
           // Parse YYYY-MM-DD manually to avoid UTC conversion issues
@@ -765,6 +756,7 @@ export default function Home() {
 
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
+    setShouldDownload(true);
 
     if (allPlans.length === 0) {
         alert('수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지');
@@ -946,16 +938,15 @@ export default function Home() {
                         {planDates[plan.id]?.length || 0} Sessions
                       </span>
                       {(() => {
-                        const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
-                        const badgeClass =
-                          slotStatus.remaining === 0
-                            ? 'bg-green-100 text-green-700'
-                            : slotStatus.remaining > 0
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-red-100 text-red-700';
+                        const usageMap = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId);
+                        const totalUsed = plan.allocations.reduce((sum, a) => {
+                          const u = a.manual_used !== undefined ? a.manual_used : (usageMap[a.book_id] || 0);
+                          return sum + (typeof u === 'number' ? u : 0);
+                        }, 0);
+                        const badgeClass = 'bg-green-100 text-green-700';
                         return (
                           <span className={`text-xs px-3 py-1 rounded-full font-semibold ${badgeClass}`}>
-                            {slotStatus.used} / 24 Slots
+                            {totalUsed}
                           </span>
                         );
                       })()}
@@ -963,11 +954,6 @@ export default function Home() {
                    <div className="flex items-center gap-2">
                      <button 
                         onClick={() => {
-                          const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
-                          if (slotStatus.used !== 24) {
-                            alert('이 달의 24회 수업이 모두 채워지지 않았습니다.');
-                            return;
-                          }
                           handleGenerate(plan.id);
                         }}
                         className="text-xs font-medium bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-700 flex items-center gap-1 transition-colors shadow-sm"
@@ -1010,6 +996,28 @@ export default function Home() {
                             <Copy className="h-3 w-3" /> Copy Previous
                           </button>
                       )}
+                      {(() => {
+                        const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
+                        if (slotStatus.used === slotStatus.target) {
+                          return (
+                            <>
+                              <button 
+                                onClick={() => saveMonthlyPlan(plan.id)}
+                                className="text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded-full hover:bg-green-700 transition-colors"
+                              >
+                                Save
+                              </button>
+                              <button 
+                                onClick={() => setExpandedMonthId(plan.id)}
+                                className="text-xs font-medium bg-yellow-500 text-white px-3 py-1.5 rounded-full hover:bg-yellow-600 transition-colors"
+                              >
+                                Edit
+                              </button>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
                    </div>
                 </div>
                 
@@ -1369,6 +1377,78 @@ export default function Home() {
                           </tr>
                          );
                       })}
+                      {inlineAddMonthId === plan.id && (
+                        <tr className="bg-indigo-50/30">
+                          <td className="px-6 py-3">
+                            <select 
+                              value={newAllocation.bookId}
+                              onChange={(e) => setNewAllocation({...newAllocation, bookId: e.target.value})}
+                              className="block w-full rounded border-gray-200 text-sm p-1.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                            >
+                              {(() => {
+                                const displayBooks = filteredBooks;
+                                const groupedBooks: Record<string, Book[]> = {};
+                                displayBooks.forEach(b => {
+                                  const level = b.level || 'Others';
+                                  if (!groupedBooks[level]) groupedBooks[level] = [];
+                                  groupedBooks[level].push(b);
+                                });
+                                const sortedLevels = Object.keys(groupedBooks).sort((a, b) => a.localeCompare(b));
+                                return sortedLevels.map(level => (
+                                  <optgroup key={level} label={level}>
+                                    {groupedBooks[level].map(b => (
+                                      <option key={b.id} value={b.id}>
+                                        {b.name} ({b.category ? b.category.replace('c_', '').toUpperCase() : 'General'})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ));
+                              })()}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input 
+                              type="number" min="1"
+                              value={newAllocation.sessionsPerWeek}
+                              onChange={(e) => setNewAllocation({...newAllocation, sessionsPerWeek: parseInt(e.target.value) || 1})}
+                              className="w-16 text-center rounded border-gray-200 p-1.5 text-sm"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xs text-gray-400">next</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <input 
+                              type="number" min="0"
+                              value={newAllocation.totalOverride || ''}
+                              onChange={(e) => setNewAllocation({...newAllocation, totalOverride: e.target.value ? parseInt(e.target.value) : undefined})}
+                              className="w-16 text-center rounded border-gray-200 p-1.5 text-sm bg-gray-50 focus:bg-white"
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xs text-indigo-600">auto</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-xs text-gray-400">calc</span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={cancelInlineAdd}
+                                className="px-2 py-1 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                              <button 
+                                onClick={handleSaveNewAllocation}
+                                className="px-2 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1429,33 +1509,46 @@ export default function Home() {
 
       {/* Output / Printable Area */}
       {isGenerated && (
-        <div id="results" className="mt-12 bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200 scroll-mt-8">
+        <>
+          <style>{`
+            @media print {
+              html, body { height: auto; }
+              #results { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
+              .date-card { page-break-inside: avoid; }
+              .print-title { margin-bottom: 4px; }
+              .print-sub { margin-top: 0; font-size: 12px; color: #6b7280; }
+              .no-print { display: none !important; }
+              .print-only { display: block !important; }
+              .pdf-root { font-family: 'Pretendard', sans-serif; }
+              .pdf-title { text-align: center; font-size: 28px; font-weight: 800; }
+              .pdf-sub { text-align: center; margin-bottom: 20px; }
+              .pdf-month { font-size: 22px; margin: 20px 0; border-bottom: 3px solid #000; }
+              .pdf-table { width: 100%; border-collapse: collapse; }
+              .pdf-date { width: 140px; vertical-align: top; font-weight: 700; border-right: 2px solid #333; padding: 10px; }
+              .pdf-content { padding: 10px; }
+              .pdf-content div { margin-bottom: 4px; }
+              .scp-line { color: #f59e0b; font-weight: 600; }
+            }
+            @media screen {
+              .print-only { display: none !important; }
+            }
+          `}</style>
+          <div id="results" className="mt-12 bg-white shadow-lg rounded-xl border border-gray-200 scroll-mt-8 max-h-[85vh] overflow-y-auto">
           <div className="p-8 border-b border-gray-200 flex justify-between items-center bg-gray-50 no-print">
             <div>
               <p className="text-sm text-gray-500">{generatedPlan.length} sessions scheduled</p>
             </div>
             <button 
-              onClick={() => {
-                  downloadPDF();
-              }}
-              disabled={isGenerating}
-              className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
+              onClick={() => { downloadPDF(); }}
+              className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
-              {isGenerating ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                    Processing...
-                  </>
-              ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    Re-Download PDF
-                  </>
-              )}
+              <Download className="h-4 w-4" />
+              Re-Download PDF
             </button>
           </div>
 
-          <div className="p-8">
+          {/* Screen Preview (grid, hidden on print) */}
+          <div className="p-8 no-print">
             {generatedPlan.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                     <p className="text-lg font-medium mb-2">No lessons generated.</p>
@@ -1475,55 +1568,83 @@ export default function Home() {
               return (
                 <div key={key} className={index < array.length - 1 ? "mb-12 print:break-after-page" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
                    <div className="mb-6 text-center">
-                      <h1 className="text-2xl font-bold text-gray-900 mb-1">{className} - {MONTH_NAMES[m]} {y}</h1>
-                      <p className="text-gray-500 text-sm">Monthly Lesson Plan</p>
+                      <h1 className="text-2xl font-bold text-gray-900 mb-1">{className} Lesson Plan</h1>
+                      <p className="text-gray-500 text-sm">
+                        {selectedDays.join(' ')} {startTime}~{endTime} • {MONTH_NAMES[m]} {y} [
+                          {(() => {
+                            const monthDates = lessons.map(l => l.date).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                            if (monthDates.length === 0) return '';
+                            const s = new Date(monthDates[0]);
+                            const e = new Date(monthDates[monthDates.length - 1]);
+                            const fmt = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
+                            return `${fmt(s)} ~ ${fmt(e)}`;
+                          })()}
+                        ]
+                      </p>
                    </div>
 
-                   <div className="overflow-x-auto">
-                   <table className="w-full text-sm text-left border border-gray-200 rounded-lg overflow-hidden">
-                      <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-2 font-semibold border-r">Date</th>
-                          <th className="px-4 py-2 font-semibold border-r">Content</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {Object.entries(lessons.reduce((byDate, l) => {
-                          const key = l.date;
-                          if (!byDate[key]) byDate[key] = [];
-                          byDate[key].push(l);
-                          return byDate;
-                        }, {} as Record<string, LessonPlan[]>)).map(([date, list]) => {
-                          const sorted = [...list].sort((a, b) => {
-                            const pa = typeof a.period === 'number' ? a.period : 0;
-                            const pb = typeof b.period === 'number' ? b.period : 0;
-                            return pa - pb;
-                          });
-                          return (
-                            <tr key={date} className="hover:bg-gray-50 transition-colors align-top">
-                              <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap border-r">
-                                {new Date(date).toLocaleDateString()}
-                              </td>
-                              <td className="px-4 py-3 text-gray-700">
-                                <div className="space-y-1">
-                                  {sorted.map(item => (
-                                    <div key={item.id} className="text-gray-700">
-                                      {item.book_id === 'event' ? (item.unit_text || '') : (item.content || '')}
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                   <div className="space-y-6">
+                     {(() => {
+                       const byDate: Record<string, LessonPlan[]> = {};
+                       lessons.forEach(l => {
+                         if (!byDate[l.date]) byDate[l.date] = [];
+                         byDate[l.date].push(l);
+                       });
+                       const uniqueDates = Object.keys(byDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+                       const cols = 2;
+                       const rows: string[][] = [];
+                       for (let i = 0; i < uniqueDates.length; i += cols) {
+                         rows.push(uniqueDates.slice(i, i + cols));
+                       }
+                       return rows.map((datesRow, ri) => (
+                        <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {datesRow.map((dStr, ci) => {
+                            const list = (byDate[dStr] || []).sort((a, b) => {
+                              const pa = typeof a.period === 'number' ? a.period : 0;
+                              const pb = typeof b.period === 'number' ? b.period : 0;
+                              return pa - pb;
+                             });
+                             const dd = new Date(dStr);
+                             const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
+                           return (
+                              <div key={dStr} className="border rounded-lg overflow-hidden date-card">
+                                <div className="px-3 py-2 bg-gray-100 text-gray-700 font-medium">{head}</div>
+                                <div className="p-3 space-y-2">
+                                   {list.map(item => {
+                                     if (item.book_id === 'event') {
+                                       return (
+                                         <div key={item.id} className="flex items-center gap-2 text-gray-800">
+                                           <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
+                                           <span className="font-medium">{item.unit_text || 'Event'}</span>
+                                         </div>
+                                     );
+                                   }
+                                   return (
+                                     <div key={item.id} className="text-sm text-gray-700">{item.content || ''}</div>
+                                   );
+                                  })}
+                                 </div>
+                               </div>
+                             );
+                           })}
+                       </div>
+                      ));
+                    })()}
                   </div>
-                </div>
+               </div>
               );
             }))}
           </div>
+          
+          {/* Print-only PDF layout */}
+          <PdfLayout
+            lessons={generatedPlan}
+            className={className}
+            selectedDays={selectedDays}
+            timeRange={`${startTime}~${endTime}`}
+          />
         </div>
+        </>
       )}
       {/* Add Book Modal */}
       {isAddBookModalOpen && (

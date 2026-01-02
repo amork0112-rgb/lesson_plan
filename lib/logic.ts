@@ -65,6 +65,67 @@ export function generateBookUnits(book: Book): LessonUnit[] {
   return units;
 }
 
+export interface AnnualPlanRow {
+  class_id: string;
+  book_id: string;
+  section: string;
+  total_sessions_year: number;
+  monthly_distribution: Record<number, number>;
+}
+
+export interface MonthAllocation {
+  book_id: string;
+  section: string;
+  required_sessions: number;
+  priority: number;
+}
+
+export interface MonthPlan {
+  year: number;
+  month: number;
+  allocations: MonthAllocation[];
+}
+
+export function buildMonthPlansFromAnnual(
+  annualRows: AnnualPlanRow[],
+  startYear: number
+): MonthPlan[] {
+  const months = [3,4,5,6,7,8,9,10,11,12,1,2];
+  const monthPlans: MonthPlan[] = [];
+
+  months.forEach((m) => {
+    const year = m >= 3 ? startYear : startYear + 1;
+    const allocations: MonthAllocation[] = [];
+
+    let priorityCounter = 1;
+    let totalSessions = 0;
+
+    annualRows.forEach(row => {
+      const count = row.monthly_distribution[m] || 0;
+      if (count > 0) {
+        allocations.push({
+          book_id: row.book_id,
+          section: row.section,
+          required_sessions: count,
+          priority: priorityCounter++
+        });
+        totalSessions += count;
+      }
+    });
+
+    if (totalSessions !== 24) {
+      console.warn(`[WARN] ${year}-${m} total sessions = ${totalSessions} (should be 24)`);
+    }
+
+    monthPlans.push({
+      year,
+      month: m - 1,
+      allocations
+    });
+  });
+
+  return monthPlans;
+}
 export function generateClassDates(
   year: number,
   rules: ScheduleRule[],
