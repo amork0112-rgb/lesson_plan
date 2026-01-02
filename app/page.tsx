@@ -14,6 +14,8 @@ interface MonthPlan {
   allocations: BookAllocation[];
 }
 
+
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -130,6 +132,18 @@ function distributeByPriority(
   return result;
 }
 
+function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates: Record<string, string[]>) {
+  const dates = planDates[planId] || [];
+  const slotsPerDay = selectedDays.length === 2 ? 3 : 2;
+  const used = dates.length * slotsPerDay;
+  return {
+    target: 24,
+    used,
+    remaining: 24 - used,
+    overflow: used - 24,
+  };
+}
+
 export default function Home() {
   const { books, holidays, classes, allocations: globalAllocations, setAllocations, specialDates, updateSpecialDate } = useData();
   
@@ -142,6 +156,9 @@ export default function Home() {
   const [selectedDays, setSelectedDays] = useState<Weekday[]>(['Mon', 'Wed', 'Fri']);
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
+  // -- SCP Settings --
+  const [scpEnabled, setScpEnabled] = useState(false);
+  const [scpLevel, setScpLevel] = useState('Blue');
   
   // -- Special Dates --
   const [expandedMonthId, setExpandedMonthId] = useState<string | null>(null);
@@ -648,28 +665,59 @@ export default function Home() {
     console.log('[Debug] Starting Generation for Class:', className);
 
     let displayOrderCounter = 1;
+    let scpDayCounter = 1;
+    const slotsPerDay = selectedDays.length === 2 ? 3 : 2; // 2days/week -> 3교시, 3days/week -> 2교시 = 월 24회
     monthPlans.forEach(plan => {
        const dates = planDates[plan.id] || [];
-       const distributed = distributeByPriority(dates, plan.allocations);
-       distributed.forEach(({ date, bookId }) => {
-         allPlans.push({
-           id: `${date}_${bookId}`,
-           class_id: classId,
-           date,
-           book_id: bookId,
-           display_order: displayOrderCounter++,
-           is_makeup: false,
-           content: 'AUTO',
-           unit_text: 'Unit Auto'
-         });
-       });
-    });
+       const sorted = [...plan.allocations].sort((a, b) => a.priority - b.priority);
+       let idx = 0;
+       dates.forEach(date => {
+         for (let slot = 0; slot < slotsPerDay; slot++) {
+           if (sorted.length > 0) {
+             const alloc = sorted[idx % sorted.length];
+             const bookName = books.find(b => b.id === alloc.book_id)?.name || 'Unknown';
+             allPlans.push({
+               id: `${date}_${alloc.book_id}_${slot + 1}`,
+               class_id: classId,
+               date,
+               book_id: alloc.book_id,
+               display_order: displayOrderCounter++,
+               is_makeup: false,
+               period: slot + 1,
+               book_name: bookName,
+               content: `Unit Day ${slot + 1}`
+             });
+             idx++;
+         }
+       }
+        // Append SCP homework (not counted in book sessions)
+        if (scpEnabled && scpLevel) {
+          const level = scpLevel;
+          allPlans.push({
+            id: `${date}_scp_${scpDayCounter}`,
+            class_id: classId,
+            date,
+            period: 99,
+            book_id: `scp_${level.toLowerCase()}`,
+            book_name: `SCP ${level}`,
+            display_order: displayOrderCounter++,
+            is_makeup: false,
+            content: `SCP ${level} Day ${scpDayCounter++}`
+          });
+        }
+      });
+     });
     
     console.log('[Debug] Total Plans Generated:', allPlans.length);
 
     if (targetMonthId) {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
       if (targetPlan) {
+        const slotStatus = getMonthlySlotStatus(targetPlan.id, selectedDays, planDates);
+        if (slotStatus.used !== 24) {
+          alert('이 달의 24회 수업이 모두 채워지지 않았습니다.');
+          return;
+        }
         // Filter plans for this month
         const monthlyPlans = allPlans.filter(l => {
           // Parse YYYY-MM-DD manually to avoid UTC conversion issues
@@ -884,6 +932,34 @@ export default function Home() {
 
           {/* Monthly Plans List */}
           <div className="p-6 space-y-8 bg-gray-50/50">
+            {/* SCP Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Enable SCP</label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    checked={scpEnabled} 
+                    onChange={(e) => setScpEnabled(e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-gray-600">Include homework per date</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">SCP Level</label>
+                <select 
+                  value={scpLevel}
+                  onChange={(e) => setScpLevel(e.target.value)}
+                  disabled={!scpEnabled}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50 disabled:opacity-50"
+                >
+                  {['Blue', 'Yellow', 'Green', 'Red'].map(level => (
+                    <option key={level} value={level}>{level}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
             {monthPlans.map((plan, index) => (
               <div key={plan.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
@@ -895,10 +971,31 @@ export default function Home() {
                       <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
                         {planDates[plan.id]?.length || 0} Sessions
                       </span>
+                      {(() => {
+                        const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
+                        const badgeClass =
+                          slotStatus.remaining === 0
+                            ? 'bg-green-100 text-green-700'
+                            : slotStatus.remaining > 0
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700';
+                        return (
+                          <span className={`text-xs px-3 py-1 rounded-full font-semibold ${badgeClass}`}>
+                            {slotStatus.used} / 24 Slots
+                          </span>
+                        );
+                      })()}
                    </div>
                    <div className="flex items-center gap-2">
                      <button 
-                        onClick={() => handleGenerate(plan.id)}
+                        onClick={() => {
+                          const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
+                          if (slotStatus.used !== 24) {
+                            alert('이 달의 24회 수업이 모두 채워지지 않았습니다.');
+                            return;
+                          }
+                          handleGenerate(plan.id);
+                        }}
                         className="text-xs font-medium bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-700 flex items-center gap-1 transition-colors shadow-sm"
                       >
                         <Play className="h-3 w-3 fill-current" /> Generate
@@ -1409,36 +1506,42 @@ export default function Home() {
                    </div>
 
                    <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left border border-gray-200 rounded-lg overflow-hidden">
+                   <table className="w-full text-sm text-left border border-gray-200 rounded-lg overflow-hidden">
                       <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th className="px-4 py-2 font-semibold border-r">Date</th>
-                          <th className="px-4 py-2 font-semibold border-r">Day</th>
-                          <th className="px-4 py-2 font-semibold border-r">Book</th>
                           <th className="px-4 py-2 font-semibold border-r">Content</th>
-                          <th className="px-4 py-2 font-semibold text-right">Unit</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {lessons.map((lesson) => (
-                          <tr key={lesson.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap border-r">
-                              {new Date(lesson.date).toLocaleDateString()}
-                            </td>
-                            <td className="px-4 py-3 text-gray-500 border-r">
-                              {new Date(lesson.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                            </td>
-                            <td className="px-4 py-3 text-gray-700 font-medium border-r">
-                              {lesson.book_id === 'event' ? 'School Event' : books.find(b => b.id === lesson.book_id)?.name}
-                            </td>
-                            <td className="px-4 py-3 text-gray-600 border-r">
-                              {lesson.book_id === 'event' ? lesson.unit_text : lesson.content}
-                            </td>
-                            <td className="px-4 py-3 text-right text-gray-500 font-mono">
-                              {lesson.book_id === 'event' ? '-' : lesson.unit_text}
-                            </td>
-                          </tr>
-                        ))}
+                        {Object.entries(lessons.reduce((byDate, l) => {
+                          const key = l.date;
+                          if (!byDate[key]) byDate[key] = [];
+                          byDate[key].push(l);
+                          return byDate;
+                        }, {} as Record<string, LessonPlan[]>)).map(([date, list]) => {
+                          const sorted = [...list].sort((a, b) => {
+                            const pa = typeof a.period === 'number' ? a.period : 0;
+                            const pb = typeof b.period === 'number' ? b.period : 0;
+                            return pa - pb;
+                          });
+                          return (
+                            <tr key={date} className="hover:bg-gray-50 transition-colors align-top">
+                              <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap border-r">
+                                {new Date(date).toLocaleDateString()}
+                              </td>
+                              <td className="px-4 py-3 text-gray-700">
+                                <div className="space-y-1">
+                                  {sorted.map(item => (
+                                    <div key={item.id} className="text-gray-700">
+                                      {item.book_id === 'event' ? (item.unit_text || '') : (item.content || '')}
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

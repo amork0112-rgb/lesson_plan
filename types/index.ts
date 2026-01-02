@@ -95,6 +95,7 @@ export interface LessonPlan {
   display_order: number;
   is_makeup: boolean;
   // Computed fields for display
+  period?: number;
   unit_text?: string; 
   book_name?: string;
   content?: string;
