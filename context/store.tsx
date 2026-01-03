@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Book, Holiday, Class, BookAllocation, SpecialDate } from '@/types';
 import { SAMPLE_BOOKS, DEFAULT_HOLIDAYS, SAMPLE_CLASSES } from '@/lib/data';
+import { getSupabase } from '@/lib/supabase';
 
 interface DataContextType {
   books: Book[];
@@ -34,57 +35,143 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [allocations, setAllocations] = useState<BookAllocation[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   const [isInitialized, setIsInitialized] = useState(false);
+  const supabase = getSupabase();
+  const orgKey = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_ORG_KEY || 'default') : 'default';
 
-  // Load from localStorage on mount
   useEffect(() => {
-    const loadData = (key: string, setter: (data: any) => void) => {
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        try {
-          setter(JSON.parse(saved));
-        } catch (e) {
-          console.error(`Failed to parse ${key}`, e);
-        }
+    let cancelled = false;
+    const loadCloud = async () => {
+      if (!supabase) return false;
+      const b = await supabase.from('books').select('*').eq('org_key', orgKey);
+      const c = await supabase.from('classes').select('*').eq('org_key', orgKey);
+      const a = await supabase.from('allocations').select('*').eq('org_key', orgKey);
+      const h = await supabase.from('holidays').select('*').eq('org_key', orgKey);
+      const s = await supabase.from('special_dates').select('*').eq('org_key', orgKey);
+      if (cancelled) return true;
+      if (!b.error && b.data) setBooks(b.data.map((x: any) => {
+        const { org_key, ...rest } = x;
+        return rest;
+      }));
+      if (!c.error && c.data) setClasses(c.data.map((x: any) => {
+        const { org_key, ...rest } = x;
+        return rest;
+      }));
+      if (!a.error && a.data) setAllocations(a.data.map((x: any) => {
+        const { org_key, ...rest } = x;
+        return rest;
+      }));
+      if (!h.error && h.data) setHolidays(h.data.map((x: any) => {
+        const { org_key, ...rest } = x;
+        return rest;
+      }));
+      if (!s.error && s.data) {
+        const obj: Record<string, SpecialDate> = {};
+        (s.data as any[]).forEach((row: any) => {
+          const { org_key, ...rest } = row;
+          obj[rest.date] = { type: rest.type, name: rest.name };
+        });
+        setSpecialDates(obj);
       }
+      setIsInitialized(true);
+      return true;
     };
-
-    loadData('lesson_plan_books', setBooks);
-    loadData('lesson_plan_holidays', setHolidays);
-    loadData('lesson_plan_classes', setClasses);
-    loadData('lesson_plan_allocations', setAllocations);
-    loadData('lesson_plan_special_dates', setSpecialDates);
-    setIsInitialized(true);
+    const loadLocal = () => {
+      const loadData = (key: string, setter: (data: any) => void) => {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          try {
+            setter(JSON.parse(saved));
+          } catch {}
+        }
+      };
+      loadData('lesson_plan_books', setBooks);
+      loadData('lesson_plan_holidays', setHolidays);
+      loadData('lesson_plan_classes', setClasses);
+      loadData('lesson_plan_allocations', setAllocations);
+      loadData('lesson_plan_special_dates', setSpecialDates);
+      setIsInitialized(true);
+    };
+    (async () => {
+      const ok = await loadCloud();
+      if (!ok) loadLocal();
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  // Save to localStorage on change (only after initialization)
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('lesson_plan_books', JSON.stringify(books));
-    }
+    const sync = async () => {
+      if (!isInitialized) return;
+      if (supabase) {
+        await supabase.from('books').delete().eq('org_key', orgKey);
+        if (books.length > 0) {
+          await supabase.from('books').insert(books.map((x) => ({ ...x, org_key: orgKey })));
+        }
+      } else {
+        localStorage.setItem('lesson_plan_books', JSON.stringify(books));
+      }
+    };
+    sync();
   }, [books, isInitialized]);
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('lesson_plan_holidays', JSON.stringify(holidays));
-    }
+    const sync = async () => {
+      if (!isInitialized) return;
+      if (supabase) {
+        await supabase.from('holidays').delete().eq('org_key', orgKey);
+        if (holidays.length > 0) {
+          await supabase.from('holidays').insert(holidays.map((x) => ({ ...x, org_key: orgKey })));
+        }
+      } else {
+        localStorage.setItem('lesson_plan_holidays', JSON.stringify(holidays));
+      }
+    };
+    sync();
   }, [holidays, isInitialized]);
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('lesson_plan_classes', JSON.stringify(classes));
-    }
+    const sync = async () => {
+      if (!isInitialized) return;
+      if (supabase) {
+        await supabase.from('classes').delete().eq('org_key', orgKey);
+        if (classes.length > 0) {
+          await supabase.from('classes').insert(classes.map((x) => ({ ...x, org_key: orgKey })));
+        }
+      } else {
+        localStorage.setItem('lesson_plan_classes', JSON.stringify(classes));
+      }
+    };
+    sync();
   }, [classes, isInitialized]);
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('lesson_plan_allocations', JSON.stringify(allocations));
-    }
+    const sync = async () => {
+      if (!isInitialized) return;
+      if (supabase) {
+        await supabase.from('allocations').delete().eq('org_key', orgKey);
+        if (allocations.length > 0) {
+          await supabase.from('allocations').insert(allocations.map((x) => ({ ...x, org_key: orgKey })));
+        }
+      } else {
+        localStorage.setItem('lesson_plan_allocations', JSON.stringify(allocations));
+      }
+    };
+    sync();
   }, [allocations, isInitialized]);
 
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('lesson_plan_special_dates', JSON.stringify(specialDates));
-    }
+    const sync = async () => {
+      if (!isInitialized) return;
+      if (supabase) {
+        await supabase.from('special_dates').delete().eq('org_key', orgKey);
+        const arr = Object.entries(specialDates).map(([date, val]) => ({ date, ...val, org_key: orgKey }));
+        if (arr.length > 0) {
+          await supabase.from('special_dates').insert(arr as any);
+        }
+      } else {
+        localStorage.setItem('lesson_plan_special_dates', JSON.stringify(specialDates));
+      }
+    };
+    sync();
   }, [specialDates, isInitialized]);
 
   const addBook = (book: Book) => setBooks([...books, book]);
