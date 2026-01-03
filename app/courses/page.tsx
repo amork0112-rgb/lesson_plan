@@ -90,7 +90,7 @@ function toBook(level: string, name: string, category: string): Book {
 }
 
 export default function CoursesPage() {
-  const { books, addBook, classes, addAllocation } = useData();
+  const { books, allocations, addBook, classes, addAllocation } = useData();
   const [rows, setRows] = useState<CurriculumRow[]>(INITIAL_ROWS);
   const [editing, setEditing] = useState<boolean>(false);
   const router = useRouter();
@@ -130,14 +130,22 @@ export default function CoursesPage() {
       if (!level) return;
       const pushOne = (name?: string, category?: string) => {
         if (!name || !name.trim()) return;
-        const book = toBook(level, name, category!);
-        const key = existingKey(book);
-        if (!existingSet.has(key)) {
-          candidates.push(book);
-          const targetClass = classes.find(c => c.name.trim().toLowerCase() === level.toLowerCase());
-          if (targetClass) {
-            newAllocations.push({ bookId: book.id, classId: targetClass.id });
+        const normalizedName = name.trim().toLowerCase();
+        const normalizedLevel = level.toLowerCase();
+        const existing = books.find(b => (b.level || '').trim().toLowerCase() === normalizedLevel && b.name.trim().toLowerCase() === normalizedName);
+        let bookId = existing?.id;
+        if (!existing) {
+          const book = toBook(level, name, category!);
+          const key = existingKey(book);
+          if (!existingSet.has(key)) {
+            candidates.push(book);
           }
+          bookId = book.id;
+        }
+        const targetClass = classes.find(c => c.name.trim().toLowerCase() === normalizedLevel);
+        if (targetClass && bookId) {
+          const dup = allocations.some(a => a.class_id === targetClass.id && a.book_id === bookId);
+          if (!dup) newAllocations.push({ bookId, classId: targetClass.id });
         }
       };
       const pushMany = (names?: string | string[], category?: string) => {
