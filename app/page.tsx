@@ -269,40 +269,14 @@ export default function Home() {
   // Rule: 2 days/week -> 8 sessions/month. 3 days/week -> 12 sessions/month.
   // Excess dates flow into the next month.
   const planDates = useMemo(() => {
-    // Ensure plans are processed chronologically
-    const sortedPlans = [...monthPlans].sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.month - b.month;
-    });
-
-    // 1. Generate ALL valid dates for the entire sequence (March to Feb next year)
-    // We need to loop through all monthPlans and collect potential dates first.
-    let allPotentialDates: string[] = [];
-    
-    sortedPlans.forEach(plan => {
-        // Get all calendar valid dates for this month
-        const dates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates);
-        allPotentialDates = [...allPotentialDates, ...dates];
-    });
-    
-    // Sort dates chronologically just in case
-    allPotentialDates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
-    
-    // 2. Determine target sessions per month
+    // 월별 개별 계산: manage schedule에서 보이는 유효 날짜만 사용
     const targetPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
-    
-    // 3. Distribute dates
     const distributed: Record<string, string[]> = {};
-    let currentIndex = 0;
-    
-    sortedPlans.forEach(plan => {
-        // Take the slice for this month
-        // If we run out of dates, we just take what's left (or empty)
-        const slice = allPotentialDates.slice(currentIndex, currentIndex + targetPerMonth);
-        distributed[plan.id] = slice;
-        currentIndex += targetPerMonth;
+    monthPlans.forEach(plan => {
+      const monthValidDates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates)
+        .sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+      distributed[plan.id] = monthValidDates.slice(0, targetPerMonth);
     });
-    
     return distributed;
   }, [monthPlans, selectedDays, holidays, specialDates]); // Dependencies: if holidays/special dates change, we re-calc flow
 
