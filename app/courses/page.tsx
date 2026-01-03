@@ -65,6 +65,7 @@ function parseUnits(name: string): { total_units: number; unit_type: 'unit' | 'd
   if (uMatch) return { total_units: parseInt(uMatch[1], 10), unit_type: 'unit' };
   const booksMatch = name.match(/\((\d+)\s*Books?\)/i);
   if (booksMatch) return { total_units: parseInt(booksMatch[1], 10), unit_type: 'unit' };
+  if (/tropy\s*9|trophy\s*9/i.test(name)) return { total_units: 16, unit_type: 'day' };
   if (/200words/i.test(name)) return { total_units: 10, unit_type: 'day' };
   return { total_units: 10, unit_type: 'unit' };
 }
@@ -234,4 +235,3 @@ export default function CoursesPage() {
     </div>
   );
 }
-
