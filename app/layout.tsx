@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { DataProvider } from "@/context/store";
 
@@ -23,7 +24,9 @@ export default function RootLayout({
           <DataProvider>
             <Sidebar />
             <main className="flex-1 overflow-auto">
-              {children}
+              <Suspense fallback={<div className="p-6 text-slate-500">Loading...</div>}>
+                {children}
+              </Suspense>
             </main>
           </DataProvider>
         </div>

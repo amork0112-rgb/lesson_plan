@@ -1,12 +1,11 @@
 'use client';
-export const dynamic = 'force-dynamic';
 
 import { Suspense, useEffect, useState } from 'react';
 import { useData } from '@/context/store';
 import { Plus, Search, Book as BookIcon, X, ChevronRight, GraduationCap, ArrowRight, Trash2 } from 'lucide-react';
 import { Book, UnitType } from '@/types';
 import { cn } from '@/lib/utils';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 const CATEGORIES = [
   { id: 'c_reading', label: 'Reading' },
@@ -20,7 +19,6 @@ const CATEGORIES = [
 
 export default function BooksPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { books, addBook, allocations, classes, addAllocation, deleteAllocation } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
@@ -55,9 +53,10 @@ export default function BooksPage() {
   const limitedSearch = filteredBooks;
 
   useEffect(() => {
-    const cid = searchParams.get('classId');
+    if (typeof window === 'undefined') return;
+    const cid = new URLSearchParams(window.location.search).get('classId');
     if (cid) setActiveTab(cid);
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'all') return;
