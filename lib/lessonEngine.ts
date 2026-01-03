@@ -17,6 +17,11 @@ interface GenerateLessonInput {
 
 function getDaysPerUnit(book?: Book) {
   if (!book) return 3;
+  const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
+  if (isTrophy) {
+    if (book.days_per_volume && book.days_per_volume > 0) return book.days_per_volume;
+    return 4;
+  }
   if (book.days_per_unit && book.days_per_unit > 0) return book.days_per_unit;
   if (book.unit_type === 'day') return 1;
   return 3;
@@ -74,6 +79,8 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
         if (!book) continue;
         const dpu = getDaysPerUnit(book);
         const p = globalProgress[picked!.book_id];
+        const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
+        const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
 
         lessons.push({
           id: `${date}_${picked!.book_id}_${period}`,
@@ -84,7 +91,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
           is_makeup: false,
           book_id: picked!.book_id,
           book_name: book.name,
-          content: `Unit ${p.unit} Day ${p.day}`
+          content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`
         });
 
         usedToday.add(picked!.book_id);

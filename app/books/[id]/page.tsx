@@ -43,6 +43,7 @@ export default function BookDetailPage() {
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<Book>>({});
+  const isTrophy = !!(book && ((book.series === 'Trophy 9') || book.progression_type === 'volume-day'));
 
   // Initialize book data
   useEffect(() => {
@@ -90,7 +91,11 @@ export default function BookDetailPage() {
       unit_type: book.unit_type,
       days_per_unit: book.days_per_unit || 1,
       review_units: book.review_units || 0,
-      total_sessions: book.total_sessions
+      total_sessions: book.total_sessions,
+      progression_type: book.progression_type,
+      volume_count: book.volume_count,
+      days_per_volume: book.days_per_volume,
+      series_level: book.series_level || book.level
     });
     setIsEditModalOpen(true);
   };
@@ -103,7 +108,10 @@ export default function BookDetailPage() {
         editFormData.total_units !== book.total_units ||
         editFormData.unit_type !== book.unit_type ||
         editFormData.days_per_unit !== book.days_per_unit ||
-        editFormData.review_units !== book.review_units;
+        editFormData.review_units !== book.review_units ||
+        editFormData.volume_count !== book.volume_count ||
+        editFormData.days_per_volume !== book.days_per_volume ||
+        editFormData.progression_type !== book.progression_type;
 
     const updatedBook = {
         ...book,
@@ -111,7 +119,11 @@ export default function BookDetailPage() {
         total_units: Number(editFormData.total_units),
         days_per_unit: Number(editFormData.days_per_unit),
         review_units: Number(editFormData.review_units || 0),
-        total_sessions: Number(editFormData.total_sessions || editFormData.total_units)
+        total_sessions: Number(editFormData.total_sessions || editFormData.total_units),
+        progression_type: editFormData.progression_type,
+        volume_count: typeof editFormData.volume_count === 'number' ? editFormData.volume_count : book.volume_count,
+        days_per_volume: typeof editFormData.days_per_volume === 'number' ? editFormData.days_per_volume : book.days_per_volume,
+        series_level: editFormData.series_level || book.series_level
     } as Book;
 
     if (structureChanged) {
@@ -303,6 +315,12 @@ export default function BookDetailPage() {
                         className="max-h-[600px] overflow-y-auto p-4 space-y-2 bg-slate-50/30"
                     >
                         {units.map((unit, index) => (
+                            <>
+                            {(index === 0 || units[index - 1].unit_no !== unit.unit_no) && (
+                                <div className="px-2 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-md">
+                                    {isTrophy ? `Volume ${unit.unit_no}` : `Unit ${unit.unit_no}`}
+                                </div>
+                            )}
                             <div 
                                 key={unit.id || index}
                                 draggable
@@ -352,6 +370,7 @@ export default function BookDetailPage() {
                                     </div>
                                 )}
                             </div>
+                            </>
                         ))}
                     </div>
                 </div>
@@ -367,14 +386,29 @@ export default function BookDetailPage() {
                     </h3>
                     
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                            <span className="text-sm text-slate-500">Total Units</span>
-                            <span className="text-sm font-medium text-slate-900">{totalUnits}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                            <span className="text-sm text-slate-500">Days per Unit</span>
-                            <span className="text-sm font-medium text-slate-900">{daysPerUnit}</span>
-                        </div>
+                        {isTrophy ? (
+                          <>
+                            <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                                <span className="text-sm text-slate-500">Volumes</span>
+                                <span className="text-sm font-medium text-slate-900">{book?.volume_count || 4}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                                <span className="text-sm text-slate-500">Days per Volume</span>
+                                <span className="text-sm font-medium text-slate-900">{book?.days_per_volume || 4}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                                <span className="text-sm text-slate-500">Total Units</span>
+                                <span className="text-sm font-medium text-slate-900">{totalUnits}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                                <span className="text-sm text-slate-500">Days per Unit</span>
+                                <span className="text-sm font-medium text-slate-900">{daysPerUnit}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between items-center py-2 border-b border-slate-50">
                             <span className="text-sm text-slate-500">Lesson Sessions</span>
                             <span className="text-sm font-medium text-slate-900">{calculatedSessions}</span>
@@ -487,43 +521,68 @@ export default function BookDetailPage() {
                       Warning: Changing these settings will reset any custom unit ordering.
                   </p>
                   
-                  <div className="grid grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit Type</label>
-                        <select
-                            value={editFormData.unit_type}
-                            onChange={e => setEditFormData({...editFormData, unit_type: e.target.value as UnitType})}
-                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
-                        >
-                            <option value="unit">Unit</option>
-                            <option value="day">Day</option>
-                            <option value="lesson">Lesson</option>
-                        </select>
+                  {isTrophy ? (
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Volumes</label>
+                          <input
+                              type="number"
+                              min="1"
+                              value={editFormData.volume_count || 4}
+                              onChange={e => setEditFormData({...editFormData, volume_count: parseInt(e.target.value)})}
+                              className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                          />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Days Per Volume</label>
+                          <input
+                              type="number"
+                              min="1"
+                              value={editFormData.days_per_volume || 4}
+                              onChange={e => setEditFormData({...editFormData, days_per_volume: parseInt(e.target.value)})}
+                              className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                          />
+                      </div>
                     </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            Total {editFormData.unit_type === 'day' ? 'Days' : 'Units'}
-                        </label>
-                        <input
-                            type="number"
-                            value={editFormData.total_units}
-                            onChange={e => setEditFormData({...editFormData, total_units: parseInt(e.target.value)})}
-                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
-                        />
+                  ) : (
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unit Type</label>
+                          <select
+                              value={editFormData.unit_type}
+                              onChange={e => setEditFormData({...editFormData, unit_type: e.target.value as UnitType})}
+                              className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                          >
+                              <option value="unit">Unit</option>
+                              <option value="day">Day</option>
+                              <option value="lesson">Lesson</option>
+                          </select>
+                      </div>
+  
+                      <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                              Total {editFormData.unit_type === 'day' ? 'Days' : 'Units'}
+                          </label>
+                          <input
+                              type="number"
+                              value={editFormData.total_units}
+                              onChange={e => setEditFormData({...editFormData, total_units: parseInt(e.target.value)})}
+                              className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                          />
+                      </div>
+  
+                      <div className="space-y-2">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Days Per Unit</label>
+                          <input
+                              type="number"
+                              min="1"
+                              value={editFormData.days_per_unit || 1}
+                              onChange={e => setEditFormData({...editFormData, days_per_unit: parseInt(e.target.value)})}
+                              className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
+                          />
+                      </div>
                     </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Days Per Unit</label>
-                        <input
-                            type="number"
-                            min="1"
-                            value={editFormData.days_per_unit || 1}
-                            onChange={e => setEditFormData({...editFormData, days_per_unit: parseInt(e.target.value)})}
-                            className="w-full border-b border-amber-200 py-2 focus:border-amber-900 focus:outline-none bg-transparent"
-                        />
-                    </div>
-                  </div>
+                  )}
               </div>
             </div>
 

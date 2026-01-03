@@ -68,6 +68,11 @@ export interface Book {
   name: string;
   category?: string;
   level?: string;
+  series?: string;
+  progression_type?: 'volume-day' | 'unit-day' | 'lesson';
+  volume_count?: number;
+  days_per_volume?: number;
+  series_level?: string;
   total_units: number;
   unit_type: UnitType;
   days_per_unit?: number; // Added: How many days per unit

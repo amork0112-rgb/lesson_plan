@@ -58,40 +58,46 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
                         const pb = typeof b.period === 'number' ? b.period : 0;
                         return pa - pb;
                       });
-                      const dd = parseLocalDate(dStr);
-                      const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
-                      return (
-                        <div key={dStr} className="border rounded-lg overflow-hidden">
-                          <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium">{head}</div>
-                          <div className="p-2 space-y-1">
-                            {list.map(item => {
-                              if (item.book_id === 'event') {
-                                return (
-                                  <div key={item.id} className="flex items-center gap-2 text-gray-800">
-                                    <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
-                                    <span className="font-medium">{item.unit_text || 'Event'}</span>
-                                  </div>
-                                );
-                              }
-                              const m = item.content?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
-                              const u = m ? parseInt(m[1]) : undefined;
-                              const d = m ? parseInt(m[2]) : undefined;
-                              const isScp = item.book_id?.startsWith('scp_');
-                              return (
-                                <div key={item.id} className={`p-2 rounded-lg border ${isScp ? 'border-yellow-300 bg-yellow-50' : 'border-slate-200 bg-white'}`}>
-                                  <div className="text-sm font-bold text-slate-900">{item.book_name}</div>
-                                  <div className="mt-0.5 text-xs text-slate-600">
-                                    {typeof u === 'number' && typeof d === 'number'
-                                      ? `Unit ${u} · Day ${d}`
-                                      : (item.content || '')}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          const dd = parseLocalDate(dStr);
+                          const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
+                          const isTrophyContent = (s?: string) => {
+                            if (!s) return false;
+                            return /^[A-Za-z0-9]+-\d+\s+Day\s+\d+$/i.test(s.trim());
+                          };
+                          return (
+                            <div key={dStr} className="border rounded-lg overflow-hidden">
+                              <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium">{head}</div>
+                              <div className="p-2 space-y-1">
+                                {list.map(item => {
+                                  if (item.book_id === 'event') {
+                                    return (
+                                      <div key={item.id} className="flex items-center gap-2 text-gray-800">
+                                        <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
+                                        <span className="font-medium">{item.unit_text || 'Event'}</span>
+                                      </div>
+                                    );
+                                  }
+                                  const m = item.content?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
+                                  const u = m ? parseInt(m[1]) : undefined;
+                                  const d = m ? parseInt(m[2]) : undefined;
+                                  const isScp = item.book_id?.startsWith('scp_');
+                                  return (
+                                    <div key={item.id} className={`p-2 rounded-lg border ${isScp ? 'border-yellow-300 bg-yellow-50' : 'border-slate-200 bg-white'}`}>
+                                      <div className="text-sm font-bold text-slate-900">{item.book_name}</div>
+                                      <div className="mt-0.5 text-xs text-slate-600">
+                                        {isTrophyContent(item.content)
+                                          ? (item.content || '')
+                                          : (typeof u === 'number' && typeof d === 'number'
+                                              ? `Unit ${u} · Day ${d}`
+                                              : (item.content || ''))}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
                   </div>
                 ));
               })()}

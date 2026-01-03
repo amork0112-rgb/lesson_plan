@@ -1408,11 +1408,11 @@ export default function Home() {
             <div className="text-sm text-gray-500 flex gap-4">
                 <div className="flex items-center gap-1">
                     <Play className="h-4 w-4 text-indigo-600" />
-                    <span>Preview Plan: 설정된 기간의 플랜 미리보기</span>
+                    <span>Preview Plan: 플랜 미리보기</span>
                 </div>
                 <div className="flex items-center gap-1">
                     <Download className="h-4 w-4 text-gray-600" />
-                    <span>Download PDF: 미리보기 내용을 저장</span>
+                    <span>Download PDF: 미리보기 내용 저장</span>
                 </div>
             </div>
             <div className="flex items-center gap-3">
@@ -1545,7 +1545,7 @@ export default function Home() {
                          rows.push(uniqueDates.slice(i, i + cols));
                        }
                        return rows.map((datesRow, ri) => (
-                        <div key={ri} className="grid grid-cols-2 gap-2">
+                        <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {datesRow.map((dStr, ci) => {
                             const list = (byDate[dStr] || []).sort((a, b) => {
                               const pa = typeof a.period === 'number' ? a.period : 0;
@@ -1553,12 +1553,18 @@ export default function Home() {
                               return pa - pb;
                              });
                               const dd = parseLocalDate(dStr);
-                              const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
+                              const monthNum = dd.getMonth()+1;
+                              const dayNum = dd.getDate();
+                              const weekday = dd.toLocaleDateString('en-US',{weekday:'short'});
                               const parseUD = (s?: string) => {
                                 const m = s?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
                                 const u = m ? parseInt(m[1]) : undefined;
                                 const d = m ? parseInt(m[2]) : undefined;
                                 return { u, d };
+                              };
+                              const isTrophyContent = (s?: string) => {
+                                if (!s) return false;
+                                return /^[A-Za-z0-9]+-\d+\s+Day\s+\d+$/i.test(s.trim());
                               };
                               const formatUD = (u?: number, d?: number, fallback?: string) => {
                                 if (typeof u === 'number' && typeof d === 'number') return `Unit ${u} Day ${d}`;
@@ -1593,9 +1599,12 @@ export default function Home() {
                                 });
                               };
                               return (
-                                <div key={dStr} className="border rounded-lg overflow-hidden date-card">
-                                  <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium flex items-center justify-between">
-                                    <span>{head}</span>
+                                <div key={dStr} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                                  <div className="px-4 py-3 bg-slate-50 text-slate-700 font-medium flex items-center justify-between border-b border-slate-200">
+                                    <div className="flex items-baseline gap-2">
+                                      <span className="text-2xl font-semibold tracking-tight text-slate-900">{monthNum}/{dayNum}</span>
+                                      <span className="text-xs font-medium uppercase text-slate-500">{weekday}</span>
+                                    </div>
                                     <button
                                       onClick={() => {
                                         setAddingDateId(dStr);
@@ -1603,7 +1612,7 @@ export default function Home() {
                                         setAddingUnit(1);
                                         setAddingDay(1);
                                       }}
-                                      className="text-xs px-2 py-1 rounded bg-indigo-600 text-white"
+                                      className="text-xs px-2 py-1 rounded bg-slate-900 text-white"
                                     >
                                       Add Lesson
                                     </button>
@@ -1615,9 +1624,9 @@ export default function Home() {
                                     {list.map(item => {
                                       if (item.book_id === 'event') {
                                         return (
-                                          <div key={item.id} className="flex items-center gap-2 text-gray-800">
-                                            <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
-                                            <span className="font-medium">{item.unit_text || 'Event'}</span>
+                                          <div key={item.id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                                            <span className="text-xs font-semibold text-amber-700">EVENT</span>
+                                            <span className="text-sm font-medium text-amber-900">{item.unit_text || 'Event'}</span>
                                           </div>
                                         );
                                       }
@@ -1637,61 +1646,63 @@ export default function Home() {
                                             onDropCard(srcId, item.id);
                                             setDraggingLessonId(null);
                                           }}
-                                          className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 bg-white shadow-sm"
+                                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between"
                                         >
-                                          <GripVertical className="h-3 w-3 text-slate-400 cursor-move" />
-                                          <div className="flex-1">
-                                            <div className="text-sm font-bold text-slate-900">{item.book_name}</div>
-                                            <div className="mt-1 flex items-center gap-2">
-                                              {hasUD ? (
-                                                <>
-                                                  <span className="text-sm text-slate-500">Unit</span>
-                                                  <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={u}
-                                                    onChange={(e) => {
-                                                      const nu = parseInt(e.target.value) || 1;
-                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(nu, d, item.content) } : l));
-                                                    }}
-                                                    className="w-14 px-2 py-1 border rounded text-xs"
-                                                  />
-                                                  <span className="text-sm text-slate-500">Day</span>
-                                                  <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={d}
-                                                    onChange={(e) => {
-                                                      const nd = parseInt(e.target.value) || 1;
-                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(u, nd, item.content) } : l));
-                                                    }}
-                                                    className="w-14 px-2 py-1 border rounded text-xs"
-                                                  />
-                                                </>
-                                              ) : (
-                                                <>
-                                                  <span className="text-sm text-slate-500">Content</span>
-                                                  <input
-                                                    type="text"
-                                                    value={item.content || ''}
-                                                    onChange={(e) => {
-                                                      const val = e.target.value;
-                                                      setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: val } : l));
-                                                    }}
-                                                    className="flex-1 px-2 py-1 border rounded text-xs"
-                                                  />
-                                                </>
-                                              )}
-                                            </div>
+                                          <div className="flex items-center gap-2">
+                                            <GripVertical className="h-3 w-3 text-slate-400 cursor-move" />
+                                            <div className="text-sm font-semibold text-slate-900">{item.book_name}</div>
                                           </div>
-                                          <button
-                                            onClick={() => {
-                                              setGeneratedPlan(prev => prev.filter(l => l.id !== item.id));
-                                            }}
-                                            className="text-slate-500 hover:text-red-600"
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </button>
+                                          <div className="flex items-center gap-2">
+                                            {isTrophyContent(item.content) ? (
+                                              <span className="text-xs font-medium text-slate-700">{item.content || ''}</span>
+                                            ) : hasUD ? (
+                                              <>
+                                                <span className="text-xs text-slate-500">Unit</span>
+                                                <input
+                                                  type="number"
+                                                  min={1}
+                                                  value={u}
+                                                  onChange={(e) => {
+                                                    const nu = parseInt(e.target.value) || 1;
+                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(nu, d, item.content) } : l));
+                                                  }}
+                                                  className="w-14 px-2 py-1 border rounded text-xs"
+                                                />
+                                                <span className="text-xs text-slate-500">Day</span>
+                                                <input
+                                                  type="number"
+                                                  min={1}
+                                                  value={d}
+                                                  onChange={(e) => {
+                                                    const nd = parseInt(e.target.value) || 1;
+                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(u, nd, item.content) } : l));
+                                                  }}
+                                                  className="w-14 px-2 py-1 border rounded text-xs"
+                                                />
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span className="text-xs text-slate-500">Content</span>
+                                                <input
+                                                  type="text"
+                                                  value={item.content || ''}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: val } : l));
+                                                  }}
+                                                  className="w-40 px-2 py-1 border rounded text-xs"
+                                                />
+                                              </>
+                                            )}
+                                            <button
+                                              onClick={() => {
+                                                setGeneratedPlan(prev => prev.filter(l => l.id !== item.id));
+                                              }}
+                                              className="text-slate-500 hover:text-red-600"
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </button>
+                                          </div>
                                         </div>
                                       );
                                     })}

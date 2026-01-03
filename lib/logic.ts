@@ -25,6 +25,38 @@ export function generateBookUnits(book: Book): LessonUnit[] {
   const units: LessonUnit[] = [];
   let sequence = 1;
 
+  const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name);
+  if (isTrophy || book.progression_type === 'volume-day') {
+    const volumes = book.volume_count && book.volume_count > 0 ? book.volume_count : 4;
+    const daysPerVol = book.days_per_volume && book.days_per_volume > 0 ? book.days_per_volume : 4;
+    const levelTag = book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'));
+    for (let v = 1; v <= volumes; v++) {
+      for (let d = 1; d <= daysPerVol; d++) {
+        units.push({
+          id: `gen_${book.id}_v${v}_d${d}`,
+          book_id: book.id,
+          sequence: sequence++,
+          unit_no: v,
+          day_no: d,
+          type: 'lesson',
+          title: `${levelTag}-${v} Day ${d}`
+        });
+      }
+    }
+    if (book.review_units) {
+      for (let r = 1; r <= Math.floor(volumes / (book.review_units || volumes)); r++) {
+        units.push({
+          id: `gen_${book.id}_rev_${r}`,
+          book_id: book.id,
+          sequence: sequence++,
+          type: 'review',
+          title: `Review ${r}`
+        });
+      }
+    }
+    return units;
+  }
+
   for (let u = 1; u <= book.total_units; u++) {
     // Determine number of days per unit based on unit_type or explicit days_per_unit
     let daysPerUnit = 1;
