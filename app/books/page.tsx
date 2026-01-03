@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useData } from '@/context/store';
 import { Plus, Search, Book as BookIcon, X, ChevronRight, GraduationCap, ArrowRight, Trash2 } from 'lucide-react';
 import { Book, UnitType } from '@/types';
@@ -258,6 +258,7 @@ export default function BooksPage() {
   };
 
   return (
+    <Suspense fallback={<div className="p-12">Loading...</div>}>
     <div className="min-h-screen bg-slate-50 p-12">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
@@ -580,5 +581,6 @@ export default function BooksPage() {
         )}
       </div>
     </div>
+    </Suspense>
   );
 }
