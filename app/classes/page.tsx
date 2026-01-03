@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useData } from '@/context/store';
 import { Plus, Trash2, Search, Users, Clock, Calendar, BookOpen } from 'lucide-react';
 import { Class, Weekday } from '@/types';
@@ -12,6 +12,7 @@ export default function ClassesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [ensured, setEnsured] = useState<boolean>(false);
   
   // New Class State
   const [newClass, setNewClass] = useState<Partial<Class>>({
@@ -30,6 +31,45 @@ export default function ClassesPage() {
   const filteredClasses = classes.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  useEffect(() => {
+    if (ensured) return;
+    const required = [
+      'G1','G2','G3',
+      'A1a','A1b','A2a','A2b','A3a','A3b','A4a','A4b','A5',
+      'F1','F2','F3',
+      'M1A','M1B','M2A','M2B','M3A','M3B'
+    ];
+    const existingNames = new Set(classes.map(c => c.name.trim().toLowerCase()));
+    const missing = required.filter(n => !existingNames.has(n.toLowerCase()));
+    if (missing.length === 0) {
+      setEnsured(true);
+      return;
+    }
+    const levelGroup = (name: string) => {
+      if (/^m/i.test(name)) return 'Middle';
+      if (/^g/i.test(name)) return 'Kinder';
+      return 'Elementary';
+    };
+    const makeId = (name: string) => `c_${name.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+    missing.forEach((name) => {
+      const cls: Class = {
+        id: makeId(name),
+        name,
+        year: 2026,
+        level_group: levelGroup(name),
+        weekly_sessions: 3,
+        sessions_per_month: 24,
+        start_time: '15:00',
+        end_time: '16:35',
+        dismissal_time: '17:25',
+        days: ['Mon','Wed','Fri'],
+        scp_type: null
+      };
+      addClass(cls);
+    });
+    setEnsured(true);
+  }, [classes, ensured, addClass]);
 
   const handleEdit = (cls: Class) => {
     setNewClass({ ...cls });

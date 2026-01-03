@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Book, Holiday, Class, BookAllocation, SpecialDate } from '@/types';
-import { SAMPLE_BOOKS, DEFAULT_HOLIDAYS, SAMPLE_CLASSES } from '@/lib/data';
+import { DEFAULT_HOLIDAYS, SAMPLE_CLASSES } from '@/lib/data';
 import { getSupabase } from '@/lib/supabase';
 
 interface DataContextType {
@@ -29,7 +29,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [books, setBooks] = useState<Book[]>(SAMPLE_BOOKS);
+  const [books, setBooks] = useState<Book[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>(DEFAULT_HOLIDAYS);
   const [classes, setClasses] = useState<Class[]>(SAMPLE_CLASSES);
   const [allocations, setAllocations] = useState<BookAllocation[]>([]);

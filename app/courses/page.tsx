@@ -125,6 +125,7 @@ export default function CoursesPage() {
   const handleImportToBooks = () => {
     const candidates: Book[] = [];
     const newAllocations: { bookId: string; classId: string }[] = [];
+    const touchedClassIds = new Set<string>();
     rows.forEach(r => {
       const level = r.level.trim();
       if (!level) return;
@@ -145,7 +146,10 @@ export default function CoursesPage() {
         const targetClass = classes.find(c => c.name.trim().toLowerCase() === normalizedLevel);
         if (targetClass && bookId) {
           const dup = allocations.some(a => a.class_id === targetClass.id && a.book_id === bookId);
-          if (!dup) newAllocations.push({ bookId, classId: targetClass.id });
+          if (!dup) {
+            newAllocations.push({ bookId, classId: targetClass.id });
+            touchedClassIds.add(targetClass.id);
+          }
         }
       };
       const pushMany = (names?: string | string[], category?: string) => {
@@ -165,22 +169,38 @@ export default function CoursesPage() {
       if (r.certify) pushOne(`SCP ${r.certify}`, 'c_speaking');
     });
     candidates.forEach(addBook);
-    newAllocations.forEach(({ bookId, classId }, idx) => {
+    const perClassPriority: Record<string, number> = {};
+    newAllocations.forEach(({ bookId, classId }) => {
+      if (!(classId in perClassPriority)) {
+        const currentMax = Math.max(0, ...allocations.filter(a => a.class_id === classId).map(a => a.priority || 0));
+        perClassPriority[classId] = currentMax;
+      }
+      perClassPriority[classId] = (perClassPriority[classId] || 0) + 1;
       addAllocation({
         id: Math.random().toString(36).slice(2),
         book_id: bookId,
         class_id: classId,
         sessions_per_week: 1,
-        priority: idx + 1
+        priority: perClassPriority[classId]
       });
     });
     alert(`Books imported: ${candidates.length}`);
-    router.push('/books');
+    const firstClass = Array.from(touchedClassIds.values())[0];
+    if (firstClass) {
+      router.push(`/books?classId=${firstClass}`);
+    } else {
+      router.push('/books');
+    }
   };
 
   const setCell = (idx: number, key: keyof CurriculumRow, value: string) => {
     const next = [...rows];
-    next[idx] = { ...next[idx], [key]: value };
+    if (key === 'secondTB') {
+      const arr = value.split('/').map(v => v.trim()).filter(Boolean);
+      next[idx] = { ...next[idx], secondTB: arr };
+    } else {
+      next[idx] = { ...next[idx], [key]: value };
+    }
     setRows(next);
   };
 
@@ -232,7 +252,7 @@ export default function CoursesPage() {
                 <th className="px-3 py-4">Speaking</th>
                 <th className="px-3 py-4">Voca</th>
                 <th className="px-3 py-4">Grammar</th>
-                <th className="px-3 py-4">Writing [A]</th>
+                <th className="px-3 py-4">Writing</th>
                 <th className="px-3 py-4">스피킹인증제</th>
                 <th className="px-3 py-4 w-12"></th>
               </tr>
