@@ -1,26 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useData } from '@/context/store';
+import { getSupabase } from '@/lib/supabase';
 import { Plus, Trash2, Search, Users, Clock, Calendar, BookOpen } from 'lucide-react';
-import { Class, Weekday } from '@/types';
+import { Class, Weekday, Book, BookAllocation } from '@/types';
 
 const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 export default function ClassesPage() {
-  const { classes, addClass, updateClass, deleteClass, allocations, books } = useData();
+  const supabase = getSupabase();
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [allocations, setAllocations] = useState<BookAllocation[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [ensured, setEnsured] = useState<boolean>(false);
   
   // New Class State
   const [newClass, setNewClass] = useState<Partial<Class>>({
     name: '',
     year: 2026,
     level_group: 'Elementary',
-    weekly_sessions: 3,
-    sessions_per_month: 24,
     start_time: '14:00',
     end_time: '15:30',
     dismissal_time: '',
@@ -33,43 +33,17 @@ export default function ClassesPage() {
   );
 
   useEffect(() => {
-    if (ensured) return;
-    const required = [
-      'G1','G2','G3',
-      'A1a','A1b','A2a','A2b','A3a','A3b','A4a','A4b','A5',
-      'F1','F2','F3',
-      'M1A','M1B','M2A','M2B','M3A','M3B'
-    ];
-    const existingNames = new Set(classes.map(c => c.name.trim().toLowerCase()));
-    const missing = required.filter(n => !existingNames.has(n.toLowerCase()));
-    if (missing.length === 0) {
-      setEnsured(true);
-      return;
-    }
-    const levelGroup = (name: string) => {
-      if (/^m/i.test(name)) return 'Middle';
-      if (/^g/i.test(name)) return 'Kinder';
-      return 'Elementary';
+    const fetchAll = async () => {
+      if (!supabase) return;
+      const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
+      if (Array.isArray(cls)) setClasses(cls as any);
+      const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
+      if (Array.isArray(bks)) setBooks(bks as any);
+      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+      if (Array.isArray(alloc)) setAllocations(alloc as any);
     };
-    const makeId = (name: string) => `c_${name.toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
-    missing.forEach((name) => {
-      const cls: Class = {
-        id: makeId(name),
-        name,
-        year: 2026,
-        level_group: levelGroup(name),
-        weekly_sessions: 3,
-        sessions_per_month: 24,
-        start_time: '15:00',
-        end_time: '16:35',
-        dismissal_time: '17:25',
-        days: ['Mon','Wed','Fri'],
-        scp_type: null
-      };
-      addClass(cls);
-    });
-    setEnsured(true);
-  }, [classes, ensured, addClass]);
+    fetchAll();
+  }, [supabase]);
 
   const handleEdit = (cls: Class) => {
     setNewClass({ ...cls });
@@ -80,34 +54,39 @@ export default function ClassesPage() {
   const handleSave = () => {
     if (!newClass.name) return;
     
-    if (editingId) {
-      updateClass(editingId, {
-        name: newClass.name,
-        year: newClass.year,
-        level_group: newClass.level_group,
-        weekly_sessions: newClass.days?.length || 0,
-        sessions_per_month: 24,
-        start_time: newClass.start_time,
-        end_time: newClass.end_time,
-        dismissal_time: newClass.dismissal_time,
-        days: newClass.days,
-        scp_type: newClass.scp_type ?? null
-      });
-    } else {
-      addClass({
-        id: `cl_${Math.random().toString(36).substr(2, 9)}`,
-        name: newClass.name,
-        year: newClass.year || 2026,
-        level_group: newClass.level_group || 'Elementary',
-        weekly_sessions: newClass.days?.length || 0,
-        sessions_per_month: 24,
-        start_time: newClass.start_time || '14:00',
-        end_time: newClass.end_time || '15:30',
-        dismissal_time: newClass.dismissal_time,
-        days: newClass.days || [],
-        scp_type: newClass.scp_type ?? null
-      } as Class);
-    }
+    const upsert = async () => {
+      if (!supabase) return;
+      if (editingId) {
+        await supabase
+          .from('classes')
+          .update({
+            name: newClass.name,
+            year: newClass.year,
+            level_group: newClass.level_group,
+            start_time: newClass.start_time,
+            end_time: newClass.end_time,
+            dismissal_time: newClass.dismissal_time,
+            days: newClass.days,
+            scp_type: newClass.scp_type ?? null
+          })
+          .eq('id', editingId);
+      } else {
+        const { data } = await supabase.from('classes').insert({
+          name: newClass.name,
+          year: newClass.year || 2026,
+          level_group: newClass.level_group || 'Elementary',
+          start_time: newClass.start_time || '14:00',
+          end_time: newClass.end_time || '15:30',
+          dismissal_time: newClass.dismissal_time || null,
+          days: newClass.days || [],
+          scp_type: newClass.scp_type ?? null
+        }).select('*');
+        if (Array.isArray(data)) setClasses([...(classes || []), ...(data as any)]);
+      }
+      const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
+      if (Array.isArray(cls)) setClasses(cls as any);
+    };
+    upsert();
     
     setIsAdding(false);
     setEditingId(null);
@@ -115,8 +94,6 @@ export default function ClassesPage() {
       name: '',
       year: 2026,
       level_group: 'Elementary',
-      weekly_sessions: 3,
-      sessions_per_month: 24,
       start_time: '14:00',
       end_time: '15:30',
       dismissal_time: '',
@@ -132,6 +109,13 @@ export default function ClassesPage() {
     } else {
       setNewClass({ ...newClass, days: [...currentDays, day] });
     }
+  };
+  
+  const handleDelete = async (id: string) => {
+    if (!supabase) return;
+    await supabase.from('classes').delete().eq('id', id);
+    const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
+    if (Array.isArray(cls)) setClasses(cls as any);
   };
 
   return (
@@ -320,7 +304,7 @@ export default function ClassesPage() {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                   </button>
                   <button 
-                    onClick={() => deleteClass(cls.id)}
+                    onClick={() => handleDelete(cls.id)}
                     className="text-slate-300 hover:text-red-500 transition-colors p-1 hover:bg-red-50 rounded-full"
                     title="Delete Class"
                   >

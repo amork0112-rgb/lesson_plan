@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
+import { getSupabase } from '@/lib/supabase';
 import { generateClassDates, calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
 import { parseLocalDate } from '@/lib/date';
@@ -537,12 +538,39 @@ export default function Home() {
     });
   };
 
-  const saveMonthlyPlan = (monthId: string) => {
+  const supabase = getSupabase();
+
+  const saveMonthlyPlan = async (monthId: string) => {
     const monthly = getPlansForMonth(monthId);
     const target = monthPlans.find(p => p.id === monthId);
     if (!target) return;
-    localStorage.setItem(`savedPlan_${classId}_${target.year}_${target.month}`, JSON.stringify(monthly));
-    alert('해당 월 플랜을 저장했습니다.');
+    if (!supabase) return;
+    for (const l of monthly) {
+      const { data: existing } = await supabase
+        .from('lesson_plans')
+        .select('*')
+        .eq('class_id', classId)
+        .eq('date', l.date)
+        .limit(1);
+      if (Array.isArray(existing) && existing.length > 0) {
+        await supabase
+          .from('lesson_plans')
+          .update({
+            content: l.content,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', (existing as any)[0].id);
+      } else {
+        await supabase
+          .from('lesson_plans')
+          .insert({
+            class_id: classId,
+            date: l.date,
+            content: l.content
+          });
+      }
+    }
+    alert('해당 월 플랜을 Supabase에 저장했습니다.');
   };
   
   const removeAllocation = (monthId: string, allocId: string) => {

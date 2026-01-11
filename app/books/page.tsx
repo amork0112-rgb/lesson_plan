@@ -1,9 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useData } from '@/context/store';
+import { getSupabase } from '@/lib/supabase';
 import { Plus, Search, Book as BookIcon, X, ChevronRight, GraduationCap, ArrowRight, Trash2 } from 'lucide-react';
-import { Book, UnitType } from '@/types';
+import { Book, UnitType, Class, BookAllocation } from '@/types';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -19,7 +19,10 @@ const CATEGORIES = [
 
 export default function BooksPage() {
   const router = useRouter();
-  const { books, addBook, allocations, classes, addAllocation, deleteAllocation } = useData();
+  const supabase = getSupabase();
+  const [books, setBooks] = useState<Book[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [allocations, setAllocations] = useState<BookAllocation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   
@@ -43,7 +46,6 @@ export default function BooksPage() {
   });
 
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
-  const [autoInit, setAutoInit] = useState<Set<string>>(new Set());
 
   const filteredBooks = books.filter(b => {
     const q = searchTerm.toLowerCase();
@@ -59,28 +61,17 @@ export default function BooksPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'all') return;
-    const hasAllocations = allocations.some(a => a.class_id === activeTab);
-    if (hasAllocations) return;
-    if (autoInit.has(activeTab)) return;
-    const cls = classes.find(c => c.id === activeTab);
-    if (!cls) return;
-    const lvl = cls.name.trim().toLowerCase();
-    const matches = books.filter(b => (b.level || '').trim().toLowerCase() === lvl);
-    let basePriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0));
-    matches.forEach((book) => {
-      if (!isAssignedToClass(book.id, activeTab)) {
-        addAllocation({
-          id: Math.random().toString(36).substr(2, 9),
-          book_id: book.id,
-          class_id: activeTab,
-          sessions_per_week: 1,
-          priority: ++basePriority
-        });
-      }
-    });
-    setAutoInit(new Set([...autoInit, activeTab]));
-  }, [activeTab, allocations, classes, books]);
+    const fetchAll = async () => {
+      if (!supabase) return;
+      const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
+      if (Array.isArray(cls)) setClasses(cls as any);
+      const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
+      if (Array.isArray(bks)) setBooks(bks as any);
+      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+      if (Array.isArray(alloc)) setAllocations(alloc as any);
+    };
+    fetchAll();
+  }, [supabase]);
 
   const getAssignedBooks = (classId: string) => {
     return allocations
@@ -99,14 +90,19 @@ export default function BooksPage() {
   const handleAddToClass = (bookId: string) => {
     if (activeTab === 'all') return;
     if (isAssignedToClass(bookId, activeTab)) return;
-    const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
-    addAllocation({
-      id: Math.random().toString(36).substr(2, 9),
-      book_id: bookId,
-      class_id: activeTab,
-      sessions_per_week: 1,
-      priority: nextPriority
-    });
+    const upsert = async () => {
+      if (!supabase) return;
+      const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
+      await supabase.from('class_book_allocations').insert({
+        class_id: activeTab,
+        book_id: bookId,
+        priority: nextPriority,
+        sessions_per_week: 1
+      });
+      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+      if (Array.isArray(alloc)) setAllocations(alloc as any);
+    };
+    upsert();
   };
 
   const handleToggleSelection = (bookId: string) => {
@@ -124,21 +120,32 @@ export default function BooksPage() {
     
     selectedBookIds.forEach(bookId => {
       if (!isAssignedToClass(bookId, activeTab)) {
-        const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
-        addAllocation({
-          id: Math.random().toString(36).substr(2, 9),
-          book_id: bookId,
-          class_id: activeTab,
-          sessions_per_week: 1,
-          priority: nextPriority
-        });
+        const upsert = async () => {
+          if (!supabase) return;
+          const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
+          await supabase.from('class_book_allocations').insert({
+            class_id: activeTab,
+            book_id: bookId,
+            priority: nextPriority,
+            sessions_per_week: 1
+          });
+          const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+          if (Array.isArray(alloc)) setAllocations(alloc as any);
+        };
+        upsert();
       }
     });
     setSelectedBookIds(new Set());
   };
 
   const handleRemoveAllocation = (allocationId: string) => {
-    deleteAllocation(allocationId);
+    const remove = async () => {
+      if (!supabase) return;
+      await supabase.from('class_book_allocations').delete().eq('id', allocationId);
+      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+      if (Array.isArray(alloc)) setAllocations(alloc as any);
+    };
+    remove();
   };
 
   const handleOpenModal = () => {
@@ -183,20 +190,23 @@ export default function BooksPage() {
 
     try {
         // 2. Prepare Data
-        const newBook: Book = {
-            id: Math.random().toString(36).substr(2, 9),
-            name: formData.name.trim(),
+        const insert = async () => {
+          if (!supabase) return;
+          const { data } = await supabase.from('books').insert({
+            name: formData.name!.trim(),
             category: formData.category,
             level: formData.level?.trim() || '',
             unit_type: formData.unit_type || 'unit',
             total_units: totalUnits,
             days_per_unit: daysPerUnit,
             review_units: Number(formData.review_units || 0),
-            units: [] // Initialize empty units
+            total_sessions: Number(formData.total_sessions || totalUnits)
+          }).select('*');
+          if (Array.isArray(data)) setBooks([...(books || []), ...(data as any)]);
+          const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
+          if (Array.isArray(bks)) setBooks(bks as any);
         };
-
-        // 3. Save
-        addBook(newBook);
+        insert();
         
         // 4. Reset & Close
         setIsModalOpen(false);
