@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useData } from '@/context/store';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
+import { useEffect, useState } from 'react';
+import { getSupabase } from '@/lib/supabase';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Holiday } from '@/types';
+import { Holiday, Class, SpecialDate } from '@/types';
 
 export default function CalendarPage() {
-  const { holidays, addHoliday, deleteHoliday, classes, specialDates, updateSpecialDate } = useData();
+  const supabase = getSupabase();
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Start at Jan 2026
   const [isAdding, setIsAdding] = useState(false);
   const [newHoliday, setNewHoliday] = useState<Partial<Holiday>>({ name: '', date: '', type: 'custom', affected_classes: [] });
@@ -26,14 +29,18 @@ export default function CalendarPage() {
 
   const handleAddHoliday = () => {
     if (!newHoliday.name || !newHoliday.date) return;
-    addHoliday({
-      id: Math.random().toString(),
-      name: newHoliday.name,
-      date: newHoliday.date,
-      type: 'custom',
-      year: parseInt(newHoliday.date.split('-')[0]),
-      affected_classes: newHoliday.affected_classes
-    });
+    const insert = async () => {
+      if (!supabase) return;
+      await supabase.from('holidays').insert({
+        name: newHoliday.name,
+        date: newHoliday.date,
+        type: newHoliday.type || 'custom',
+        affected_classes: newHoliday.affected_classes || []
+      });
+      const { data } = await supabase.from('holidays').select('*');
+      if (Array.isArray(data)) setHolidays(data as Holiday[]);
+    };
+    insert();
     setIsAdding(false);
     setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [] });
   };
@@ -55,7 +62,7 @@ export default function CalendarPage() {
   const handleDateClick = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const current = specialDates[dateStr];
-    let nextData: any = null;
+    let nextData: SpecialDate | null = null;
     
     if (!current) {
         nextData = { type: 'event', name: 'Event' };
@@ -74,8 +81,62 @@ export default function CalendarPage() {
     } else {
         nextData = null;
     }
-    updateSpecialDate(dateStr, nextData);
+    const applyToggle = async () => {
+      if (!supabase) return;
+      if (nextData) {
+        await supabase.from('special_dates').upsert({ date: dateStr, type: nextData.type, name: nextData.name });
+        setSpecialDates({ ...specialDates, [dateStr]: nextData });
+      } else {
+        await supabase.from('special_dates').delete().eq('date', dateStr);
+        const rest = { ...specialDates };
+        delete rest[dateStr];
+        setSpecialDates(rest);
+      }
+    };
+    applyToggle();
   };
+
+  const deleteHolidayById = (id: string) => {
+    const remove = async () => {
+      if (!supabase) return;
+      await supabase.from('holidays').delete().eq('id', id);
+      const { data } = await supabase.from('holidays').select('*');
+      if (Array.isArray(data)) setHolidays(data as Holiday[]);
+    };
+    remove();
+  };
+
+  useEffect(() => {
+    const fetchBase = async () => {
+      if (!supabase) return;
+      const { data: cls } = await supabase.from('classes').select('*').order('name');
+      if (Array.isArray(cls)) setClasses(cls as Class[]);
+      const { data: hol } = await supabase.from('holidays').select('*');
+      if (Array.isArray(hol)) setHolidays(hol as Holiday[]);
+    };
+    fetchBase();
+  }, [supabase]);
+
+  useEffect(() => {
+    const fetchSpecial = async () => {
+      if (!supabase) return;
+      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+      const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('special_dates')
+        .select('*')
+        .gte('date', monthStartStr)
+        .lte('date', monthEndStr);
+      if (Array.isArray(data)) {
+        const map: Record<string, SpecialDate> = {};
+        (data as { date: string; type: SpecialDate['type']; name: string }[]).forEach((row) => {
+          map[row.date] = { type: row.type, name: row.name };
+        });
+        setSpecialDates(map);
+      }
+    };
+    fetchSpecial();
+  }, [supabase, monthStart, monthEnd]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-8">
@@ -258,7 +319,7 @@ export default function CalendarPage() {
                           <div className="flex justify-between items-start">
                               <span className="font-semibold truncate">{h.name}</span>
                               <button 
-                                  onClick={(e) => { e.stopPropagation(); deleteHoliday(h.id); }}
+                                  onClick={(e) => { e.stopPropagation(); deleteHolidayById(h.id); }}
                                   className="hidden group-hover:block hover:opacity-75 ml-1"
                               >
                                   <Trash2 className="h-3 w-3" />
