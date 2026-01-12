@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { Plus, Trash2, Search } from 'lucide-react';
-import { Class, Weekday, Book, BookAllocation } from '@/types';
+import { Class, Weekday } from '@/types';
 
 const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const DAY_MAP: Record<Weekday, string> = { Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토', Sun: '일' };
@@ -45,7 +45,7 @@ export default function ClassesPage() {
     const fetchAll = async () => {
       if (!supabase) return;
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-      if (Array.isArray(cls)) setClasses(cls as any);
+      if (Array.isArray(cls)) setClasses(cls as Class[]);
       // Prefetch related sources for future enhancements
       // const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
       // if (Array.isArray(bks)) setBooks(bks as any);
@@ -97,7 +97,7 @@ export default function ClassesPage() {
         }
       }
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-      if (Array.isArray(cls)) setClasses(cls as any);
+      if (Array.isArray(cls)) setClasses(cls as Class[]);
     };
     upsert();
     
@@ -128,7 +128,7 @@ export default function ClassesPage() {
     if (!supabase) return;
     await supabase.from('classes').delete().eq('id', id);
     const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-    if (Array.isArray(cls)) setClasses(cls as any);
+    if (Array.isArray(cls)) setClasses(cls as Class[]);
   };
 
   return (

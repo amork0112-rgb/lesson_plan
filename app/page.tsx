@@ -35,7 +35,7 @@ function getDatesForMonth(
   year: number,
   month: number,
   selectedDays: Weekday[],
-  holidays: any[],
+  holidays: { date: string }[],
   specialDates: Record<string, SpecialDate> = {}
 ): string[] {
   const dates: string[] = [];
@@ -468,7 +468,7 @@ export default function Home() {
     }
   };
 
-  const updateAllocation = (monthId: string, allocId: string, field: keyof BookAllocation, value: any) => {
+  const updateAllocation = (monthId: string, allocId: string, field: keyof BookAllocation, value: BookAllocation[keyof BookAllocation]) => {
     setMonthPlans(monthPlans.map(plan => {
       if (plan.id !== monthId) return plan;
       return {
@@ -573,7 +573,7 @@ export default function Home() {
             content: l.content,
             updated_at: new Date().toISOString()
           })
-          .eq('id', (existing as any)[0].id);
+          .eq('id', (existing as LessonPlan[])[0].id);
       } else {
         await supabase
           .from('lesson_plans')
@@ -1043,7 +1043,7 @@ export default function Home() {
                                 gridStart.setDate(gridStart.getDate() - startDayOfWeek);
                                 
                                 const days = [];
-                                let current = new Date(gridStart);
+                                const current = new Date(gridStart);
                                 
                                 // Generate continuous grid
                                 // Loop until we pass effectiveEnd AND complete the week

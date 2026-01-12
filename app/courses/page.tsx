@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '@/lib/supabase';
 import { Book } from '@/types';
-import { Upload } from 'lucide-react';
+import { Upload, Save, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 type CurriculumRow = {
+  id?: string;
   level: string;
   duration: string;
   mainTB?: string;
@@ -51,22 +52,23 @@ export default function CoursesPage() {
   const [rows, setRows] = useState<CurriculumRow[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const router = useRouter();
+  const [editing, setEditing] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!supabase) return;
       const { data: courses } = await supabase.from('courses').select('*');
       if (Array.isArray(courses)) {
-        const arr = courses as any[];
+        const arr = courses as CurriculumRow[];
         const sorted = [...arr].sort((a, b) => {
-          const an = (a.name || a.level || '').toString().toLowerCase();
-          const bn = (b.name || b.level || '').toString().toLowerCase();
+          const an = (a.level || a.mainTB || '').toString().toLowerCase();
+          const bn = (b.level || b.mainTB || '').toString().toLowerCase();
           return an.localeCompare(bn);
         });
-        setRows(sorted as any);
+        setRows(sorted);
       }
       const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      if (Array.isArray(bks)) setBooks(bks as any);
+      if (Array.isArray(bks)) setBooks(bks as Book[]);
     };
     fetchData();
   }, [supabase]);
@@ -113,12 +115,68 @@ export default function CoursesPage() {
       if (candidates.length > 0) {
         await supabase.from('books').upsert(candidates);
         const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-        if (Array.isArray(bks)) setBooks(bks as any);
+        if (Array.isArray(bks)) setBooks(bks as Book[]);
       }
       alert(`Books imported: ${candidates.length}`);
       router.push('/books');
     };
     importBooks();
+  };
+
+  const setCell = (idx: number, key: keyof CurriculumRow, value: string) => {
+    const next = [...rows];
+    if (key === 'secondTB') {
+      const arr = value.split('/').map(v => v.trim()).filter(Boolean);
+      next[idx] = { ...next[idx], secondTB: arr };
+    } else {
+      next[idx] = { ...next[idx], [key]: value };
+    }
+    setRows(next);
+  };
+
+  const handleAddRow = () => {
+    setRows([
+      ...rows,
+      { id: undefined, level: '', duration: '3', mainTB: '' }
+    ]);
+  };
+
+  const handleDeleteRow = async (idx: number) => {
+    const target = rows[idx];
+    if (supabase && target?.id) {
+      await supabase.from('courses').delete().eq('id', target.id);
+    }
+    const next = [...rows];
+    next.splice(idx, 1);
+    setRows(next);
+  };
+
+  const handleSaveRows = async () => {
+    if (!supabase) return;
+    const payload = rows.map(r => ({
+      id: r.id,
+      level: r.level?.trim() || '',
+      duration: r.duration?.trim() || '',
+      mainTB: r.mainTB || '',
+      secondTB: Array.isArray(r.secondTB) ? r.secondTB : (r.secondTB ? r.secondTB.split('/').map(v => v.trim()).filter(Boolean) : []),
+      speaking: r.speaking || '',
+      voca: r.voca || '',
+      grammar: r.grammar || '',
+      writing: r.writing || '',
+      certify: r.certify || ''
+    }));
+    await supabase.from('courses').upsert(payload);
+    const { data: courses } = await supabase.from('courses').select('*');
+    if (Array.isArray(courses)) {
+      const arr = courses as CurriculumRow[];
+      const sorted = [...arr].sort((a, b) => {
+        const an = (a.level || a.mainTB || '').toString().toLowerCase();
+        const bn = (b.level || b.mainTB || '').toString().toLowerCase();
+        return an.localeCompare(bn);
+      });
+      setRows(sorted);
+    }
+    alert('Courses 저장 완료');
   };
 
   return (
@@ -127,14 +185,32 @@ export default function CoursesPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-light text-slate-900 tracking-tight">Courses</h1>
-            <p className="text-slate-500 font-light">Supabase의 레벨별 커리큘럼을 조회하고 Books를 생성합니다.</p>
+            <p className="text-slate-500 font-light">엑셀처럼 편집하고 저장, Books로 반영합니다.</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEditing(!editing)}
+              className={`px-4 py-2 rounded-full text-sm font-medium border transition-all ${editing ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+            >
+              <Pencil className="h-4 w-4 inline mr-1" /> {editing ? '편집 종료' : '편집'}
+            </button>
+            <button
+              onClick={handleSaveRows}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-all"
+            >
+              <Save className="h-4 w-4 inline mr-1" /> 저장
+            </button>
             <button
               onClick={handleImportToBooks}
               className="px-4 py-2 rounded-full text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-all"
             >
               <Upload className="h-4 w-4 inline mr-1" /> Books에 반영
+            </button>
+            <button
+              onClick={handleAddRow}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 transition-all"
+            >
+              <Plus className="h-4 w-4 inline mr-1" /> 행 추가
             </button>
           </div>
         </div>
@@ -152,6 +228,7 @@ export default function CoursesPage() {
                 <th className="px-3 py-4">Grammar</th>
                 <th className="px-3 py-4">Writing</th>
                 <th className="px-3 py-4">스피킹인증제</th>
+                <th className="px-3 py-4 w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -160,12 +237,27 @@ export default function CoursesPage() {
                   {(['level','duration','mainTB','secondTB','speaking','voca','grammar','writing','certify'] as (keyof CurriculumRow)[])
                     .map((key) => (
                       <td key={key as string} className="px-3 py-2">
-                        <div className="text-sm text-slate-800 whitespace-pre-line">
-                          {Array.isArray(r[key]) ? (r[key] as string[]).join('\n') : (r[key] as string)}
-                        </div>
+                        {editing ? (
+                          <textarea
+                            value={(Array.isArray(r[key]) ? (r[key] as string[]).join(' / ') : (r[key] || '') as string)}
+                            onChange={(e) => setCell(idx, key, e.target.value)}
+                            rows={key === 'level' || key === 'duration' ? 1 : 2}
+                            className="w-full text-sm border border-slate-200 rounded-md p-2 bg-white"
+                          />
+                        ) : (
+                          <div className="text-sm text-slate-800 whitespace-pre-line">{Array.isArray(r[key]) ? (r[key] as string[]).join('\n') : (r[key] as string)}</div>
+                        )}
                       </td>
                     ))
                   }
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => handleDeleteRow(idx)}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
