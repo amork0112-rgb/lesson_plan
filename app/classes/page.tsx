@@ -2,16 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabase';
-import { Plus, Trash2, Search, Users, Clock, Calendar, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Search } from 'lucide-react';
 import { Class, Weekday, Book, BookAllocation } from '@/types';
 
 const WEEKDAYS: Weekday[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DAY_MAP: Record<Weekday, string> = { Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토', Sun: '일' };
+function to12h(time?: string | null) {
+  if (!time) return '';
+  const [hh, mm] = time.split(':');
+  const h = parseInt(hh, 10);
+  const twelve = ((h % 12) || 12).toString();
+  return `${twelve}:${mm}`;
+}
+function formatDays(days: Weekday[]) {
+  return days.map(d => DAY_MAP[d]).join('');
+}
 
 export default function ClassesPage() {
   const supabase = getSupabase();
   const [classes, setClasses] = useState<Class[]>([]);
-  const [allocations, setAllocations] = useState<BookAllocation[]>([]);
-  const [books, setBooks] = useState<Book[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,10 +46,11 @@ export default function ClassesPage() {
       if (!supabase) return;
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
       if (Array.isArray(cls)) setClasses(cls as any);
-      const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      if (Array.isArray(bks)) setBooks(bks as any);
-      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as any);
+      // Prefetch related sources for future enhancements
+      // const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
+      // if (Array.isArray(bks)) setBooks(bks as any);
+      // const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+      // if (Array.isArray(alloc)) setAllocations(alloc as any);
     };
     fetchAll();
   }, [supabase]);
@@ -81,7 +91,10 @@ export default function ClassesPage() {
           days: newClass.days || [],
           scp_type: newClass.scp_type ?? null
         }).select('*');
-        if (Array.isArray(data)) setClasses([...(classes || []), ...(data as any)]);
+        if (Array.isArray(data)) {
+          const combined = [...classes, ...(data as Class[])].sort((a, b) => a.name.localeCompare(b.name));
+          setClasses(combined);
+        }
       }
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
       if (Array.isArray(cls)) setClasses(cls as any);
@@ -281,85 +294,52 @@ export default function ClassesPage() {
           </div>
         )}
 
-        {/* Class List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClasses.map((cls) => (
-            <div key={cls.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow group relative">
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                    <Users className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900">{cls.name}</h3>
-                    <p className="text-xs text-slate-500">{cls.level_group} • {cls.year}</p>
-                  </div>
-                </div>
-                <div className="flex gap-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => handleEdit(cls)}
-                    className="text-slate-300 hover:text-indigo-500 transition-colors p-1 hover:bg-indigo-50 rounded-full"
-                    title="Edit Class"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(cls.id)}
-                    className="text-slate-300 hover:text-red-500 transition-colors p-1 hover:bg-red-50 rounded-full"
-                    title="Delete Class"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <Calendar className="h-4 w-4 text-slate-400" />
-                  <div className="flex gap-1">
-                    {cls.days.map(d => (
-                      <span key={d} className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-medium text-slate-600">
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <Clock className="h-4 w-4 text-slate-400" />
-                  <span>{cls.start_time} - {cls.end_time}</span>
-                  {cls.dismissal_time && (
-                    <span className="text-xs text-orange-500 font-medium ml-2">
-                       (Out: {cls.dismissal_time})
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                <th className="px-6 py-4">Class Name</th>
+                <th className="px-6 py-4 w-40">Days</th>
+                <th className="px-6 py-4 w-56">Class Time</th>
+                <th className="px-6 py-4 w-40">Dismissal</th>
+                <th className="px-6 py-4 w-24"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredClasses.map((cls) => (
+                <tr
+                  key={cls.id}
+                  onClick={() => handleEdit(cls)}
+                  className="hover:bg-indigo-50/30 transition-colors cursor-pointer group"
+                >
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-slate-900 group-hover:text-indigo-900 transition-colors">{cls.name}</div>
+                    <div className="text-xs text-slate-500">{cls.level_group} • {cls.year}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm text-slate-700">{formatDays(cls.days || [])}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm font-medium text-slate-700">
+                      {to12h(cls.start_time)} ~ {to12h(cls.end_time)}
                     </span>
-                  )}
-                </div>
-                {typeof cls.scp_type !== 'undefined' && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600">
-                    <span className="text-xs font-medium px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full">
-                      SCP: {cls.scp_type ? cls.scp_type.charAt(0).toUpperCase() + cls.scp_type.slice(1) : 'None'}
-                    </span>
-                  </div>
-                )}
-                
-                <div className="flex items-start gap-2 text-sm text-slate-600 pt-2 border-t border-slate-50">
-                  <BookOpen className="h-4 w-4 text-slate-400 mt-0.5" />
-                  <div className="flex gap-1 flex-wrap">
-                     {Array.from(new Set(allocations.filter(a => a.class_id === cls.id).map(a => a.book_id))).map(bookId => {
-                         const book = books.find(b => b.id === bookId);
-                         return book ? (
-                            <span key={book.id} className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-medium border border-indigo-100">
-                               {book.name}
-                            </span>
-                         ) : null;
-                     })}
-                     {allocations.filter(a => a.class_id === cls.id).length === 0 && (
-                        <span className="text-slate-400 text-xs italic">No books assigned</span>
-                     )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-sm text-slate-700">{cls.dismissal_time ? to12h(cls.dismissal_time) : '-'}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(cls.id); }}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete Class"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

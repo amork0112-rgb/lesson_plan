@@ -460,22 +460,12 @@ export default function Home() {
         nextData = null;
      }
      
-    const applyToggle = async () => {
-      if (!supabase) return;
-      if (nextData) {
-        await supabase.from('special_dates').upsert({
-          date: dateStr,
-          type: nextData.type,
-          name: nextData.name
-        });
-        setSpecialDates({ ...specialDates, [dateStr]: nextData });
-      } else {
-        await supabase.from('special_dates').delete().eq('date', dateStr);
-        const { [dateStr]: _, ...rest } = specialDates;
-        setSpecialDates(rest);
-      }
-    };
-    applyToggle();
+    if (nextData) {
+      setSpecialDates({ ...specialDates, [dateStr]: nextData });
+    } else {
+      const { [dateStr]: _, ...rest } = specialDates;
+      setSpecialDates(rest);
+    }
   };
 
   const updateAllocation = (monthId: string, allocId: string, field: keyof BookAllocation, value: any) => {
@@ -557,39 +547,12 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const fetchHolidays = async () => {
-      if (!supabase) return;
-      const { data } = await supabase.from('holidays').select('*');
-      if (Array.isArray(data)) setHolidays(data as any);
-    };
-    fetchHolidays();
-  }, [supabase]);
+    setHolidays([]);
+  }, []);
 
   useEffect(() => {
-    const fetchSpecialDates = async () => {
-      if (!supabase || monthPlans.length === 0) return;
-      const minY = Math.min(...monthPlans.map(p => p.year));
-      const minM = Math.min(...monthPlans.map(p => p.month));
-      const maxY = Math.max(...monthPlans.map(p => p.year));
-      const maxM = Math.max(...monthPlans.map(p => p.month));
-      const monthStart = `${minY}-${String(minM + 1).padStart(2, '0')}-01`;
-      const monthEndDate = new Date(maxY, maxM + 1, 0).getDate();
-      const monthEnd = `${maxY}-${String(maxM + 1).padStart(2, '0')}-${String(monthEndDate).padStart(2, '0')}`;
-      const { data } = await supabase
-        .from('special_dates')
-        .select('*')
-        .gte('date', monthStart)
-        .lte('date', monthEnd);
-      if (Array.isArray(data)) {
-        const map: Record<string, SpecialDate> = {};
-        (data as any).forEach((row: any) => {
-          map[row.date] = { type: row.type, name: row.name };
-        });
-        setSpecialDates(map);
-      }
-    };
-    fetchSpecialDates();
-  }, [supabase, monthPlans]);
+    setSpecialDates({});
+  }, [monthPlans.length]);
 
   const saveMonthlyPlan = async (monthId: string) => {
     const monthly = getPlansForMonth(monthId);

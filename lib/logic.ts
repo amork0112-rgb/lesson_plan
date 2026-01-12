@@ -1,7 +1,6 @@
 import { 
-  Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
+  ScheduleRule, Holiday, Event, Book, BookAllocation, Weekday, LessonUnit 
 } from '@/types';
-import { parseLocalDate } from './date';
 
 const WEEKDAYS: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
