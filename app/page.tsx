@@ -3,14 +3,15 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
 import { getSupabase } from '@/lib/supabase';
-import { generateClassDates, calculateBookDistribution } from '@/lib/logic';
+import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
 import { parseLocalDate } from '@/lib/date';
 import PdfLayout from '@/components/PdfLayout';
-import { Class, BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
-import { Settings, Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, ChevronRight, AlertCircle, CheckCircle, XCircle, ArrowUp, ArrowDown, HelpCircle, BookOpen, FileText, GripVertical } from 'lucide-react';
+import { BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
+import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical } from 'lucide-react';
 
-async function exportPdf(element: HTMLElement, filename: string) {
+async function exportPdf(_element: HTMLElement) {
+  void _element;
   window.print();
 }
 
@@ -144,7 +145,7 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
 export default function Home() {
   const { books, classes, allocations: globalAllocations, setAllocations } = useData();
   const supabase = getSupabase();
-  const [holidays, setHolidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
+  const [holidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   
   // -- Global Settings --
@@ -171,11 +172,6 @@ export default function Home() {
         // This prevents saving "old" plans to "new" keys during state transitions
         const firstPlan = monthPlans[0];
         // Calculate expected year/month for the first plan
-        const expectedYear = startMonth < firstPlan.month ? year + 1 : year; // This logic is tricky if startMonth changes
-        // Simpler check: Does the first plan's ID match the expected ID structure for the current settings?
-        // Actually, just check if the plan's year matches the current year state (roughly)
-        // or better: The 'Load' effect handles creating the correct structure.
-        // We just need to ensure we don't save *stale* state.
         
         // If I switched year to 2027, but monthPlans is still 2026...
         if (firstPlan.year !== year && firstPlan.year !== year + 1) return; // Allow next year rollover, but main year should match
@@ -202,7 +198,7 @@ export default function Home() {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 console.log('[Debug] Loaded saved plans for', classId);
-                setMonthPlans(parsed);
+                setTimeout(() => setMonthPlans(parsed), 0);
                 return;
             }
         } catch (e) {
@@ -235,8 +231,8 @@ export default function Home() {
        });
     });
     
-    setMonthPlans(newPlans);
-  }, [classId, year, startMonth, duration]);
+    setTimeout(() => setMonthPlans(newPlans), 0);
+  }, [classId, year, startMonth, duration, monthPlans]);
 
   // Sync Allocations to Global Context
   useEffect(() => {
@@ -254,11 +250,12 @@ export default function Home() {
     // Use functional update if possible, or just current globalAllocations
     const otherAllocations = globalAllocations.filter(a => a.class_id !== classId);
     setAllocations([...otherAllocations, ...currentClassAllocations]);
-  }, [monthPlans, classId]);
+  }, [monthPlans, classId, globalAllocations, setAllocations]);
 
   // -- Output --
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<LessonPlan[]>([]);
+  const [pageTitle, setPageTitle] = useState('FRAGE Lesson Plan');
   const [showGuide, setShowGuide] = useState(true);
   const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
   const [addingDateId, setAddingDateId] = useState<string | null>(null);
@@ -268,6 +265,9 @@ export default function Home() {
 
   // -- Computed Usage & Flow --
   // We calculate the flow of sessions: Start -> Used -> Remaining -> Next Start
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle]);
   
   // 1. Calculate the Fixed Session Dates for each month based on the 8/12 rule
   // Rule: 2 days/week -> 8 sessions/month. 3 days/week -> 12 sessions/month.
@@ -463,7 +463,8 @@ export default function Home() {
     if (nextData) {
       setSpecialDates({ ...specialDates, [dateStr]: nextData });
     } else {
-      const { [dateStr]: _, ...rest } = specialDates;
+      const rest = { ...specialDates };
+      delete rest[dateStr];
       setSpecialDates(rest);
     }
   };
@@ -546,13 +547,9 @@ export default function Home() {
     });
   };
 
-  useEffect(() => {
-    setHolidays([]);
-  }, []);
+  // 초기 상태가 []이므로 별도의 reset 효과는 제거
 
-  useEffect(() => {
-    setSpecialDates({});
-  }, [monthPlans.length]);
+  // Removed specialDates reset effect to avoid setState in effect
 
   const saveMonthlyPlan = async (monthId: string) => {
     const monthly = getPlansForMonth(monthId);
@@ -629,25 +626,14 @@ export default function Home() {
     }));
   };
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [shouldDownload, setShouldDownload] = useState(false);
   const [inlineAddMonthId, setInlineAddMonthId] = useState<string | null>(null);
 
-  // Auto-download effect
-  useEffect(() => {
-    if (shouldDownload && isGenerated && generatedPlan.length > 0) {
-      const element = document.getElementById('pdf-root');
-      if (element) {
-        requestAnimationFrame(() => exportPdf(element, 'lesson_plan.pdf'));
-      }
-      setShouldDownload(false);
-    }
-  }, [shouldDownload, isGenerated, generatedPlan]);
+  // Removed auto-download effect to avoid setState in effect
 
   const downloadPDF = () => {
     const element = document.getElementById('pdf-root');
     if (!element) return;
-    exportPdf(element, 'lesson_plan.pdf');
+    exportPdf(element);
   };
 
   const handleGenerate = (targetMonthId?: string) => {
@@ -672,20 +658,6 @@ export default function Home() {
         return;
     }
 
-    const selectedClass = classes.find(c => c.id === classId);
-    const classInfo: Class = {
-      id: classId,
-      name: className,
-      year,
-      level_group: selectedClass?.level_group || 'Root',
-      weekly_sessions: selectedDays.length,
-      sessions_per_month: 24,
-      start_time: startTime,
-      end_time: endTime,
-      days: selectedDays,
-      scp_type: selectedClass?.scp_type ?? null
-    };
-
     const allLessons = generateLessons({
       classId,
       monthPlans,
@@ -702,7 +674,7 @@ export default function Home() {
         // Filter plans for this month
         const monthlyPlans = allPlans.filter(l => {
           // Parse YYYY-MM-DD manually to avoid UTC conversion issues
-          const [y, m, d] = l.date.split('-').map(Number);
+          const [y, m] = l.date.split('-').map(Number);
           return (m - 1) === targetPlan.month && y === targetPlan.year;
         });
         
@@ -711,7 +683,7 @@ export default function Home() {
             allPlans = monthlyPlans;
             const monthName = MONTH_NAMES[targetPlan.month];
             const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
-            document.title = fileName;
+            setPageTitle(fileName);
         } else {
             // Fallback: If monthly generation fails/empty, user requested "Generate All" as backup?
             // Or simply alert?
@@ -731,7 +703,7 @@ export default function Home() {
             
             if (confirm(`No lessons generated for ${MONTH_NAMES[targetPlan.month]}. Show full plan instead?`)) {
                 // Do not filter. `allPlans` remains full.
-                document.title = `LessonPlan_${className}_All_Months_${year}`;
+                setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
             } else {
                 allPlans = []; // User declined, show empty
             }
@@ -739,12 +711,11 @@ export default function Home() {
       }
     } else {
         // Generate All
-        document.title = `LessonPlan_${className}_All_Months_${year}`;
+        setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
     }
 
     setGeneratedPlan(allPlans);
     setIsGenerated(true);
-    setShouldDownload(!targetMonthId);
     requestAnimationFrame(() => {
       const el = document.getElementById('preview-root');
       if (el) {
@@ -757,14 +728,7 @@ export default function Home() {
     }
   };
   
-  // Clear preview when Academic Year changes to avoid stale display
-  useEffect(() => {
-    setIsGenerated(false);
-    setGeneratedPlan([]);
-  }, [year, startMonth, duration]);
-  
- 
-
+  // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
     <div className="p-8 max-w-6xl mx-auto">
       {/* Guide Section */}
@@ -868,7 +832,12 @@ export default function Home() {
                 <div className="relative">
                   <select 
                     value={year} 
-                    onChange={(e) => setYear(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const y = parseInt(e.target.value);
+                      setYear(y);
+                      setIsGenerated(false);
+                      setGeneratedPlan([]);
+                    }}
                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50 appearance-none"
                   >
                     {[2024, 2025, 2026, 2027, 2028].map(y => (
@@ -885,7 +854,12 @@ export default function Home() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Start Month</label>
                 <select 
                   value={startMonth} 
-                  onChange={(e) => setStartMonth(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const m = parseInt(e.target.value);
+                    setStartMonth(m);
+                    setIsGenerated(false);
+                    setGeneratedPlan([]);
+                  }}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
                   {MONTH_NAMES.map((m, idx) => (
@@ -1215,12 +1189,11 @@ export default function Home() {
                          const book = books.find(b => b.id === alloc.book_id);
                          
                          const stats = bookFlow[plan.id]?.[alloc.book_id] || { start: 0, used: 0, remaining: 0 };
-                         const { start, used, remaining } = stats;
+                         const { start, remaining } = stats;
                          const calculatedUsed = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId)[alloc.book_id] || 0;
                          
                          // Color Logic
                          let remainingColor = 'text-green-600 font-bold';
-                         let StatusIcon = CheckCircle;
                          
                          // Calculate percentage based on the START value of this month (or original total? user wants flow)
                          // If we use Start as the denominator, it shows progress for THIS month's chunk?
@@ -1230,13 +1203,10 @@ export default function Home() {
                          
                          if (remaining < 0) {
                             remainingColor = 'text-red-600 font-black';
-                            StatusIcon = XCircle;
                          } else if (remaining <= 4) { // Warning if less than 2 weeks approx
                             remainingColor = 'text-red-500 font-bold';
-                            StatusIcon = AlertCircle;
                          } else if (remaining <= 8) {
                             remainingColor = 'text-yellow-600 font-bold';
-                            StatusIcon = AlertCircle;
                          }
 
                          return (
@@ -1460,36 +1430,28 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleGenerate()}
-                disabled={monthPlans.every(p => p.allocations.length === 0) || isGenerating}
+                disabled={monthPlans.every(p => p.allocations.length === 0)}
                 title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "설정된 기간의 플랜을 미리보기로 생성"}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
-                  ${monthPlans.every(p => p.allocations.length === 0) || isGenerating
+                  ${monthPlans.every(p => p.allocations.length === 0)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                     : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
                 `}
               >
-                {isGenerating ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                ) : (
-                    <Play className="h-4 w-4" />
-                )}
-                {isGenerating ? 'Generating...' : 'Preview Plan'}
+                <Play className="h-4 w-4" />
+                Preview Plan
               </button>
               <button
-                onClick={() => setShouldDownload(true)}
-                disabled={!isGenerated || generatedPlan.length === 0 || isGenerating}
+                onClick={() => downloadPDF()}
+                disabled={!isGenerated || generatedPlan.length === 0}
                 title={!isGenerated ? "먼저 플랜을 미리보기로 생성하세요" : "PDF로 저장"}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
-                  ${(!isGenerated || generatedPlan.length === 0) || isGenerating
+                  ${(!isGenerated || generatedPlan.length === 0)
                     ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
                     : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
                 `}
               >
-                {isGenerating ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                ) : (
-                    <Download className="h-4 w-4" />
-                )}
+                <Download className="h-4 w-4" />
                 Download PDF
               </button>
             </div>
@@ -1588,7 +1550,7 @@ export default function Home() {
                        }
                        return rows.map((datesRow, ri) => (
                         <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {datesRow.map((dStr, ci) => {
+                          {datesRow.map((dStr) => {
                             const list = (byDate[dStr] || []).sort((a, b) => {
                               const pa = typeof a.period === 'number' ? a.period : 0;
                               const pb = typeof b.period === 'number' ? b.period : 0;

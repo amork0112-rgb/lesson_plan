@@ -57,18 +57,18 @@ export default function BooksPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const cid = new URLSearchParams(window.location.search).get('classId');
-    if (cid) setActiveTab(cid);
+    if (cid) setTimeout(() => setActiveTab(cid), 0);
   }, []);
 
   useEffect(() => {
     const fetchAll = async () => {
       if (!supabase) return;
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-      if (Array.isArray(cls)) setClasses(cls as any);
+      if (Array.isArray(cls)) setClasses(cls as Class[]);
       const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      if (Array.isArray(bks)) setBooks(bks as any);
+      if (Array.isArray(bks)) setBooks(bks as Book[]);
       const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as any);
+      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
     };
     fetchAll();
   }, [supabase]);
@@ -100,7 +100,7 @@ export default function BooksPage() {
         sessions_per_week: 1
       });
       const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as any);
+      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
     };
     upsert();
   };
@@ -130,7 +130,7 @@ export default function BooksPage() {
             sessions_per_week: 1
           });
           const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-          if (Array.isArray(alloc)) setAllocations(alloc as any);
+          if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
         };
         upsert();
       }
@@ -143,7 +143,7 @@ export default function BooksPage() {
       if (!supabase) return;
       await supabase.from('class_book_allocations').delete().eq('id', allocationId);
       const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as any);
+      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
     };
     remove();
   };
@@ -202,9 +202,9 @@ export default function BooksPage() {
             review_units: Number(formData.review_units || 0),
             total_sessions: Number(formData.total_sessions || totalUnits)
           }).select('*');
-          if (Array.isArray(data)) setBooks([...(books || []), ...(data as any)]);
+          if (Array.isArray(data)) setBooks([...(books || []), ...(data as Book[])]);
           const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-          if (Array.isArray(bks)) setBooks(bks as any);
+          if (Array.isArray(bks)) setBooks(bks as Book[]);
         };
         insert();
         
@@ -229,42 +229,7 @@ export default function BooksPage() {
     }
   };
 
-  const getUsedByText = (bookId: string) => {
-    const usedClassIds = allocations
-        .filter(a => a.book_id === bookId)
-        .map(a => a.class_id);
-    
-    const uniqueClassIds = Array.from(new Set(usedClassIds));
-    const usedClasses = uniqueClassIds
-        .map(id => classes.find(c => c.id === id))
-        .filter(c => c !== undefined);
-
-    if (usedClasses.length === 0) return <span className="text-slate-400 text-sm italic">Not assigned</span>;
-
-    const names = usedClasses.map(c => c!.name);
-    if (names.length <= 3) {
-        return (
-            <div className="flex flex-wrap gap-1">
-                {names.map(name => (
-                    <span key={name} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-medium border border-indigo-100">
-                        {name}
-                    </span>
-                ))}
-            </div>
-        );
-    } else {
-        return (
-            <div className="flex flex-wrap gap-1 items-center">
-                {names.slice(0, 3).map(name => (
-                    <span key={name} className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-medium border border-indigo-100">
-                        {name}
-                    </span>
-                ))}
-                <span className="text-xs text-slate-500 font-medium">+{names.length - 3} more</span>
-            </div>
-        );
-    }
-  };
+  // Removed unused getUsedByText helper
 
   return (
     <Suspense fallback={<div className="p-12">Loading...</div>}>

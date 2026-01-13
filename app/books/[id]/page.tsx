@@ -50,13 +50,13 @@ export default function BookDetailPage() {
     if (id && books.length > 0) {
       const foundBook = books.find(b => b.id === id);
       if (foundBook) {
-        setBook(foundBook);
+        setTimeout(() => setBook(foundBook), 0);
         // Ensure units exist, otherwise generate them
         if (!foundBook.units || foundBook.units.length === 0) {
            const generated = generateBookUnits(foundBook);
-           setUnits(generated);
+           setTimeout(() => setUnits(generated), 0);
         } else {
-           setUnits(foundBook.units);
+           setTimeout(() => setUnits(foundBook.units!), 0);
         }
       } else {
         // Handle not found
