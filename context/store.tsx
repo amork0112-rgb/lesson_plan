@@ -36,6 +36,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   const [isInitialized, setIsInitialized] = useState(false);
   const supabase = getSupabase();
+  const isCalendarPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/calendar');
 
   useEffect(() => {
     let cancelled = false;
@@ -43,12 +44,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!supabase) return false;
       const b = await supabase
         .from('books')
-        .select('id,name,category,level,series,progression_type,volume_count,days_per_volume,series_level,total_units,unit_type,days_per_unit,review_units,total_sessions,units')
-        .order('name', { ascending: true });
+        .select('id,name,category,level,series,progression_type,volume_count,days_per_volume,series_level,total_units,unit_type,days_per_unit,review_units,total_sessions,units');
       const c = await supabase
         .from('classes')
-        .select('id,name,year,level_group,weekly_sessions,sessions_per_month,start_time,end_time,dismissal_time,days,scp_type')
-        .order('name', { ascending: true });
+        .select('id,name,year,level_group,weekly_sessions,sessions_per_month,start_time,end_time,dismissal_time,days,scp_type');
       const a = await supabase
         .from('allocations')
         .select('id,class_id,book_id,sessions_per_week,priority,total_sessions_override,manual_used,month,year');
@@ -78,11 +77,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setIsInitialized(true);
     };
     (async () => {
-      const ok = await loadCloud();
-      if (!ok) loadLocal();
+      if (isCalendarPath) {
+        loadLocal();
+      } else {
+        const ok = await loadCloud();
+        if (!ok) loadLocal();
+      }
     })();
     return () => { cancelled = true; };
-  }, [supabase]);
+  }, [supabase, isCalendarPath]);
 
   useEffect(() => {
     const sync = async () => {
