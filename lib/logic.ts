@@ -38,7 +38,8 @@ export function generateBookUnits(book: Book): LessonUnit[] {
           unit_no: v,
           day_no: d,
           type: 'lesson',
-          title: `${levelTag}-${v} Day ${d}`
+          title: `${levelTag}-${v} Day ${d}`,
+          has_video: false
         });
       }
     }
@@ -76,7 +77,8 @@ export function generateBookUnits(book: Book): LessonUnit[] {
         unit_no: u,
         day_no: d,
         type: 'lesson',
-        title: book.unit_type === 'day' ? `Day ${u}` : `Unit ${u} - Day ${d}`
+        title: book.unit_type === 'day' ? `Day ${u}` : `Unit ${u} - Day ${d}`,
+        has_video: false
       });
     }
 

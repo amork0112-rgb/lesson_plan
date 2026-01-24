@@ -1,3 +1,4 @@
+//from frage-lesson-plan/app/books/[id]/page.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -365,9 +366,24 @@ export default function BookDetailPage() {
                                     </button>
                                 )}
                                 {unit.type !== 'review' && (
-                                    <div className="px-3 py-1 text-xs text-slate-400 bg-slate-100 rounded-md">
-                                        Fixed
-                                    </div>
+                                    <label className="flex items-center gap-2 px-3 py-1 text-xs text-slate-700 bg-slate-100 rounded-md cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!unit.has_video}
+                                          onChange={(e) => {
+                                            const next = [...units];
+                                            next[index] = { ...unit, has_video: e.target.checked };
+                                            setUnits(next);
+                                            setIsDirty(true);
+                                            if (book) {
+                                              const resequenced = next.map((u, i) => ({ ...u, sequence: i + 1 }));
+                                              updateBook(book.id, { ...book, units: resequenced });
+                                              setIsDirty(false);
+                                            }
+                                          }}
+                                        />
+                                        <span className="font-medium">Video</span>
+                                    </label>
                                 )}
                             </div>
                             </>

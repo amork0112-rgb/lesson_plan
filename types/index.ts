@@ -61,6 +61,7 @@ export interface LessonUnit {
   day_no?: number; // 1~3 (nullable)
   type: 'lesson' | 'review';
   title: string;
+  has_video?: boolean;
 }
 
 export interface Book {
