@@ -49,7 +49,7 @@ export async function GET() {
         id,
         priority,
         sessions_per_week,
-        books (
+        books:class_book_allocations_book_id_fkey (
           id,
           name,
           total_units,
