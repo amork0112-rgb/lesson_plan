@@ -1,11 +1,10 @@
+//app/api/books/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  console.log('🔥 [API/books] route file loaded');
-  console.log('➡️ [API/books] GET called');
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   console.log('🔑 Supabase URL:', supabaseUrl ? 'OK' : 'MISSING');
@@ -40,9 +39,19 @@ export async function GET() {
   };
   const list = Array.isArray(data) ? (data as BookLite[]) : [];
   const result = list.map((b) => {
-    const sessions =
-      b.total_units && b.days_per_unit ? b.total_units * b.days_per_unit : null;
-    return { ...b, sessions };
+    const total_sessions =
+      (b.total_units ?? 0) && (b.days_per_unit ?? 0)
+        ? (b.total_units ?? 0) * (b.days_per_unit ?? 0)
+        : 0;
+    return {
+      id: b.id,
+      name: b.name,
+      category: b.category ?? 'others',
+      level: b.level ?? '',
+      total_units: b.total_units ?? 0,
+      days_per_unit: b.days_per_unit ?? 1,
+      total_sessions,
+    };
   });
 
   return NextResponse.json(result);

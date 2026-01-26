@@ -46,25 +46,23 @@ export default function BookDetailPage() {
   const [editFormData, setEditFormData] = useState<Partial<Book>>({});
   const isTrophy = !!(book && ((book.series === 'Trophy 9') || book.progression_type === 'volume-day'));
 
-  // Initialize book data
+  // Initialize book data via API
   useEffect(() => {
-    if (!id || books.length === 0) return;
+    if (!id) return;
     const rawId = Array.isArray(id) ? id[0] : id;
-    const foundBook = books.find(b => b.id === rawId);
-    if (foundBook) {
-      setTimeout(() => {
-        setBook(foundBook);
-        if (!foundBook.units || foundBook.units.length === 0) {
-          const generated = generateBookUnits(foundBook);
-          setUnits(generated);
-        } else {
-          setUnits(foundBook.units!);
-        }
-      }, 0);
-    } else {
-      router.push('/books');
-    }
-  }, [id, books, router]);
+    const fetchDetail = async () => {
+      const res = await fetch(`/api/books/${rawId}`);
+      if (!res.ok) {
+        router.push('/books');
+        return;
+      }
+      const data = await res.json();
+      setBook(data as Book);
+      const generated = generateBookUnits(data as Book);
+      setUnits(generated);
+    };
+    fetchDetail();
+  }, [id, router]);
 
   // Save changes (Sequence)
   const handleSave = () => {
