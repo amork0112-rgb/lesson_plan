@@ -36,7 +36,6 @@ type CourseView = {
   id: string;
   section: string;
   book: { id: string; name: string };
-  is_secondary: boolean;
   total_sessions: number;
   remaining_sessions: number;
   sessions_by_month: Record<number, number>;
@@ -50,10 +49,9 @@ export default function ClassDetailPage() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [courses, setCourses] = useState<CourseView[]>([]);
   const [addingCourse, setAddingCourse] = useState<boolean>(false);
-  const [newCourse, setNewCourse] = useState<{ section: string; book_id: string | null; is_secondary: boolean; total_sessions: number }>({
+  const [newCourse, setNewCourse] = useState<{ section: string; book_id: string | null; total_sessions: number }>({
     section: 'Reading',
     book_id: null,
-    is_secondary: false,
     total_sessions: 0,
   });
 
@@ -143,7 +141,6 @@ export default function ClassDetailPage() {
                       setNewCourse({
                         section: 'Reading',
                         book_id: b.id,
-                        is_secondary: false,
                         total_sessions: b.total_sessions ?? 0,
                       });
                       setAddingCourse(true);
@@ -164,7 +161,7 @@ export default function ClassDetailPage() {
             <button
               onClick={() => {
                 setAddingCourse(true);
-                setNewCourse({ section: 'Reading', book_id: null, is_secondary: false, total_sessions: 0 });
+                setNewCourse({ section: 'Reading', book_id: null, total_sessions: 0 });
               }}
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800"
             >
@@ -194,7 +191,6 @@ export default function ClassDetailPage() {
                     <tr key={c.id}>
                       <td className="px-4 py-3 text-sm">{c.section}</td>
                       <td className="px-4 py-3 text-sm">{c.book.name}</td>
-                      <td className="px-4 py-3 text-sm text-center">{c.is_secondary ? 'Yes' : 'No'}</td>
                       <td className="px-4 py-3 text-sm text-center">{c.total_sessions}</td>
                       <td className={`px-4 py-3 text-sm text-center ${remaining < 0 ? 'text-red-600 font-semibold' : ''}`}>{remaining}</td>
                       {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => (
@@ -302,15 +298,6 @@ export default function ClassDetailPage() {
                     ))}
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="is_secondary"
-                    type="checkbox"
-                    checked={newCourse.is_secondary}
-                    onChange={(e) => setNewCourse({ ...newCourse, is_secondary: e.target.checked })}
-                  />
-                  <label htmlFor="is_secondary" className="text-sm text-slate-700">Secondary</label>
-                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Sessions</label>
                   <input
@@ -332,7 +319,6 @@ export default function ClassDetailPage() {
                         body: JSON.stringify({
                           section: newCourse.section,
                           book_id: newCourse.book_id,
-                          is_secondary: newCourse.is_secondary,
                           total_sessions: newCourse.total_sessions,
                         }),
                       });
