@@ -42,6 +42,9 @@ export default function ClassDetailPage() {
     priority: 1,
     sessions_per_week: 1,
   });
+  const [notes, setNotes] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -61,10 +64,16 @@ export default function ClassDetailPage() {
     loadBooks();
   }, [id]);
 
-  const notAllocatedBooks = useMemo(() => {
-    const allocatedIds = new Set((clazz?.books || []).map(b => b.book_id).filter(Boolean) as string[]);
-    return allBooks.filter(b => !allocatedIds.has(b.id));
-  }, [allBooks, clazz]);
+  const allocatedIds = useMemo(() => new Set((clazz?.books || []).map(b => b.book_id).filter(Boolean) as string[]), [clazz]);
+  const filteredBooks = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    const list = term ? allBooks.filter(b => b.name.toLowerCase().includes(term)) : allBooks;
+    return list;
+  }, [allBooks, searchTerm]);
+  const maxPriority = useMemo(() => {
+    const arr = (clazz?.books || []).map(b => b.priority || 0);
+    return arr.length ? Math.max(...arr) : 0;
+  }, [clazz]);
 
   const handleAddAllocation = async () => {
     if (!clazz || !newAlloc.book_id) return;
@@ -84,6 +93,8 @@ export default function ClassDetailPage() {
     }
     setAdding(false);
     setNewAlloc({ book_id: undefined, priority: 1, sessions_per_week: 1 });
+    setNotes('');
+    setSearchTerm('');
     const refreshed = await fetch('/api/classes');
     const json = await refreshed.json();
     const arr = Array.isArray(json) ? (json as ClassView[]) : [];
@@ -124,6 +135,27 @@ export default function ClassDetailPage() {
     setClazz(found || null);
   };
 
+  const handleReorder = async (from: number, to: number) => {
+    if (!clazz) return;
+    const list = [...clazz.books];
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    const orderedIds = list.map((b) => b.allocation_id!).filter(Boolean);
+    setClazz({ ...clazz, books: list.map((b, i) => ({ ...b, priority: i + 1 })) });
+    const res = await fetch('/api/class-book-allocations/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: clazz.class_id, ordered_ids: orderedIds }),
+    });
+    if (!res.ok) {
+      alert('Failed to reorder');
+    }
+  };
+
+  const weekdayMap: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+  const daysText = (clazz?.weekdays || []).map((n) => weekdayMap[n] || '').filter(Boolean).join(' / ');
+  const timeText = clazz?.class_start_time && clazz?.class_end_time ? `${clazz.class_start_time} ~ ${clazz.class_end_time}` : '';
+
   if (!clazz) {
     return (
       <div className="p-8">
@@ -138,23 +170,35 @@ export default function ClassDetailPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-10">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <button onClick={() => router.push('/classes')} className="text-slate-500 hover:text-slate-800 mb-4 flex items-center">
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back to Classes
-            </button>
-            <h1 className="text-3xl font-bold text-slate-900">{clazz.class_name}</h1>
-            <p className="text-slate-500">Manage book allocations</p>
-          </div>
-          <button
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800"
-          >
-            <Plus className="h-4 w-4" /> Add Book
+        <div className="mb-8">
+          <button onClick={() => router.push('/classes')} className="text-slate-500 hover:text-slate-800 mb-4 flex items-center">
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to Classes
           </button>
+          <h1 className="text-3xl font-bold text-slate-900">{clazz.class_name}</h1>
+          <div className="text-slate-600 mt-1">
+            <span>Campus: {clazz.campus || '-'}</span>
+            <span className="mx-2">•</span>
+            <span>Days: {daysText || '-'}</span>
+            <span className="mx-2">•</span>
+            <span>Time: {timeText || '-'}</span>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Assigned Books</h2>
+            <button
+              onClick={() => {
+                setNewAlloc({ book_id: undefined, priority: maxPriority + 1, sessions_per_week: 1 });
+                setNotes('');
+                setSearchTerm('');
+                setAdding(true);
+              }}
+              className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" /> Add Book
+            </button>
+          </div>
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
@@ -165,8 +209,19 @@ export default function ClassDetailPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
-              {(clazz.books || []).map((b) => (
-                <tr key={`${b.book_id}-${b.allocation_id}`}>
+              {(clazz.books || []).map((b, idx) => (
+                <tr
+                  key={`${b.book_id}-${b.allocation_id}`}
+                  draggable
+                  onDragStart={() => setDragIndex(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragIndex === null || dragIndex === idx) return;
+                    handleReorder(dragIndex, idx);
+                    setDragIndex(null);
+                  }}
+                  className="cursor-move"
+                >
                   <td className="px-6 py-3 text-sm text-slate-900">{b.book_name}</td>
                   <td className="px-6 py-3">
                     <div className="flex items-center gap-2">
@@ -227,21 +282,36 @@ export default function ClassDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                <h3 className="text-lg font-medium text-slate-900">Add Book</h3>
+                <h3 className="text-lg font-medium text-slate-900">Add Book to This Class</h3>
                 <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-slate-600">✕</button>
               </div>
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Book</label>
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      placeholder="Search books..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="block w-full rounded-lg border-gray-300 p-2.5"
+                    />
+                  </div>
                   <select
                     value={newAlloc.book_id || ''}
                     onChange={(e) => setNewAlloc({ ...newAlloc, book_id: e.target.value })}
                     className="block w-full rounded-lg border-gray-300 p-2.5"
                   >
                     <option value="">Select a book</option>
-                    {notAllocatedBooks.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
+                    {filteredBooks.map(b => {
+                      const disabled = allocatedIds.has(b.id);
+                      return (
+                        <option key={b.id} value={b.id} disabled={disabled}>
+                          {b.name}
+                          {disabled ? ' (Assigned)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -266,9 +336,18 @@ export default function ClassDetailPage() {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes (optional)</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className="block w-full rounded-lg border-gray-300 p-2.5"
+                  />
+                </div>
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setAdding(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
-                  <button onClick={handleAddAllocation} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Save</button>
+                  <button onClick={handleAddAllocation} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Add Book</button>
                 </div>
               </div>
             </div>
