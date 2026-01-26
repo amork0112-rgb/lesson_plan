@@ -98,11 +98,10 @@ export default function ClassDetailPage() {
 
   const handleAddAllocation = async () => {
     if (!clazz || !newAlloc.book_id) return;
-    const res = await fetch('/api/class-book-allocations', {
+    const res = await fetch(`/api/classes/${clazz.class_id}/books`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        class_id: clazz.class_id,
         book_id: newAlloc.book_id,
         priority: newAlloc.priority,
         sessions_per_week: newAlloc.sessions_per_week,
@@ -156,7 +155,7 @@ export default function ClassDetailPage() {
 
   const removeAllocation = async (allocationId?: string) => {
     if (!allocationId) return;
-    const res = await fetch(`/api/class-book-allocations/${allocationId}`, {
+    const res = await fetch(`/api/classes/${clazz!.class_id}/books/${allocationId}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
