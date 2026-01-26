@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, BookOpen, Layers, LayoutDashboard, Users } from 'lucide-react';
+import { Calendar, BookOpen, LayoutDashboard, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -10,7 +10,6 @@ const NAV_ITEMS = [
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Classes', href: '/classes', icon: Users },
   { name: 'Books', href: '/books', icon: BookOpen },
-  { name: 'Courses', href: '/courses', icon: Layers },
 ];
 
 export function Sidebar() {
