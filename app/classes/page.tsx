@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Weekday } from '@/types';
 
@@ -36,6 +37,7 @@ export default function ClassesPage() {
   };
   const [classes, setClasses] = useState<ClassView[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
 
   const filteredClasses = classes.filter(c =>
     c.class_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -88,7 +90,8 @@ export default function ClassesPage() {
               {filteredClasses.map((cls) => (
                 <tr
                   key={cls.class_id}
-                  className="hover:bg-indigo-50/30 transition-colors group"
+                  onClick={() => router.push(`/classes/${cls.class_id}`)}
+                  className="cursor-pointer hover:bg-indigo-50/30 transition-colors group"
                 >
                   <td className="px-6 py-4">
                     <div className="font-medium text-slate-900 group-hover:text-indigo-900 transition-colors">{cls.class_name}</div>
