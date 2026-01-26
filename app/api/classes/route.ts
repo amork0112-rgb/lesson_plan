@@ -97,6 +97,7 @@ export async function GET() {
       const totalUnits = bookObj?.total_units ?? 0;
       const daysPerUnit = bookObj?.days_per_unit ?? 0;
       return {
+        allocation_id: a.id,
         book_id: bookObj?.id,
         book_name: bookObj?.name,
         priority: a.priority,
