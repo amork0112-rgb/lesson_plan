@@ -25,7 +25,15 @@ export async function PATCH(_: Request, { params }: { params: Promise<{ id: stri
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  const { data: row, error: selErr } = await supabase
+    .from('class_book_allocations')
+    .select('id,priority,sessions_per_week,updated_at')
+    .eq('id', id)
+    .single();
+  if (selErr) {
+    return NextResponse.json({ error: selErr.message }, { status: 500 });
+  }
+  return NextResponse.json(row);
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {

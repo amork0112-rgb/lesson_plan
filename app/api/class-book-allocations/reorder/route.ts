@@ -12,16 +12,18 @@ export async function PATCH(req: Request) {
   const supabase = getSupabaseService();
   const body = await req.json();
   const classId: string | undefined = body.class_id;
-  const orderedIds: string[] | undefined = body.ordered_ids;
-  if (!classId || !Array.isArray(orderedIds) || orderedIds.length === 0) {
+  const orders: Array<{ allocation_id: string; priority: number }> | undefined = body.orders;
+  if (!classId || !Array.isArray(orders) || orders.length === 0) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
-  for (let i = 0; i < orderedIds.length; i++) {
-    const id = orderedIds[i];
+  for (const o of orders) {
+    if (!o.allocation_id || typeof o.priority !== 'number' || o.priority < 1) {
+      return NextResponse.json({ error: 'Invalid order item' }, { status: 400 });
+    }
     const { error } = await supabase
       .from('class_book_allocations')
-      .update({ priority: i + 1 })
-      .eq('id', id)
+      .update({ priority: o.priority })
+      .eq('id', o.allocation_id)
       .eq('class_id', classId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

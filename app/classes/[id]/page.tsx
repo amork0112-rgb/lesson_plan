@@ -54,6 +54,27 @@ export default function ClassDetailPage() {
       const arr = Array.isArray(json) ? (json as ClassView[]) : [];
       const found = arr.find(c => c.class_id === rawId);
       setClazz(found || null);
+      if (found) {
+        const ar = await fetch(`/api/classes/${found.class_id}/books`);
+        const list: unknown = await ar.json();
+        if (Array.isArray(list)) {
+          type AssignedResp = {
+            allocation_id: string;
+            priority: number;
+            sessions_per_week: number;
+            book: { id: string; name: string; total_sessions: number };
+          };
+          const books = (list as unknown as AssignedResp[]).map((r) => ({
+            allocation_id: r.allocation_id,
+            book_id: r.book.id,
+            book_name: r.book.name,
+            priority: r.priority,
+            sessions_per_week: r.sessions_per_week,
+            total_sessions: r.book.total_sessions ?? 0,
+          }));
+          setClazz(prev => prev ? { ...prev, books } : prev);
+        }
+      }
     };
     const loadBooks = async () => {
       const res = await fetch('/api/books');
@@ -112,11 +133,25 @@ export default function ClassDetailPage() {
       alert('Failed to update allocation');
       return;
     }
-    const refreshed = await fetch('/api/classes');
-    const json = await refreshed.json();
-    const arr = Array.isArray(json) ? (json as ClassView[]) : [];
-    const found = arr.find(c => c.class_id === clazz?.class_id);
-    setClazz(found || null);
+    const refreshed = await fetch(`/api/classes/${clazz!.class_id}/books`);
+    const list: unknown = await refreshed.json();
+    if (Array.isArray(list)) {
+      type AssignedResp = {
+        allocation_id: string;
+        priority: number;
+        sessions_per_week: number;
+        book: { id: string; name: string; total_sessions: number };
+      };
+      const books = (list as unknown as AssignedResp[]).map((r) => ({
+        allocation_id: r.allocation_id,
+        book_id: r.book.id,
+        book_name: r.book.name,
+        priority: r.priority,
+        sessions_per_week: r.sessions_per_week,
+        total_sessions: r.book.total_sessions ?? 0,
+      }));
+      setClazz(prev => prev ? { ...prev, books } : prev);
+    }
   };
 
   const removeAllocation = async (allocationId?: string) => {
@@ -128,11 +163,25 @@ export default function ClassDetailPage() {
       alert('Failed to remove allocation');
       return;
     }
-    const refreshed = await fetch('/api/classes');
-    const json = await refreshed.json();
-    const arr = Array.isArray(json) ? (json as ClassView[]) : [];
-    const found = arr.find(c => c.class_id === clazz?.class_id);
-    setClazz(found || null);
+    const refreshed = await fetch(`/api/classes/${clazz!.class_id}/books`);
+    const list: unknown = await refreshed.json();
+    if (Array.isArray(list)) {
+      type AssignedResp = {
+        allocation_id: string;
+        priority: number;
+        sessions_per_week: number;
+        book: { id: string; name: string; total_sessions: number };
+      };
+      const books = (list as unknown as AssignedResp[]).map((r) => ({
+        allocation_id: r.allocation_id,
+        book_id: r.book.id,
+        book_name: r.book.name,
+        priority: r.priority,
+        sessions_per_week: r.sessions_per_week,
+        total_sessions: r.book.total_sessions ?? 0,
+      }));
+      setClazz(prev => prev ? { ...prev, books } : prev);
+    }
   };
 
   const handleReorder = async (from: number, to: number) => {
@@ -140,12 +189,12 @@ export default function ClassDetailPage() {
     const list = [...clazz.books];
     const [moved] = list.splice(from, 1);
     list.splice(to, 0, moved);
-    const orderedIds = list.map((b) => b.allocation_id!).filter(Boolean);
+    const orders = list.map((b, i) => ({ allocation_id: b.allocation_id!, priority: i + 1 }));
     setClazz({ ...clazz, books: list.map((b, i) => ({ ...b, priority: i + 1 })) });
     const res = await fetch('/api/class-book-allocations/reorder', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ class_id: clazz.class_id, ordered_ids: orderedIds }),
+      body: JSON.stringify({ class_id: clazz.class_id, orders }),
     });
     if (!res.ok) {
       alert('Failed to reorder');
