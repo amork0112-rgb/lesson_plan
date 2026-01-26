@@ -43,17 +43,15 @@ export default function ClassesPage() {
 
   useEffect(() => {
     const fetchAll = async () => {
-      if (!supabase) return;
-      const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-      if (Array.isArray(cls)) setClasses(cls as Class[]);
-      // Prefetch related sources for future enhancements
-      // const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      // if (Array.isArray(bks)) setBooks(bks as any);
-      // const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      // if (Array.isArray(alloc)) setAllocations(alloc as any);
+      const res = await fetch('/api/classes');
+      const json: unknown = await res.json();
+      if (Array.isArray(json)) {
+        const simple = json.map((c) => ({ id: (c as { id: string }).id, name: (c as { name: string }).name }));
+        setClasses(simple as unknown as Class[]);
+      }
     };
     fetchAll();
-  }, [supabase]);
+  }, []);
 
   const handleEdit = (cls: Class) => {
     setNewClass({ ...cls });

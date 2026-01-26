@@ -63,21 +63,26 @@ export default function BooksPage() {
 
   useEffect(() => {
     const fetchAll = async () => {
-      if (!supabase) return;
-      const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
-      if (Array.isArray(cls)) setClasses(cls as Class[]);
       console.log('🧭 [BooksPage] mounted');
+      const clsRes = await fetch('/api/classes');
+      const clsJson: unknown = await clsRes.json();
+      if (Array.isArray(clsJson)) {
+        const simpleClasses = clsJson.map((c) => ({ id: (c as { id: string }).id, name: (c as { name: string }).name }));
+        setClasses(simpleClasses as unknown as Class[]);
+      }
       console.log('📡 fetching /api/books');
       const res = await fetch('/api/books');
       console.log('📥 response status:', res.status);
-      const data = await res.json();
+      const data: unknown = await res.json();
       console.log('📚 books data:', data);
       if (Array.isArray(data)) setBooks(data as Book[]);
-      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
+      if (supabase) {
+        const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
+        if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
+      }
     };
     fetchAll();
-  }, [supabase]);
+  }, []);
 
   const getAssignedBooks = (classId: string) => {
     return allocations

@@ -56,10 +56,10 @@ export default function CoursesPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!supabase) return;
-      const { data: courses } = await supabase.from('courses').select('*');
-      if (Array.isArray(courses)) {
-        const arr = courses as CurriculumRow[];
+      const courseRes = await fetch('/api/courses');
+      const courseJson: unknown = await courseRes.json();
+      if (Array.isArray(courseJson)) {
+        const arr = courseJson as unknown as CurriculumRow[];
         const sorted = [...arr].sort((a, b) => {
           const an = (a.level || a.mainTB || '').toString().toLowerCase();
           const bn = (b.level || b.mainTB || '').toString().toLowerCase();
@@ -67,11 +67,12 @@ export default function CoursesPage() {
         });
         setRows(sorted);
       }
-      const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      if (Array.isArray(bks)) setBooks(bks as Book[]);
+      const bookRes = await fetch('/api/books');
+      const bookJson: unknown = await bookRes.json();
+      if (Array.isArray(bookJson)) setBooks(bookJson as unknown as Book[]);
     };
     fetchData();
-  }, [supabase]);
+  }, []);
 
   const existingKey = (b: Book) => `${(b.level || '').toLowerCase()}::${b.name.toLowerCase()}`;
   const existingSet = useMemo(() => new Set(books.map(existingKey)), [books]);
