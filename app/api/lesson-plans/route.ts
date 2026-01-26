@@ -14,7 +14,5 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Optional: enrich with book name if relation isn't defined
-  // This keeps it simple for now; front-end can join when needed.
   return NextResponse.json(data || []);
 }
