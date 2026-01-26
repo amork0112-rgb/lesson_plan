@@ -45,6 +45,22 @@ export default function ClassDetailPage() {
   const [notes, setNotes] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [courses, setCourses] = useState<Array<{
+    id: string;
+    section: string;
+    book: { id: string; name: string };
+    is_secondary: boolean;
+    total_sessions: number;
+    remaining_sessions: number;
+    sessions_by_month: Record<number, number>;
+  }>>([]);
+  const [addingCourse, setAddingCourse] = useState<boolean>(false);
+  const [newCourse, setNewCourse] = useState<{ section: string; book_id: string | null; is_secondary: boolean; total_sessions: number }>({
+    section: 'Reading',
+    book_id: null,
+    is_secondary: false,
+    total_sessions: 0,
+  });
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -73,6 +89,11 @@ export default function ClassDetailPage() {
             total_sessions: r.book.total_sessions ?? 0,
           }));
           setClazz(prev => prev ? { ...prev, books } : prev);
+        }
+        const cr = await fetch(`/api/classes/${found.class_id}/courses`);
+        const clist: unknown = await cr.json();
+        if (Array.isArray(clist)) {
+          setCourses(clist as any);
         }
       }
     };
@@ -326,6 +347,121 @@ export default function ClassDetailPage() {
           </table>
         </div>
 
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-10">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Assigned Courses</h2>
+            <button
+              onClick={() => {
+                setAddingCourse(true);
+                setNewCourse({ section: 'Reading', book_id: null, is_secondary: false, total_sessions: 0 });
+              }}
+              className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" /> Add Course
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Section</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Book</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Secondary</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Total</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Remaining</th>
+                  {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => (
+                    <th key={m} className="px-2 py-3 text-center text-[11px] font-semibold text-slate-600">{m}</th>
+                  ))}
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {courses.map((c, idx) => {
+                  const used = Object.values(c.sessions_by_month).reduce((sum, v) => sum + (v || 0), 0);
+                  const remaining = (c.total_sessions || 0) - used;
+                  return (
+                    <tr key={c.id}>
+                      <td className="px-4 py-3 text-sm">{c.section}</td>
+                      <td className="px-4 py-3 text-sm">{c.book.name}</td>
+                      <td className="px-4 py-3 text-sm text-center">{c.is_secondary ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-3 text-sm text-center">{c.total_sessions}</td>
+                      <td className={`px-4 py-3 text-sm text-center ${remaining < 0 ? 'text-red-600 font-semibold' : ''}`}>{remaining}</td>
+                      {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => (
+                        <td key={`${c.id}-${m}`} className="px-2 py-2 text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            value={c.sessions_by_month[m] ?? 0}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value || '0', 10);
+                              setCourses(prev => {
+                                const copy = [...prev];
+                                copy[idx] = {
+                                  ...copy[idx],
+                                  sessions_by_month: { ...copy[idx].sessions_by_month, [m]: val }
+                                };
+                                return copy;
+                              });
+                            }}
+                            className="w-16 text-sm rounded-lg border-gray-300 px-2 py-1"
+                          />
+                        </td>
+                      ))}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={async () => {
+                              const months = [3,4,5,6,7,8,9,10,11,12,1,2];
+                              for (const m of months) {
+                                const v = courses[idx].sessions_by_month[m] ?? 0;
+                                const res = await fetch(`/api/courses/${c.id}/sessions`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ month: m, sessions: v }),
+                                });
+                                if (!res.ok) {
+                                  alert('Failed to save sessions');
+                                  return;
+                                }
+                              }
+                              const cr = await fetch(`/api/classes/${clazz!.class_id}/courses`);
+                              const clist: unknown = await cr.json();
+                              if (Array.isArray(clist)) {
+                                setCourses(clist as any);
+                              }
+                            }}
+                            className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-700 flex items-center gap-1"
+                          >
+                            <Save className="h-3 w-3" /> Save
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const res = await fetch(`/api/courses/${c.id}`, { method: 'DELETE' });
+                              if (!res.ok) {
+                                alert('Failed to remove course');
+                                return;
+                              }
+                              const cr = await fetch(`/api/classes/${clazz!.class_id}/courses`);
+                              const clist: unknown = await cr.json();
+                              if (Array.isArray(clist)) {
+                                setCourses(clist as any);
+                              }
+                            }}
+                            className="text-slate-300 hover:text-red-500 p-2 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {adding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -396,6 +532,94 @@ export default function ClassDetailPage() {
                 <div className="flex justify-end gap-2">
                   <button onClick={() => setAdding(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
                   <button onClick={handleAddAllocation} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Add Book</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {addingCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="text-lg font-medium text-slate-900">Add Course</h3>
+                <button onClick={() => setAddingCourse(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Section</label>
+                  <select
+                    value={newCourse.section}
+                    onChange={(e) => setNewCourse({ ...newCourse, section: e.target.value })}
+                    className="block w-full rounded-lg border-gray-300 p-2.5"
+                  >
+                    {['Reading','Grammar','Voca','Writing','Activity','Others'].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Book</label>
+                  <select
+                    value={newCourse.book_id || ''}
+                    onChange={(e) => setNewCourse({ ...newCourse, book_id: e.target.value })}
+                    className="block w-full rounded-lg border-gray-300 p-2.5"
+                  >
+                    <option value="">Select a book</option>
+                    {allBooks.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="is_secondary"
+                    type="checkbox"
+                    checked={newCourse.is_secondary}
+                    onChange={(e) => setNewCourse({ ...newCourse, is_secondary: e.target.checked })}
+                  />
+                  <label htmlFor="is_secondary" className="text-sm text-slate-700">Secondary</label>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Sessions</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newCourse.total_sessions}
+                    onChange={(e) => setNewCourse({ ...newCourse, total_sessions: parseInt(e.target.value || '0', 10) })}
+                    className="block w-full rounded-lg border-gray-300 p-2.5"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setAddingCourse(false)} className="px-4 py-2 rounded-lg border">Cancel</button>
+                  <button
+                    onClick={async () => {
+                      if (!clazz || !newCourse.book_id) return;
+                      const res = await fetch(`/api/classes/${clazz.class_id}/courses`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          section: newCourse.section,
+                          book_id: newCourse.book_id,
+                          is_secondary: newCourse.is_secondary,
+                          total_sessions: newCourse.total_sessions,
+                        }),
+                      });
+                      if (!res.ok) {
+                        alert('Failed to add course');
+                        return;
+                      }
+                      setAddingCourse(false);
+                      const cr = await fetch(`/api/classes/${clazz.class_id}/courses`);
+                      const clist: unknown = await cr.json();
+                      if (Array.isArray(clist)) {
+                        setCourses(clist as any);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white"
+                  >
+                    Add Course
+                  </button>
                 </div>
               </div>
             </div>
