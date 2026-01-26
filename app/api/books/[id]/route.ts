@@ -4,7 +4,7 @@ import { getSupabaseService } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -12,10 +12,11 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   }
 
   const supabase = getSupabaseService();
+  const { id } = await params;
   const { data, error } = await supabase
     .from('books')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single();
 
   if (error || !data) {
