@@ -11,7 +11,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   }
   const supabase = getSupabaseService();
   const { id } = await params;
-  const { month, sessions } = await req.json();
+  const body = await req.json();
+  if (body && typeof body.sessions_by_month === 'object') {
+    const map = body.sessions_by_month as Record<number, number>;
+    const entries = Object.entries(map)
+      .map(([k, v]) => ({ month: Number(k), sessions: Number(v) }))
+      .filter(e => Number.isInteger(e.month) && e.month >= 1 && e.month <= 12 && Number.isFinite(e.sessions) && e.sessions >= 0);
+    if (entries.length > 0) {
+      const rows = entries.map(e => ({ course_id: id, month: e.month, sessions: e.sessions }));
+      const { error: upErr } = await supabase.from('course_sessions').upsert(rows);
+      if (upErr) {
+        return NextResponse.json({ error: upErr.message }, { status: 500 });
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+  const { month, sessions } = body as { month?: number; sessions?: number };
   if (typeof month !== 'number' || month < 1 || month > 12) {
     return NextResponse.json({ error: 'Invalid month' }, { status: 400 });
   }

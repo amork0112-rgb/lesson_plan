@@ -49,7 +49,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   const byCourse: Record<string, Record<number, number>> = {};
-  (Array.isArray(sessData) ? sessData : []).forEach((s: any) => {
+  (Array.isArray(sessData) ? sessData : []).forEach((s: { course_id: string; month: number; sessions: number | null }) => {
     if (!byCourse[s.course_id]) byCourse[s.course_id] = {};
     byCourse[s.course_id][s.month] = s.sessions ?? 0;
   });
@@ -97,6 +97,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  const months = [3,4,5,6,7,8,9,10,11,12,1,2];
+  const rows = months.map(m => ({ course_id: data.id as string, month: m, sessions: 0 }));
+  const { error: sessErr } = await supabase.from('course_sessions').upsert(rows);
+  if (sessErr) {
+    return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   return NextResponse.json(data, { status: 201 });
 }
