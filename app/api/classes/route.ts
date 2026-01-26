@@ -3,6 +3,24 @@ import { getSupabaseService } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
+const WEEKDAY_MAP: Record<string, number> = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
+};
+function parseWeekdays(input?: string | number[] | null): number[] | null {
+  if (!input) return null;
+  if (Array.isArray(input)) return input as number[];
+  return (input as string)
+    .split(',')
+    .map((s) => WEEKDAY_MAP[s.trim().toLowerCase()])
+    .filter((n) => n !== undefined);
+}
+
 type BookJoin = {
   id: string;
   name: string;
@@ -21,15 +39,13 @@ type ClassJoinRow = {
   class_id: string;
   class_name: string;
   campus?: string | null;
-  weekdays?: number[] | null;
+  weekdays?: string | number[] | null;
   class_start_time?: string | null;
   class_end_time?: string | null;
   class_book_allocations: AllocationJoin[];
 };
 
 export async function GET() {
-  console.log('🔥 [API/classes] route file loaded');
-  console.log('➡️ [API/classes] GET called');
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   console.log('🔑 Supabase URL:', supabaseUrl ? 'OK' : 'MISSING');
@@ -92,7 +108,7 @@ export async function GET() {
       class_id: cls.class_id,
       class_name: cls.class_name,
       campus: cls.campus ?? null,
-      weekdays: cls.weekdays ?? null,
+      weekdays: parseWeekdays(cls.weekdays),
       class_start_time: cls.class_start_time ?? null,
       class_end_time: cls.class_end_time ?? null,
       books,
