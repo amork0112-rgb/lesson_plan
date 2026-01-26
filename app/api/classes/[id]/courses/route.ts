@@ -80,7 +80,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const supabase = getSupabaseService();
   const { id } = await params;
-  const { section, book_id, is_secondary, total_sessions } = await req.json();
+  const body = await req.json();
+  console.log('📦 ADD COURSE BODY', body, 'class_id', id);
+  const { section, book_id, is_secondary, total_sessions } = body;
   if (!section || !book_id || typeof total_sessions !== 'number' || total_sessions < 0) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
@@ -95,8 +97,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     })
     .select('id,class_id,section,book_id,is_secondary,total_sessions,created_at')
     .single();
+  console.log('📦 INSERT RESULT', { data, error });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
   const months = [3,4,5,6,7,8,9,10,11,12,1,2];
   const rows = months.map(m => ({ course_id: data.id as string, month: m, sessions: 0 }));
