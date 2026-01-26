@@ -48,21 +48,21 @@ export default function BookDetailPage() {
 
   // Initialize book data
   useEffect(() => {
-    if (id && books.length > 0) {
-      const foundBook = books.find(b => b.id === id);
-      if (foundBook) {
-        setTimeout(() => setBook(foundBook), 0);
-        // Ensure units exist, otherwise generate them
+    if (!id || books.length === 0) return;
+    const rawId = Array.isArray(id) ? id[0] : id;
+    const foundBook = books.find(b => b.id === rawId);
+    if (foundBook) {
+      setTimeout(() => {
+        setBook(foundBook);
         if (!foundBook.units || foundBook.units.length === 0) {
-           const generated = generateBookUnits(foundBook);
-           setTimeout(() => setUnits(generated), 0);
+          const generated = generateBookUnits(foundBook);
+          setUnits(generated);
         } else {
-           setTimeout(() => setUnits(foundBook.units!), 0);
+          setUnits(foundBook.units!);
         }
-      } else {
-        // Handle not found
-        router.push('/books');
-      }
+      }, 0);
+    } else {
+      router.push('/books');
     }
   }, [id, books, router]);
 
@@ -176,7 +176,6 @@ export default function BookDetailPage() {
     if (unitToRemove.type !== 'review') return; // Can only remove reviews
     
     // Check if used (This would require checking lesson plans, but for now we just warn if needed)
-    // For MVP, we just remove it.
     
     const newUnits = units.filter((_, i) => i !== index)
                           .map((u, i) => ({ ...u, sequence: i + 1 }));
