@@ -1,3 +1,4 @@
+//from frage-lesson-plan/app/books/page.tsx
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
@@ -65,8 +66,13 @@ export default function BooksPage() {
       if (!supabase) return;
       const { data: cls } = await supabase.from('classes').select('*').order('name', { ascending: true });
       if (Array.isArray(cls)) setClasses(cls as Class[]);
-      const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-      if (Array.isArray(bks)) setBooks(bks as Book[]);
+      console.log('🧭 [BooksPage] mounted');
+      console.log('📡 fetching /api/books');
+      const res = await fetch('/api/books');
+      console.log('📥 response status:', res.status);
+      const data = await res.json();
+      console.log('📚 books data:', data);
+      if (Array.isArray(data)) setBooks(data as Book[]);
       const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
       if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
     };
