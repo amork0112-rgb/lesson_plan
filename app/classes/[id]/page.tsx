@@ -174,7 +174,6 @@ export default function ClassDetailPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Section</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Book</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Secondary</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Total</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Remaining</th>
                   {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => (
