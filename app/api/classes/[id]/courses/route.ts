@@ -8,7 +8,6 @@ type AllocationRow = {
   class_id: string;
   section: string | null;
   book_id: string;
-  is_secondary: boolean | null;
   total_sessions: number | null;
   books?: { id: string; name: string } | { id: string; name: string }[];
 };
@@ -29,7 +28,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       class_id,
       section,
       book_id,
-      is_secondary,
       total_sessions,
       books:class_book_allocations_book_id_fkey (id,name)
     `
@@ -63,7 +61,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       id: r.id,
       section: r.section ?? 'others',
       book: { id: b?.id ?? r.book_id, name: b?.name ?? '' },
-      is_secondary: !!r.is_secondary,
       total_sessions: total,
       remaining_sessions: remaining,
       sessions_by_month: sessionsByMonth,
@@ -82,7 +79,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const body = await req.json();
   console.log('📦 ADD COURSE BODY', body, 'class_id', id);
-  const { section, book_id, is_secondary, total_sessions } = body;
+  const { section, book_id, total_sessions } = body;
   if (!section || !book_id || typeof total_sessions !== 'number' || total_sessions < 0) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
@@ -92,10 +89,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       class_id: id,
       section,
       book_id,
-      is_secondary: !!is_secondary,
       total_sessions,
     })
-    .select('id,class_id,section,book_id,is_secondary,total_sessions,created_at')
+    .select('id,class_id,section,book_id,total_sessions,created_at')
     .single();
   console.log('📦 INSERT RESULT', { data, error });
   if (error) {
