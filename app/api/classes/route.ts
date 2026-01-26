@@ -18,9 +18,12 @@ type AllocationJoin = {
 };
 
 type ClassJoinRow = {
-  id: string;
-  name: string;
+  class_id: string;
+  class_name: string;
   campus?: string | null;
+  weekdays?: number[] | null;
+  class_start_time?: string | null;
+  class_end_time?: string | null;
   class_book_allocations: AllocationJoin[];
 };
 
@@ -37,14 +40,16 @@ export async function GET() {
   }
 
   const supabaseService = getSupabaseService();
-  console.log('🔌 Supabase client created');
   const { data, error } = await supabaseService
-    .from('classes')
+    .from('v_classes_with_schedules')
     .select(
       `
-      id,
-      name,
+      class_id,
+      class_name,
       campus,
+      weekdays,
+      class_start_time,
+      class_end_time,
       class_book_allocations (
         id,
         priority,
@@ -58,7 +63,7 @@ export async function GET() {
       )
     `
     )
-    .order('name', { ascending: true });
+    .order('class_name', { ascending: true });
 
   console.log('📦 Supabase response:', {
     dataLength: Array.isArray(data) ? data.length : data ? 1 : 0,
@@ -84,9 +89,12 @@ export async function GET() {
       };
     });
     return {
-      id: cls.id,
-      name: cls.name,
+      class_id: cls.class_id,
+      class_name: cls.class_name,
       campus: cls.campus ?? null,
+      weekdays: cls.weekdays ?? null,
+      class_start_time: cls.class_start_time ?? null,
+      class_end_time: cls.class_end_time ?? null,
       books,
     };
   });

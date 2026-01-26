@@ -3,8 +3,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { getSupabase } from '@/lib/supabase';
-import { Plus, Search, Book as BookIcon, X, ChevronRight, GraduationCap, ArrowRight, Trash2 } from 'lucide-react';
-import { Book, UnitType, Class, BookAllocation } from '@/types';
+import { Plus, Search, Book as BookIcon, X, ChevronRight } from 'lucide-react';
+import { Book, UnitType } from '@/types';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -22,15 +22,8 @@ export default function BooksPage() {
   const router = useRouter();
   const supabase = getSupabase();
   const [books, setBooks] = useState<Book[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [allocations, setAllocations] = useState<BookAllocation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
-  
-  const tabs = [
-    { id: 'all', label: 'All Books' },
-    ...classes.map(c => ({ id: c.id, label: c.name }))
-  ];
+  const [loadingBooks, setLoadingBooks] = useState(true);
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,8 +39,6 @@ export default function BooksPage() {
     total_sessions: 10
   });
 
-  const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
-
   const filteredBooks = books.filter(b => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = b.name.toLowerCase().includes(q) || (b.level || '').toLowerCase().includes(q);
@@ -56,108 +47,20 @@ export default function BooksPage() {
   const limitedSearch = filteredBooks;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const cid = new URLSearchParams(window.location.search).get('classId');
-    if (cid) setTimeout(() => setActiveTab(cid), 0);
-  }, []);
-
-  useEffect(() => {
     const fetchAll = async () => {
       console.log('🧭 [BooksPage] mounted');
-      const clsRes = await fetch('/api/classes');
-      const clsJson: unknown = await clsRes.json();
-      if (Array.isArray(clsJson)) {
-        const simpleClasses = clsJson.map((c) => ({ id: (c as { id: string }).id, name: (c as { name: string }).name }));
-        setClasses(simpleClasses as unknown as Class[]);
-      }
       console.log('📡 fetching /api/books');
       const res = await fetch('/api/books');
       console.log('📥 response status:', res.status);
-      const data: unknown = await res.json();
+      const data = await res.json();
       console.log('📚 books data:', data);
       if (Array.isArray(data)) setBooks(data as Book[]);
-      if (supabase) {
-        const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-        if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
-      }
+      setLoadingBooks(false);
     };
     fetchAll();
   }, []);
 
-  const getAssignedBooks = (classId: string) => {
-    return allocations
-      .filter(a => a.class_id === classId)
-      .map(a => {
-        const book = books.find(b => b.id === a.book_id);
-        return { ...a, book };
-      })
-      .filter(item => item.book !== undefined);
-  };
-
-  const isAssignedToClass = (bookId: string, classId: string) => {
-    return allocations.some(a => a.book_id === bookId && a.class_id === classId);
-  };
-
-  const handleAddToClass = (bookId: string) => {
-    if (activeTab === 'all') return;
-    if (isAssignedToClass(bookId, activeTab)) return;
-    const upsert = async () => {
-      if (!supabase) return;
-      const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
-      await supabase.from('class_book_allocations').insert({
-        class_id: activeTab,
-        book_id: bookId,
-        priority: nextPriority,
-        sessions_per_week: 1
-      });
-      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
-    };
-    upsert();
-  };
-
-  const handleToggleSelection = (bookId: string) => {
-    const newSelected = new Set(selectedBookIds);
-    if (newSelected.has(bookId)) {
-      newSelected.delete(bookId);
-    } else {
-      newSelected.add(bookId);
-    }
-    setSelectedBookIds(newSelected);
-  };
-
-  const handleAssignSelected = () => {
-    if (activeTab === 'all') return;
-    
-    selectedBookIds.forEach(bookId => {
-      if (!isAssignedToClass(bookId, activeTab)) {
-        const upsert = async () => {
-          if (!supabase) return;
-          const nextPriority = Math.max(0, ...allocations.filter(a => a.class_id === activeTab).map(a => a.priority || 0)) + 1;
-          await supabase.from('class_book_allocations').insert({
-            class_id: activeTab,
-            book_id: bookId,
-            priority: nextPriority,
-            sessions_per_week: 1
-          });
-          const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-          if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
-        };
-        upsert();
-      }
-    });
-    setSelectedBookIds(new Set());
-  };
-
-  const handleRemoveAllocation = (allocationId: string) => {
-    const remove = async () => {
-      if (!supabase) return;
-      await supabase.from('class_book_allocations').delete().eq('id', allocationId);
-      const { data: alloc } = await supabase.from('class_book_allocations').select('*').order('priority', { ascending: true });
-      if (Array.isArray(alloc)) setAllocations(alloc as BookAllocation[]);
-    };
-    remove();
-  };
+  if (loadingBooks) return <div className="p-12">Loading...</div>;
 
   const handleOpenModal = () => {
     setFormData({
@@ -260,41 +163,19 @@ export default function BooksPage() {
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
           <button
-            onClick={() => setActiveTab('all')}
             className={cn(
               "px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap",
-              activeTab === 'all'
-                ? "bg-slate-900 text-white shadow-md" 
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+              "bg-slate-900 text-white shadow-md"
             )}
           >
             All Books
           </button>
-          
-          <div className="h-6 w-px bg-slate-200 mx-1 flex-shrink-0" />
-
-          {classes.map(cls => (
-            <button
-              key={cls.id}
-              onClick={() => setActiveTab(cls.id)}
-              className={cn(
-                "px-5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap",
-                activeTab === cls.id 
-                  ? "bg-indigo-600 text-white shadow-md" 
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-              )}
-            >
-              {cls.name}
-            </button>
-          ))}
         </div>
 
         {/* Search Bar */}
-        {activeTab === 'all' && (
-          <div className="mb-8 relative max-w-lg">
+        <div className="mb-8 relative max-w-lg">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
             <input
               type="text"
@@ -303,12 +184,9 @@ export default function BooksPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-3 bg-white border-none rounded-xl shadow-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-shadow"
             />
-          </div>
-        )}
+        </div>
 
-        {activeTab === 'all' ? (
-          /* ALL BOOKS TABLE VIEW */
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <table className="w-full text-left border-collapse">
                   <thead>
                       <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-semibold">
@@ -360,109 +238,7 @@ export default function BooksPage() {
                       )}
                   </tbody>
               </table>
-          </div>
-        ) : (
-          /* CLASS ASSIGNMENT: SEARCH + ASSIGNED ONLY */
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                  <BookIcon className="h-4 w-4 text-slate-400" />
-                  Search Books to add
-                </h3>
-              </div>
-              <div className="p-4">
-                <div className="mb-4 relative max-w-lg">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-5 w-5" />
-                  <input
-                    type="text"
-                    placeholder="Search books by name or level..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition-shadow"
-                  />
-                </div>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {limitedSearch.map(book => {
-                    const assigned = isAssignedToClass(book.id, activeTab);
-                    return (
-                      <div
-                        key={book.id}
-                        className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 hover:border-slate-200 transition-all"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-8 w-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
-                            <BookIcon className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-medium text-slate-900 truncate">{book.name}</div>
-                            <div className="text-xs text-slate-500">
-                               {CATEGORIES.find(c => c.id === book.category)?.label || book.category} • {book.total_sessions || book.total_units} sessions
-                            </div>
-                          </div>
-                        </div>
-                        {assigned ? (
-                          <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">Assigned</span>
-                        ) : (
-                          <button
-                            onClick={() => handleAddToClass(book.id)}
-                            className="px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700"
-                          >
-                            Add
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4 text-slate-400" />
-                  Assigned to {classes.find(c => c.id === activeTab)?.name}
-                </h3>
-              </div>
-              <div className="p-4 space-y-2">
-                {getAssignedBooks(activeTab).length > 0 ? (
-                  getAssignedBooks(activeTab).map(allocation => (
-                    <div 
-                      key={allocation.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 hover:border-slate-200 transition-all group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="h-10 w-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                          <BookIcon className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-medium text-slate-900 truncate">{allocation.book!.name}</div>
-                          <div className="text-xs text-slate-500">
-                             {allocation.book!.total_sessions || allocation.book!.total_units} sessions
-                          </div>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => handleRemoveAllocation(allocation.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                        title="Remove from class"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-slate-400 p-8 text-center">
-                    <BookIcon className="h-12 w-12 mb-3 opacity-20" />
-                    <p>No books assigned yet.</p>
-                    <p className="text-sm opacity-70">위 검색으로 추가하세요.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Simple Add Modal */}
         {isModalOpen && (
