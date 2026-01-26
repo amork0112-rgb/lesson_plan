@@ -18,7 +18,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       .map(([k, v]) => ({ month: Number(k), sessions: Number(v) }))
       .filter(e => Number.isInteger(e.month) && e.month >= 1 && e.month <= 12 && Number.isFinite(e.sessions) && e.sessions >= 0);
     if (entries.length > 0) {
-      const rows = entries.map(e => ({ course_id: id, month: e.month, sessions: e.sessions }));
+      const rows = entries.map(e => ({ class_book_allocation_id: id, month: e.month, sessions: e.sessions }));
       const { error: upErr } = await supabase.from('course_sessions').upsert(rows);
       if (upErr) {
         return NextResponse.json({ error: upErr.message }, { status: 500 });
@@ -36,7 +36,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const { data: existing, error: selErr } = await supabase
     .from('course_sessions')
     .select('id')
-    .eq('course_id', id)
+    .eq('class_book_allocation_id', id)
     .eq('month', month)
     .limit(1);
   if (selErr) {
@@ -46,7 +46,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const { error: updErr } = await supabase
       .from('course_sessions')
       .update({ sessions })
-      .eq('course_id', id)
+      .eq('class_book_allocation_id', id)
       .eq('month', month);
     if (updErr) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });
@@ -54,7 +54,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   } else {
     const { error: insErr } = await supabase
       .from('course_sessions')
-      .insert({ course_id: id, month, sessions });
+      .insert({ class_book_allocation_id: id, month, sessions });
     if (insErr) {
       return NextResponse.json({ error: insErr.message }, { status: 500 });
     }

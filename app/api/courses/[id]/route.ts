@@ -14,12 +14,12 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const { error: sessErr } = await supabase
     .from('course_sessions')
     .delete()
-    .eq('course_id', id);
+    .eq('class_book_allocation_id', id);
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   const { error } = await supabase
-    .from('courses')
+    .from('class_book_allocations')
     .delete()
     .eq('id', id);
   if (error) {

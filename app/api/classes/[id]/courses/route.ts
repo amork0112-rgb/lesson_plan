@@ -3,7 +3,7 @@ import { getSupabaseService } from '@/lib/supabase/service';
 
 export const dynamic = 'force-dynamic';
 
-type CourseRow = {
+type AllocationRow = {
   id: string;
   class_id: string;
   section: string | null;
@@ -22,7 +22,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const supabase = getSupabaseService();
   const { id } = await params;
   const { data, error } = await supabase
-    .from('courses')
+    .from('class_book_allocations')
     .select(
       `
       id,
@@ -31,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       book_id,
       is_secondary,
       total_sessions,
-      books:courses_book_id_fkey (id,name)
+      books:class_book_allocations_book_id_fkey (id,name)
     `
     )
     .eq('class_id', id)
@@ -39,19 +39,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  const rows: CourseRow[] = Array.isArray(data) ? (data as unknown as CourseRow[]) : [];
+  const rows: AllocationRow[] = Array.isArray(data) ? (data as unknown as AllocationRow[]) : [];
   const ids = rows.map(r => r.id);
   const { data: sessData, error: sessErr } = await supabase
     .from('course_sessions')
-    .select('course_id,month,sessions')
-    .in('course_id', ids);
+    .select('class_book_allocation_id,month,sessions')
+    .in('class_book_allocation_id', ids);
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   const byCourse: Record<string, Record<number, number>> = {};
-  (Array.isArray(sessData) ? sessData : []).forEach((s: { course_id: string; month: number; sessions: number | null }) => {
-    if (!byCourse[s.course_id]) byCourse[s.course_id] = {};
-    byCourse[s.course_id][s.month] = s.sessions ?? 0;
+  (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month: number; sessions: number | null }) => {
+    if (!byCourse[s.class_book_allocation_id]) byCourse[s.class_book_allocation_id] = {};
+    byCourse[s.class_book_allocation_id][s.month] = s.sessions ?? 0;
   });
   const result = rows.map((r) => {
     const b = Array.isArray(r.books) ? r.books?.[0] : r.books;
@@ -87,7 +87,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
   const { data, error } = await supabase
-    .from('courses')
+    .from('class_book_allocations')
     .insert({
       class_id: id,
       section,
@@ -100,12 +100,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   console.log('📦 INSERT RESULT', { data, error });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-  const months = [3,4,5,6,7,8,9,10,11,12,1,2];
-  const rows = months.map(m => ({ course_id: data.id as string, month: m, sessions: 0 }));
-  const { error: sessErr } = await supabase.from('course_sessions').upsert(rows);
-  if (sessErr) {
-    return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   return NextResponse.json(data, { status: 201 });
 }
