@@ -134,7 +134,7 @@ export default function ClassDetailPage() {
                 className="block w-full rounded-lg border-gray-300 p-2.5"
               />
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 max-h-[240px] overflow-y-auto">
               {filteredBooks.map(b => (
                 <div key={b.id} className="flex items-center justify-between py-2">
                   <div className="text-sm text-slate-900">{b.name}</div>
