@@ -46,14 +46,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
-  const byCourse: Record<string, Record<number, number>> = {};
+  const byAlloc: Record<string, Record<number, number>> = {};
   (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month: number; sessions: number | null }) => {
-    if (!byCourse[s.class_book_allocation_id]) byCourse[s.class_book_allocation_id] = {};
-    byCourse[s.class_book_allocation_id][s.month] = s.sessions ?? 0;
+    if (!byAlloc[s.class_book_allocation_id]) byAlloc[s.class_book_allocation_id] = {};
+    byAlloc[s.class_book_allocation_id][s.month] = s.sessions ?? 0;
   });
   const result = rows.map((r) => {
     const b = Array.isArray(r.books) ? r.books?.[0] : r.books;
-    const sessionsByMonth = byCourse[r.id] || {};
+    const sessionsByMonth = byAlloc[r.id] || {};
     const total = r.total_sessions ?? 0;
     const used = Object.values(sessionsByMonth).reduce((sum, v) => sum + (v || 0), 0);
     const remaining = total - used;
@@ -67,44 +67,4 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     };
   });
   return NextResponse.json(result);
-}
-
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) {
-    return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
-  }
-  const supabase = getSupabaseService();
-  const { id } = await params;
-  const body = await req.json();
-  console.log('📦 ADD COURSE BODY', body, 'class_id', id);
-  const { book_id, total_sessions } = body;
-  if (!book_id || typeof total_sessions !== 'number' || total_sessions < 0) {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-  }
-  const { data: bookRow, error: bookErr } = await supabase
-    .from('books')
-    .select('category')
-    .eq('id', book_id)
-    .single();
-  if (bookErr) {
-    return NextResponse.json({ error: bookErr.message }, { status: 500 });
-  }
-  const section = ((bookRow?.category as string) ?? 'others');
-  const { data, error } = await supabase
-    .from('class_book_allocations')
-    .insert({
-      class_id: id,
-      section,
-      book_id,
-      total_sessions,
-    })
-    .select('id,class_id,section,book_id,total_sessions,created_at')
-    .single();
-  console.log('📦 INSERT RESULT', { data, error });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-  return NextResponse.json(data, { status: 201 });
 }
