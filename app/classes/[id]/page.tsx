@@ -273,14 +273,27 @@ export default function ClassDetailPage() {
             <div className="flex items-center gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Month</label>
-                <select value={genMonth} onChange={(e) => setGenMonth(parseInt(e.target.value, 10))} className="rounded-lg border-gray-300 p-2.5">
+                <select value={genMonth} onChange={(e) => { setGenMonth(parseInt(e.target.value, 10)); setGenResult([]); }} className="rounded-lg border-gray-300 p-2.5">
                   {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Sessions</label>
-                <input type="number" min={0} value={genTotal} onChange={(e)=>setGenTotal(parseInt(e.target.value||'0',10))} className="rounded-lg border-gray-300 p-2.5 w-28" />
+                <input type="number" min={0} value={genTotal} onChange={(e)=>{ setGenTotal(parseInt(e.target.value||'0',10)); setGenResult([]); }} className="rounded-lg border-gray-300 p-2.5 w-28" />
               </div>
+              {(() => {
+                const sumRemaining = courses.reduce((sum, c) => sum + (c.remaining_sessions || 0), 0);
+                const underUtil = genResult.length > 0 && genTotal < sumRemaining;
+                const shortage = genResult.length > 0 && genTotal > sumRemaining;
+                const anyZero = genResult.length > 0 && genResult.some(r => r.used_sessions === 0);
+                return (
+                  <div className="flex items-center gap-2">
+                    {underUtil && (<span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">총 세션 &lt; 배정 가능</span>)}
+                    {shortage && (<span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Remaining 부족</span>)}
+                    {anyZero && (<span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">일부 코스 0 사용</span>)}
+                  </div>
+                );
+              })()}
               <button
                 onClick={async () => {
                   if (!clazz) return;

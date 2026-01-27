@@ -56,6 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   const items = allocations
+    .filter(a => !!a.id)
     .map(a => {
       const total = a.total_sessions ?? 0;
       const used = usedTotalByAlloc[a.id] || 0;
@@ -78,10 +79,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
   let usedSum = initialAlloc.reduce((sum, x) => sum + x.used, 0);
   let leftover = Math.max(0, total_sessions - usedSum);
-  while (leftover > 0) {
+  while (leftover > 0 && usedSum < total_sessions) {
     let progressed = false;
     for (const a of initialAlloc) {
-      if (leftover <= 0) break;
+      if (leftover <= 0 || usedSum >= total_sessions) break;
       if (a.remaining_after > 0) {
         a.used += 1;
         a.remaining_after -= 1;
