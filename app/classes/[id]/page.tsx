@@ -53,9 +53,6 @@ export default function ClassDetailPage() {
     book_id: null,
     total_sessions: 0,
   });
-  const [genMonth, setGenMonth] = useState<number>(3);
-  const [genTotal, setGenTotal] = useState<number>(0);
-  const [genResult, setGenResult] = useState<Array<{ allocation_id: string; book_id: string; used_sessions: number; remaining_after: number }>>([]);
 
   useEffect(() => {
     const rawId = Array.isArray(id) ? id[0] : id;
@@ -265,110 +262,6 @@ export default function ClassDetailPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-10">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Month Plan Generator</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Month</label>
-                <select value={genMonth} onChange={(e) => { setGenMonth(parseInt(e.target.value, 10)); setGenResult([]); }} className="rounded-lg border-gray-300 p-2.5">
-                  {[3,4,5,6,7,8,9,10,11,12,1,2].map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Sessions</label>
-                <input type="number" min={0} value={genTotal} onChange={(e)=>{ setGenTotal(parseInt(e.target.value||'0',10)); setGenResult([]); }} className="rounded-lg border-gray-300 p-2.5 w-28" />
-              </div>
-              {(() => {
-                const sumRemaining = courses.reduce((sum, c) => sum + (c.remaining_sessions || 0), 0);
-                const underUtil = genResult.length > 0 && genTotal < sumRemaining;
-                const shortage = genResult.length > 0 && genTotal > sumRemaining;
-                const anyZero = genResult.length > 0 && genResult.some(r => r.used_sessions === 0);
-                return (
-                  <div className="flex items-center gap-2">
-                    {underUtil && (<span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">총 세션 &lt; 배정 가능</span>)}
-                    {shortage && (<span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Remaining 부족</span>)}
-                    {anyZero && (<span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700">일부 코스 0 사용</span>)}
-                  </div>
-                );
-              })()}
-              <button
-                onClick={async () => {
-                  if (!clazz) return;
-                  const res = await fetch(`/api/classes/${clazz.class_id}/month-plan/generate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ month: genMonth, total_sessions: genTotal }),
-                  });
-                  const json: { month: number; total_used: number; plan: Array<{ allocation_id: string; book_id: string; used_sessions: number; remaining_after: number }>; error?: string } = await res.json();
-                  if (!res.ok) {
-                    alert(json?.error || 'Failed to generate');
-                    return;
-                  }
-                  setGenResult(json.plan || []);
-                }}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-700"
-              >
-                Generate
-              </button>
-              <button
-                onClick={async () => {
-                  if (!clazz || genResult.length === 0) return;
-                  const res = await fetch(`/api/classes/${clazz.class_id}/month-plan/save`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ month: genMonth, plan: genResult.map(r => ({ allocation_id: r.allocation_id, used_sessions: r.used_sessions })) }),
-                  });
-                  const json: { ok?: boolean; count?: number; error?: string } = await res.json();
-                  if (!res.ok) {
-                    alert(json?.error || 'Failed to save');
-                    return;
-                  }
-                  const cr = await fetch(`/api/classes/${clazz!.class_id}/courses`);
-                  const clist: unknown = await cr.json();
-                  if (Array.isArray(clist)) {
-                    setCourses(clist as CourseView[]);
-                  }
-                  alert('Saved month plan');
-                }}
-                className="bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-800"
-              >
-                Save
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Book</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Used</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600">Remaining After</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {genResult.map(r => {
-                    const course = courses.find(c => c.id === r.allocation_id);
-                    const bookName = course?.book.name || r.book_id;
-                    return (
-                      <tr key={`${r.allocation_id}-${r.book_id}`}>
-                        <td className="px-4 py-3 text-sm">{bookName}</td>
-                        <td className="px-4 py-3 text-sm text-center">{r.used_sessions}</td>
-                        <td className="px-4 py-3 text-sm text-center">{r.remaining_after}</td>
-                      </tr>
-                    );
-                  })}
-                  {genResult.length === 0 && (
-                    <tr>
-                      <td className="px-4 py-6 text-center text-slate-400" colSpan={3}>No plan generated</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
 
         {addingCourse && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

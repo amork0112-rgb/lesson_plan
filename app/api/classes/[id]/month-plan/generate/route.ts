@@ -1,3 +1,4 @@
+//app/api/classes/[id]/month-plan/generate
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase/service';
 
