@@ -23,6 +23,14 @@ interface MonthPlan {
   allocations: BookAllocation[];
 }
 
+interface AssignedCourseView {
+  id: string;
+  section: string;
+  book: { id: string; name: string };
+  total_sessions: number;
+  remaining_sessions: number;
+  sessions_by_month: Record<number, number>;
+}
 
 
 const MONTH_NAMES = [
@@ -164,6 +172,24 @@ export default function Home() {
 
   // -- Monthly Plans --
   const [monthPlans, setMonthPlans] = useState<MonthPlan[]>([]);
+  const [assignedCourses, setAssignedCourses] = useState<AssignedCourseView[]>([]);
+
+  useEffect(() => {
+    if (!classId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/classes/${classId}/assigned-courses`, { cache: 'no-store' });
+        const list: unknown = await res.json();
+        if (Array.isArray(list)) {
+          setAssignedCourses(list as AssignedCourseView[]);
+        } else {
+          setAssignedCourses([]);
+        }
+      } catch {
+        setAssignedCourses([]);
+      }
+    })();
+  }, [classId]);
   
   // -- Persistence --
   useEffect(() => {
@@ -404,6 +430,8 @@ export default function Home() {
       setEndTime(selectedClass.end_time);
     } else {
         setClassName('');
+        setClassId('');
+        setAssignedCourses([]);
     }
   };
 
@@ -493,7 +521,16 @@ export default function Home() {
 
   const openAddBookModal = (monthId: string) => {
     setTargetMonthId(monthId);
-    const defaultBookId = filteredBooks.length > 0 ? filteredBooks[0].id : (books.length > 0 ? books[0].id : '');
+    const plan = monthPlans.find(p => p.id === monthId);
+    const selMonth = plan ? (plan.month + 1) : (startMonth + 1);
+    const monthlyIds = assignedCourses
+      .filter(c => (c.sessions_by_month?.[selMonth] ?? 0) > 0)
+      .map(c => c.book.id);
+    const monthlyBooks = books.filter(b => monthlyIds.includes(b.id));
+    const defaultBookId =
+      monthlyBooks[0]?.id ??
+      filteredBooks[0]?.id ??
+      (books.length > 0 ? books[0].id : '');
     setNewAllocation({ bookId: defaultBookId, sessionsPerWeek: selectedDays.length > 0 ? selectedDays.length : 2 });
     setInlineAddMonthId(monthId);
     setIsAddBookModalOpen(false);
@@ -1346,7 +1383,12 @@ export default function Home() {
                               className="block w-full rounded border-gray-200 text-sm p-1.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                             >
                               {(() => {
-                                const displayBooks = filteredBooks;
+                                const selMonth = plan.month + 1;
+                                const monthlyIds = assignedCourses
+                                  .filter(c => (c.sessions_by_month?.[selMonth] ?? 0) > 0)
+                                  .map(c => c.book.id);
+                                const monthlyBooks = books.filter(b => monthlyIds.includes(b.id));
+                                const displayBooks = monthlyBooks.length > 0 ? monthlyBooks : filteredBooks;
                                 const groupedBooks: Record<string, Book[]> = {};
                                 displayBooks.forEach(b => {
                                   const level = b.level || 'Others';
