@@ -232,7 +232,7 @@ export default function Home() {
     });
     
     setTimeout(() => setMonthPlans(newPlans), 0);
-  }, [classId, year, startMonth, duration, monthPlans]);
+  }, [classId, year, startMonth, duration]);
 
   // Sync Allocations to Global Context
   useEffect(() => {

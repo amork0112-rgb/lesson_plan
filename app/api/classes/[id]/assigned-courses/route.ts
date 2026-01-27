@@ -12,7 +12,7 @@ type AllocationRow = {
   books?: { id: string; name: string } | { id: string; name: string }[];
 };
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -20,6 +20,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
   const supabase = getSupabaseService();
   const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const monthKey = searchParams.get('month'); // expected format YYYY-MM
+  if (monthKey !== null) {
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+      return NextResponse.json({ error: 'Invalid month format (YYYY-MM required)' }, { status: 400 });
+    }
+  }
   const { data, error } = await supabase
     .from('class_book_allocations')
     .select(
