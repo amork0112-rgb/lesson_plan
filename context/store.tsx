@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Book, Course, Holiday, Class, User, Role } from '@/types';
+import { Book, Course, Holiday, Class, User, Role, BookAllocation } from '@/types';
 import { getSupabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -11,17 +11,19 @@ interface DataContextType {
   books: Book[];
   courses: Course[];
   holidays: Holiday[];
-  classes: Class[]; // Added classes
+  classes: Class[];
+  allocations: BookAllocation[];
   user: User | null;
   loading: boolean;
   
   addBook: (book: Book) => Promise<void>;
+  updateBook: (id: string, updates: Partial<Book>) => Promise<void>;
   deleteBook: (id: string) => Promise<void>;
   addCourse: (course: Course) => Promise<void>;
   deleteCourse: (id: string) => Promise<void>;
   addHoliday: (holiday: Holiday) => Promise<void>;
   deleteHoliday: (id: string) => Promise<void>;
-  addClass: (cls: Class) => Promise<void>; // Added addClass
+  addClass: (cls: Class) => Promise<void>;
   
   signOut: () => Promise<void>;
 }
@@ -33,6 +35,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [allocations, setAllocations] = useState<BookAllocation[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -52,6 +55,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const { data: classesData } = await supabase.from('classes').select('*');
       if (classesData) setClasses(classesData as any);
+
+      const { data: allocationsData } = await supabase.from('class_book_allocations').select('*');
+      if (allocationsData) setAllocations(allocationsData as any);
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -97,6 +103,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setCourses([]);
         setHolidays([]);
         setClasses([]);
+        setAllocations([]);
       }
       setLoading(false);
     });
@@ -108,6 +115,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     const { error } = await supabase.from('books').insert(book);
     if (!error) setBooks([...books, book]);
+  };
+
+  const updateBook = async (id: string, updates: Partial<Book>) => {
+    if (!supabase) return;
+    const { error } = await supabase.from('books').update(updates).eq('id', id);
+    if (!error) {
+      setBooks(books.map(b => b.id === id ? { ...b, ...updates } : b));
+    }
   };
 
   const deleteBook = async (id: string) => {
@@ -154,8 +169,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   return (
     <DataContext.Provider value={{ 
-      books, courses, holidays, classes, user, loading,
-      addBook, deleteBook, 
+      books, courses, holidays, classes, allocations, user, loading,
+      addBook, updateBook, deleteBook, 
       addCourse, deleteCourse,
       addHoliday, deleteHoliday,
       addClass,
