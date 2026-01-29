@@ -24,15 +24,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   
   const upserts = Object.entries(sessions_by_month).map(([m, count]) => ({
     class_book_allocation_id: id,
-    month: parseInt(m, 10),
+    month_index: parseInt(m, 10),
     sessions: typeof count === 'number' ? count : 0
   }));
 
   // We should probably delete existing sessions for this allocation that are NOT in the payload?
   // Or just upsert. The UI sends all 12 months (or 6 in the new version).
-  // Ideally we use upsert on (class_book_allocation_id, month).
+  // Ideally we use upsert on (class_book_allocation_id, month_index).
   
-  // Note: 'course_sessions' must have a unique constraint on (class_book_allocation_id, month) for upsert to work properly
+  // Note: 'course_sessions' must have a unique constraint on (class_book_allocation_id, month_index) for upsert to work properly
   // or we delete all for this allocation and insert new ones.
   // Deleting and inserting is safer if we don't know the constraint.
   
@@ -42,7 +42,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   
   const { error } = await supabase
     .from('course_sessions')
-    .upsert(upserts, { onConflict: 'class_book_allocation_id,month' });
+    .upsert(upserts, { onConflict: 'class_book_allocation_id,month_index' });
 
   if (error) {
     // Fallback: Delete and Insert if constraint name is different or missing unique index

@@ -21,10 +21,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const supabase = getSupabaseService();
   const { id } = await params;
   const body = await req.json();
-  const month: number = body?.month;
+  const month_index: number = body?.month_index;
   const total_sessions: number = body?.total_sessions;
-  if (!Number.isInteger(month) || month < 1 || month > 12) {
-    return NextResponse.json({ error: 'Invalid month' }, { status: 400 });
+  const save: boolean = body?.save === true;
+  if (!Number.isInteger(month_index) || month_index < 1) {
+    return NextResponse.json({ error: 'Invalid month_index' }, { status: 400 });
   }
   if (!Number.isFinite(total_sessions) || total_sessions < 0) {
     return NextResponse.json({ error: 'Invalid total_sessions' }, { status: 400 });
@@ -45,13 +46,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const allocIds = allocations.map(a => a.id);
   const { data: sessData, error: sessErr } = await supabase
     .from('course_sessions')
-    .select('class_book_allocation_id,month,sessions')
+    .select('class_book_allocation_id,month_index,sessions')
     .in('class_book_allocation_id', allocIds);
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
   const usedTotalByAlloc: Record<string, number> = {};
-  (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month: number; sessions: number | null }) => {
+  (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month_index: number; sessions: number | null }) => {
     usedTotalByAlloc[s.class_book_allocation_id] = (usedTotalByAlloc[s.class_book_allocation_id] || 0) + (s.sessions ?? 0);
   });
 
@@ -96,5 +97,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const plan = initialAlloc
     .filter(p => p.used > 0)
     .map(p => ({ allocation_id: p.id, book_id: p.book_id, used_sessions: p.used, remaining_after: p.remaining_after }));
-  return NextResponse.json({ month, total_used: usedSum, plan });
+
+  if (save && plan.length > 0) {
+    const upsertData = plan.map(p => ({
+      class_book_allocation_id: p.allocation_id,
+      month_index,
+      sessions: p.used_sessions
+    }));
+    
+    // First, we need to clear existing sessions for this month if they are not in the plan?
+    // Actually, upsert will update existing. But if a book is NOT in the plan (0 sessions), we might need to set it to 0.
+    // However, the 'plan' only contains used > 0.
+    // If we want to fully reset the month, we should probably set others to 0.
+    // But let's stick to updating what we calculated. 
+    // Wait, if I re-generate and a book gets 0 sessions now, it should be updated to 0 in DB.
+    // The current 'plan' filter(p => p.used > 0) removes 0s.
+    // We should probably include 0s if we want to overwrite.
+    // But let's assume the user wants to ADD sessions.
+    // Actually, generation usually REPLACES the plan for that month.
+    // So we should upsert all allocations for this class/month.
+    
+    // Let's include all from 'items' (allocations with remaining > 0) in the upsert, even if used is 0?
+    // The initialAlloc contains all items.
+    
+    const fullPlan = initialAlloc.map(p => ({
+      class_book_allocation_id: p.id,
+      month_index,
+      sessions: p.used
+    }));
+
+    const { error: saveErr } = await supabase
+      .from('course_sessions')
+      .upsert(fullPlan, { onConflict: 'class_book_allocation_id,month_index' });
+      
+    if (saveErr) {
+      return NextResponse.json({ error: `Save failed: ${saveErr.message}` }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ month_index, total_used: usedSum, plan });
 }

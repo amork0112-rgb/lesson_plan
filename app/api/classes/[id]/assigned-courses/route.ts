@@ -21,13 +21,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   const supabase = getSupabaseService();
   const { id } = await params;
-  const { searchParams } = new URL(req.url);
-  const monthKey = searchParams.get('month'); // expected format YYYY-MM
-  if (monthKey !== null) {
-    if (!/^\d{4}-\d{2}$/.test(monthKey)) {
-      return NextResponse.json({ error: 'Invalid month format (YYYY-MM required)' }, { status: 400 });
-    }
-  }
+  
   const { data, error } = await supabase
     .from('class_book_allocations')
     .select(
@@ -47,18 +41,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   const rows: AllocationRow[] = Array.isArray(data) ? (data as unknown as AllocationRow[]) : [];
   const ids = rows.map(r => r.id);
+  
+  // Use month_index instead of month
   const { data: sessData, error: sessErr } = await supabase
     .from('course_sessions')
-    .select('class_book_allocation_id,month,sessions')
+    .select('class_book_allocation_id, month_index, sessions')
     .in('class_book_allocation_id', ids);
+    
   if (sessErr) {
     return NextResponse.json({ error: sessErr.message }, { status: 500 });
   }
+  
   const byAlloc: Record<string, Record<number, number>> = {};
-  (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month: number; sessions: number | null }) => {
+  // Map using month_index
+  (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month_index: number; sessions: number | null }) => {
     if (!byAlloc[s.class_book_allocation_id]) byAlloc[s.class_book_allocation_id] = {};
-    byAlloc[s.class_book_allocation_id][s.month] = s.sessions ?? 0;
+    byAlloc[s.class_book_allocation_id][s.month_index] = s.sessions ?? 0;
   });
+  
   const result = rows.map((r) => {
     const b = Array.isArray(r.books) ? r.books?.[0] : r.books;
     const sessionsByMonth = byAlloc[r.id] || {};

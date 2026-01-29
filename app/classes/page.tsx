@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2, Zap } from 'lucide-react';
 import { Weekday } from '@/types';
 
 // Types
@@ -63,6 +63,10 @@ export default function ClassesPage() {
     book_id: null,
     total_sessions: 0,
   });
+  
+  // State for generation inputs
+  const [monthTotals, setMonthTotals] = useState<Record<number, number>>({});
+  const [generating, setGenerating] = useState<Record<number, boolean>>({});
 
   // Fetch classes on mount
   useEffect(() => {
@@ -206,6 +210,44 @@ export default function ClassesPage() {
     }
   };
 
+  const handleGenerate = async (monthIndex: number) => {
+    if (!expandedClassId) return;
+    const total = monthTotals[monthIndex];
+    if (!total || total <= 0) {
+      alert('Please enter a valid total sessions count for this month');
+      return;
+    }
+
+    setGenerating(prev => ({ ...prev, [monthIndex]: true }));
+    try {
+      const res = await fetch(`/api/classes/${expandedClassId}/month-plan/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month_index: monthIndex,
+          total_sessions: total,
+          save: true
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Generation failed');
+      }
+
+      // Refresh data to reflect saved changes
+      const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
+      const json = await refresh.json();
+      setCourses(json as CourseView[]);
+      
+    } catch (e: any) {
+      alert(`Generation failed: ${e.message}`);
+    } finally {
+      setGenerating(prev => ({ ...prev, [monthIndex]: false }));
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-slate-50 p-12">
       <div className="max-w-7xl mx-auto">
@@ -310,6 +352,33 @@ export default function ClassesPage() {
                                     <th key={m} className="px-2 py-3 text-center w-14">Month {m}</th>
                                   ))}
                                   <th className="px-4 py-3 text-right w-24">Action</th>
+                                </tr>
+                                <tr className="bg-slate-50/50 border-b border-slate-100">
+                                  <td colSpan={3} className="px-4 py-2 text-right text-xs text-slate-500 font-medium">
+                                    Total Sessions:
+                                  </td>
+                                  {[1, 2, 3, 4, 5, 6].map(m => (
+                                    <td key={m} className="px-2 py-2 text-center align-top">
+                                      <div className="flex flex-col items-center gap-1">
+                                        <input 
+                                          type="number" 
+                                          className="w-12 text-center text-xs border-gray-200 rounded focus:ring-indigo-500 focus:border-indigo-500 py-1"
+                                          placeholder="0"
+                                          value={monthTotals[m] || ''}
+                                          onChange={(e) => setMonthTotals(prev => ({ ...prev, [m]: parseInt(e.target.value) || 0 }))}
+                                        />
+                                        <button 
+                                          onClick={() => handleGenerate(m)}
+                                          disabled={generating[m]}
+                                          className="text-indigo-600 hover:text-indigo-800 disabled:text-slate-400"
+                                          title="Generate Plan"
+                                        >
+                                          <Zap className={`h-4 w-4 ${generating[m] ? 'animate-pulse' : ''}`} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  ))}
+                                  <td></td>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
