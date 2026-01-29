@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Book, Course, Holiday, Class, User, Role, BookAllocation } from '@/types';
+import { Book, Course, Holiday, Class, User, Role, BookAllocation, SpecialDate, Event, SpecialDateType } from '@/types';
 import { getSupabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -13,6 +13,8 @@ interface DataContextType {
   holidays: Holiday[];
   classes: Class[];
   allocations: BookAllocation[];
+  setAllocations: (allocations: BookAllocation[]) => void;
+  specialDates: Record<string, SpecialDate>;
   user: User | null;
   loading: boolean;
   
@@ -24,6 +26,7 @@ interface DataContextType {
   addHoliday: (holiday: Holiday) => Promise<void>;
   deleteHoliday: (id: string) => Promise<void>;
   addClass: (cls: Class) => Promise<void>;
+  updateSpecialDate: (date: string, data: SpecialDate | null) => Promise<void>;
   
   signOut: () => Promise<void>;
 }
@@ -36,6 +39,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [allocations, setAllocations] = useState<BookAllocation[]>([]);
+  const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -58,6 +62,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const { data: allocationsData } = await supabase.from('class_book_allocations').select('*');
       if (allocationsData) setAllocations(allocationsData as any);
+
+      const { data: eventsData } = await supabase.from('events').select('*');
+      if (eventsData) {
+        const map: Record<string, SpecialDate> = {};
+        eventsData.forEach((e: any) => {
+            // Assume single day events for now or take start_date
+            if (e.start_date) {
+                map[e.start_date] = { 
+                    type: e.type as SpecialDateType, 
+                    name: e.name 
+                };
+            }
+        });
+        setSpecialDates(map);
+      }
+
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -104,6 +124,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setHolidays([]);
         setClasses([]);
         setAllocations([]);
+        setSpecialDates({});
       }
       setLoading(false);
     });
@@ -161,6 +182,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!error) setClasses([...classes, cls]);
   };
 
+  const updateSpecialDate = async (date: string, data: SpecialDate | null) => {
+    if (!supabase) return;
+
+    if (data) {
+        // Delete existing event on this date first (simple approximation)
+        await supabase.from('events').delete().eq('start_date', date);
+        
+        const { error } = await supabase.from('events').insert({
+            name: data.name,
+            type: data.type,
+            start_date: date,
+            end_date: date // Single day
+        });
+        
+        if (!error) {
+            setSpecialDates(prev => ({ ...prev, [date]: data }));
+        }
+    } else {
+        // Delete
+        const { error } = await supabase.from('events').delete().eq('start_date', date);
+        if (!error) {
+            setSpecialDates(prev => {
+                const next = { ...prev };
+                delete next[date];
+                return next;
+            });
+        }
+    }
+  };
+
   const signOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -169,11 +220,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   return (
     <DataContext.Provider value={{ 
-      books, courses, holidays, classes, allocations, user, loading,
+      books, courses, holidays, classes, allocations, setAllocations, specialDates, user, loading,
       addBook, updateBook, deleteBook, 
       addCourse, deleteCourse,
       addHoliday, deleteHoliday,
       addClass,
+      updateSpecialDate,
       signOut
     }}>
       {children}
