@@ -368,27 +368,14 @@ export default function BookDetailPage() {
                                           type="checkbox"
                                           checked={!!unit.has_video}
                                           onChange={(e) => {
-                                            const checked = e.target.checked;
-                                            if (book && typeof unit.unit_no === 'number' && typeof unit.day_no === 'number') {
-                                              fetch('/api/book-video-rule', {
-                                                method: checked ? 'POST' : 'DELETE',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                  book_id: book.id,
-                                                  unit_no: unit.unit_no,
-                                                  day_no: unit.day_no,
-                                                }),
-                                              }).then(async (res) => {
-                                                if (!res.ok) {
-                                                  alert('Failed to update video rule');
-                                                  return;
-                                                }
-                                                const next = [...units];
-                                                next[index] = { ...unit, has_video: checked };
-                                                setUnits(next);
-                                              }).catch(() => {
-                                                alert('Network error updating video rule');
-                                              });
+                                            const next = [...units];
+                                            next[index] = { ...unit, has_video: e.target.checked };
+                                            setUnits(next);
+                                            setIsDirty(true);
+                                            if (book) {
+                                              const resequenced = next.map((u, i) => ({ ...u, sequence: i + 1 }));
+                                              updateBook(book.id, { ...book, units: resequenced });
+                                              setIsDirty(false);
                                             }
                                           }}
                                         />

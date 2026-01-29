@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseService } from '@/lib/supabase/service';
+import { getSupabaseService } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,55 +9,58 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!supabaseUrl || !serviceKey) {
     return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
   }
+
   const supabase = getSupabaseService();
-  const { id } = await params;
+  const { id } = await params; // This is the allocation ID
   const body = await req.json();
-  if (body && typeof body.sessions_by_month === 'object') {
-    const map = body.sessions_by_month as Record<number, number>;
-    const entries = Object.entries(map)
-      .map(([k, v]) => ({ month: Number(k), sessions: Number(v) }))
-      .filter(e => Number.isInteger(e.month) && e.month >= 1 && e.month <= 12 && Number.isFinite(e.sessions) && e.sessions >= 0);
-    if (entries.length > 0) {
-      const rows = entries.map(e => ({ class_book_allocation_id: id, month: e.month, sessions: e.sessions }));
-      const { error: upErr } = await supabase.from('course_sessions').upsert(rows);
-      if (upErr) {
-        return NextResponse.json({ error: upErr.message }, { status: 500 });
-      }
-    }
-    return NextResponse.json({ ok: true });
+  const { sessions_by_month } = body;
+
+  if (!sessions_by_month || typeof sessions_by_month !== 'object') {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
-  const { month, sessions } = body as { month?: number; sessions?: number };
-  if (typeof month !== 'number' || month < 1 || month > 12) {
-    return NextResponse.json({ error: 'Invalid month' }, { status: 400 });
-  }
-  if (typeof sessions !== 'number' || sessions < 0) {
-    return NextResponse.json({ error: 'Invalid sessions' }, { status: 400 });
-  }
-  const { data: existing, error: selErr } = await supabase
+
+  // We need to upsert sessions for this allocation
+  // sessions_by_month is { month_key: count }
+  
+  const upserts = Object.entries(sessions_by_month).map(([m, count]) => ({
+    class_book_allocation_id: id,
+    month: parseInt(m, 10),
+    sessions: typeof count === 'number' ? count : 0
+  }));
+
+  // We should probably delete existing sessions for this allocation that are NOT in the payload?
+  // Or just upsert. The UI sends all 12 months (or 6 in the new version).
+  // Ideally we use upsert on (class_book_allocation_id, month).
+  
+  // Note: 'course_sessions' must have a unique constraint on (class_book_allocation_id, month) for upsert to work properly
+  // or we delete all for this allocation and insert new ones.
+  // Deleting and inserting is safer if we don't know the constraint.
+  
+  // First, delete existing sessions for this allocation to avoid stale data (if we only send some months)
+  // But usually we send all relevant months.
+  // Let's try upsert.
+  
+  const { error } = await supabase
     .from('course_sessions')
-    .select('id')
-    .eq('class_book_allocation_id', id)
-    .eq('month', month)
-    .limit(1);
-  if (selErr) {
-    return NextResponse.json({ error: selErr.message }, { status: 500 });
-  }
-  if (Array.isArray(existing) && existing.length > 0) {
-    const { error: updErr } = await supabase
-      .from('course_sessions')
-      .update({ sessions })
-      .eq('class_book_allocation_id', id)
-      .eq('month', month);
-    if (updErr) {
-      return NextResponse.json({ error: updErr.message }, { status: 500 });
-    }
-  } else {
+    .upsert(upserts, { onConflict: 'class_book_allocation_id,month' });
+
+  if (error) {
+    // Fallback: Delete and Insert if constraint name is different or missing unique index
+    console.error('Upsert failed, trying delete+insert', error);
+    
+    const { error: delErr } = await supabase
+        .from('course_sessions')
+        .delete()
+        .eq('class_book_allocation_id', id);
+        
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+    
     const { error: insErr } = await supabase
-      .from('course_sessions')
-      .insert({ class_book_allocation_id: id, month, sessions });
-    if (insErr) {
-      return NextResponse.json({ error: insErr.message }, { status: 500 });
-    }
+        .from('course_sessions')
+        .insert(upserts);
+        
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+
+  return NextResponse.json({ success: true });
 }

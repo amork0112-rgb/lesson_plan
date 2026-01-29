@@ -1,6 +1,7 @@
 import { 
-  ScheduleRule, Holiday, Event, Book, BookAllocation, Weekday, LessonUnit 
+  Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
 } from '@/types';
+import { parseLocalDate } from './date';
 
 const WEEKDAYS: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -38,8 +39,7 @@ export function generateBookUnits(book: Book): LessonUnit[] {
           unit_no: v,
           day_no: d,
           type: 'lesson',
-          title: `${levelTag}-${v} Day ${d}`,
-          has_video: false
+          title: `${levelTag}-${v} Day ${d}`
         });
       }
     }
@@ -77,8 +77,7 @@ export function generateBookUnits(book: Book): LessonUnit[] {
         unit_no: u,
         day_no: d,
         type: 'lesson',
-        title: book.unit_type === 'day' ? `Day ${u}` : `Unit ${u} - Day ${d}`,
-        has_video: false
+        title: book.unit_type === 'day' ? `Day ${u}` : `Unit ${u} - Day ${d}`
       });
     }
 

@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
+import { useData } from '@/context/store';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Holiday, Class, SpecialDate } from '@/types';
-import { DEFAULT_HOLIDAYS, SAMPLE_CLASSES } from '@/lib/data';
+import { Holiday } from '@/types';
 
 export default function CalendarPage() {
-  const [holidays, setHolidays] = useState<Holiday[]>(DEFAULT_HOLIDAYS);
-  const [classes] = useState<Class[]>(SAMPLE_CLASSES);
-  const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
+  const { holidays, addHoliday, deleteHoliday, classes, specialDates, updateSpecialDate } = useData();
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Start at Jan 2026
   const [isAdding, setIsAdding] = useState(false);
   const [newHoliday, setNewHoliday] = useState<Partial<Holiday>>({ name: '', date: '', type: 'custom', affected_classes: [] });
@@ -28,16 +26,14 @@ export default function CalendarPage() {
 
   const handleAddHoliday = () => {
     if (!newHoliday.name || !newHoliday.date) return;
-    const id = `h_local_${newHoliday.date}_${newHoliday.name}`;
-    const next: Holiday = {
-      id,
-      name: newHoliday.name!,
-      date: newHoliday.date!,
-      type: (newHoliday.type as Holiday['type']) || 'custom',
-      year: parseInt(newHoliday.date!.slice(0, 4), 10),
-      affected_classes: newHoliday.affected_classes || []
-    };
-    setHolidays([...holidays, next]);
+    addHoliday({
+      id: Math.random().toString(),
+      name: newHoliday.name,
+      date: newHoliday.date,
+      type: 'custom',
+      year: parseInt(newHoliday.date.split('-')[0]),
+      affected_classes: newHoliday.affected_classes
+    });
     setIsAdding(false);
     setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [] });
   };
@@ -59,7 +55,7 @@ export default function CalendarPage() {
   const handleDateClick = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const current = specialDates[dateStr];
-    let nextData: SpecialDate | null = null;
+    let nextData: any = null;
     
     if (!current) {
         nextData = { type: 'event', name: 'Event' };
@@ -78,20 +74,8 @@ export default function CalendarPage() {
     } else {
         nextData = null;
     }
-    if (nextData) {
-      setSpecialDates({ ...specialDates, [dateStr]: nextData });
-    } else {
-      const rest = { ...specialDates };
-      delete rest[dateStr];
-      setSpecialDates(rest);
-    }
+    updateSpecialDate(dateStr, nextData);
   };
-
-  const deleteHolidayById = (id: string) => {
-    setHolidays(holidays.filter(h => h.id !== id));
-  };
-
-  // Removed all Supabase effects; calendar operates on local state only
 
   return (
     <div className="min-h-screen bg-slate-50 p-8">
@@ -274,7 +258,7 @@ export default function CalendarPage() {
                           <div className="flex justify-between items-start">
                               <span className="font-semibold truncate">{h.name}</span>
                               <button 
-                                  onClick={(e) => { e.stopPropagation(); deleteHolidayById(h.id); }}
+                                  onClick={(e) => { e.stopPropagation(); deleteHoliday(h.id); }}
                                   className="hidden group-hover:block hover:opacity-75 ml-1"
                               >
                                   <Trash2 className="h-3 w-3" />
