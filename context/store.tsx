@@ -57,8 +57,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { data: holidaysData } = await supabase.from('holidays').select('*');
       if (holidaysData) setHolidays(holidaysData as any);
 
-      const { data: classesData } = await supabase.from('classes').select('*');
-      if (classesData) setClasses(classesData as any);
+      try {
+        const classesRes = await fetch('/api/raw-classes');
+        if (classesRes.ok) {
+          const classesData = await classesRes.json();
+          if (Array.isArray(classesData)) {
+            setClasses(classesData as any);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch classes via API', e);
+      }
 
       const { data: allocationsData } = await supabase.from('class_book_allocations').select('*');
       if (allocationsData) setAllocations(allocationsData as any);
