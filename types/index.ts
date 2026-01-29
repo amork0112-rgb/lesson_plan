@@ -117,3 +117,23 @@ export interface LessonRow {
   content: string;
   is_scp?: boolean;
 }
+
+export interface Course {
+  id: string;
+  level: string;
+  duration: string;
+  mainTB?: string;
+  subTB1?: string;
+  subTB2?: string;
+  secondTB?: string | string[];
+  rw?: string;
+  speaking?: string;
+  voca?: string;
+  vocab?: string;
+  grammar?: string;
+  writing?: string;
+  video?: string;
+  test?: string;
+  certify?: string;
+  [key: string]: any;
+}

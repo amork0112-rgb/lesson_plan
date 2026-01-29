@@ -1,9 +1,11 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Book, Course, Holiday, Class, User, Role } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+
+const supabase = getSupabase();
 
 interface DataContextType {
   books: Book[];
@@ -37,6 +39,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch initial data
   const fetchData = async () => {
+    if (!supabase) return;
     try {
       const { data: booksData } = await supabase.from('books').select('*');
       if (booksData) setBooks(booksData as any);
@@ -55,6 +58,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
@@ -97,41 +105,49 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addBook = async (book: Book) => {
+    if (!supabase) return;
     const { error } = await supabase.from('books').insert(book);
     if (!error) setBooks([...books, book]);
   };
 
   const deleteBook = async (id: string) => {
+    if (!supabase) return;
     const { error } = await supabase.from('books').delete().eq('id', id);
     if (!error) setBooks(books.filter(b => b.id !== id));
   };
 
   const addCourse = async (course: Course) => {
+    if (!supabase) return;
     const { error } = await supabase.from('courses').insert(course);
     if (!error) setCourses([...courses, course]);
   };
 
   const deleteCourse = async (id: string) => {
+    if (!supabase) return;
     const { error } = await supabase.from('courses').delete().eq('id', id);
     if (!error) setCourses(courses.filter(c => c.id !== id));
   };
 
   const addHoliday = async (holiday: Holiday) => {
+    if (!supabase) return;
     const { error } = await supabase.from('holidays').insert(holiday);
     if (!error) setHolidays([...holidays, holiday]);
   };
 
   const deleteHoliday = async (id: string) => {
+    if (!supabase) return;
     const { error } = await supabase.from('holidays').delete().eq('id', id);
     if (!error) setHolidays(holidays.filter(h => h.id !== id));
   };
   
   const addClass = async (cls: Class) => {
+    if (!supabase) return;
     const { error } = await supabase.from('classes').insert(cls);
     if (!error) setClasses([...classes, cls]);
   };
 
   const signOut = async () => {
+    if (!supabase) return;
     await supabase.auth.signOut();
     router.push('/login');
   };

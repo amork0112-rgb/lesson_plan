@@ -1,6 +1,6 @@
 //app/api/books/route.ts
 import { NextResponse } from 'next/server';
-import { getSupabaseService } from '@/lib/supabase/service';
+import { getSupabaseService } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
