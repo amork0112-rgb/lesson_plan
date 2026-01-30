@@ -239,49 +239,19 @@ export async function POST(
 
     // 5. Generate
     const monthPlanInput = {
-        month: `${year}-${String(month + 1).padStart(2, '0')}`, // YYYY-MM
+        id: `plan-${year}-${month}`,
+        year: year,
+        month: month,
         allocations: activeAllocations.map(a => ({
+            id: a.id,
+            class_id: class_id,
             book_id: a.book_id,
             priority: a.priority,
-            sessions_per_week: 1 // Logic handled by distribution, so we just need order
+            sessions_per_week: 1 
         })),
-        // We override the session count by providing specific sessions map to generator?
-        // Actually, 'generateLessons' uses 'datesToUse' (planDates).
-        // And it distributes them among books.
-        // But we ALREADY distributed them in 'activeAllocations' (field 'used').
-        // We need to tell 'generateLessons' exactly how many sessions each book gets.
-        // The current 'generateLessons' logic might try to re-distribute if we don't constrain it.
-        // However, 'generateLessons' takes 'monthPlans' which has 'allocations'.
-        // And 'planDates'.
-        // It iterates dates and assigns books.
-        // We need to ensure it respects our 'used' count.
-        // The 'generateLessons' engine uses a simplified Round Robin or priority.
-        // If we want exact match, we might need to modify 'generateLessons' or pass 'sessionCounts'.
-        // BUT, 'generateLessons' is stateless.
-        // Let's rely on 'priority' and 'sessions_per_week' (which we set to 1) and the fact that we passed ONLY active books.
-        // Actually, if we want exact counts, we should probably construct the plan manually here?
-        // No, 'generateLessons' handles holidays, logic, format.
-        
-        // Let's pass 'sessionCounts' to 'generateLessons' if it supported it.
-        // It doesn't. It uses 'allocations' list.
-        // If we want book A to have 5 sessions and B to have 3.
-        // We can create an allocation list like [A, A, A, A, A, B, B, B] (exploded)?
-        // No, 'generateLessons' iterates dates and picks a book.
-        
-        // Let's trust 'generateLessons' to do a fair distribution similar to our Step 1.
-        // Since Step 1 used Round Robin, and 'generateLessons' uses Round Robin (if implemented so), it should match.
-        // Warning: If Step 1 says Book A: 5, Book B: 5. And 'generateLessons' does A, B, A, B... it matches.
-        
-        // We will pass 'allocations' to 'generateLessons'.
-        // But 'generateLessons' might use ALL books passed in 'books' array?
-        // We passed 'books' corresponding to 'activeAllocations'.
     };
     
-    // We need to pass the *distribution* to generateLessons?
-    // Looking at 'lib/lessonEngine.ts', it iterates 'planDates' and loops through 'allocations'.
-    // If we want to enforce the count, we might need to verify.
-    // But for now, let's assume it aligns well enough.
-    
+    // We pass the *distribution* to generateLessons via planDates logic
     const planDates = {
         [`plan-${year}-${month}`]: datesToUse
     };
