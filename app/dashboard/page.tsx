@@ -143,7 +143,7 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
  
 
 export default function Home() {
-  const { books, classes, allocations: globalAllocations, setAllocations } = useData();
+  const { books, classes, allocations: globalAllocations, setAllocations, loading } = useData();
   const supabase = getSupabase();
   const [holidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2, Zap } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react';
 import { Weekday } from '@/types';
 
 // Types
@@ -64,9 +64,7 @@ export default function ClassesPage() {
     total_sessions: 0,
   });
   
-  // State for generation inputs
-  const [monthTotals, setMonthTotals] = useState<Record<number, number>>({});
-  const [generating, setGenerating] = useState<Record<number, boolean>>({});
+
 
   // Fetch classes on mount
   useEffect(() => {
@@ -210,90 +208,7 @@ export default function ClassesPage() {
     }
   };
 
-  const handleGenerateAll = async () => {
-    if (!expandedClassId) return;
-    
-    const monthsToGenerate = [1, 2, 3, 4, 5, 6].filter(m => monthTotals[m] && monthTotals[m] > 0);
-    
-    if (monthsToGenerate.length === 0) {
-      alert('Please set Total Sessions for at least one month.');
-      return;
-    }
 
-    if (!confirm(`Generate plans for ${monthsToGenerate.length} months?`)) return;
-
-    let successCount = 0;
-    for (const m of monthsToGenerate) {
-       try {
-         // Re-implementing logic to avoid alerts in loop
-         setGenerating(prev => ({ ...prev, [m]: true }));
-         const res = await fetch(`/api/classes/${expandedClassId}/month-plan/generate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              month_index: m,
-              total_sessions: monthTotals[m],
-              save: true
-            })
-         });
-         
-         if (!res.ok) throw new Error('Failed');
-         successCount++;
-       } catch (e) {
-         console.error(`Failed to generate month ${m}`, e);
-       } finally {
-         setGenerating(prev => ({ ...prev, [m]: false }));
-       }
-    }
-    
-    // Refresh once at the end
-    const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
-    const json = await refresh.json();
-    setCourses(json as CourseView[]);
-    
-    if (successCount === monthsToGenerate.length) {
-      alert('All selected months generated successfully!');
-    } else {
-      alert(`Generated ${successCount}/${monthsToGenerate.length} months. Check console for errors.`);
-    }
-  };
-
-  const handleGenerate = async (monthIndex: number) => {
-    if (!expandedClassId) return;
-    const total = monthTotals[monthIndex];
-    if (!total || total <= 0) {
-      alert('Please enter a valid total sessions count for this month');
-      return;
-    }
-
-    setGenerating(prev => ({ ...prev, [monthIndex]: true }));
-    try {
-      const res = await fetch(`/api/classes/${expandedClassId}/month-plan/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          month_index: monthIndex,
-          total_sessions: total,
-          save: true
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Generation failed');
-      }
-
-      // Refresh data to reflect saved changes
-      const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
-      const json = await refresh.json();
-      setCourses(json as CourseView[]);
-      
-    } catch (e: any) {
-      alert(`Generation failed: ${e.message}`);
-    } finally {
-      setGenerating(prev => ({ ...prev, [monthIndex]: false }));
-    }
-  };
 
 
   return (
@@ -386,13 +301,6 @@ export default function ClassesPage() {
                       <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between">
                           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Courses</h3>
-                          <button
-                            onClick={handleGenerateAll}
-                            className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded font-medium transition-colors flex items-center gap-1"
-                          >
-                            <Zap className="h-3 w-3" />
-                            Generate All
-                          </button>
                         </div>
                         
                         {loadingCourses ? (
@@ -412,33 +320,7 @@ export default function ClassesPage() {
                                   ))}
                                   <th className="px-4 py-3 text-right w-24">Action</th>
                                 </tr>
-                                <tr className="bg-slate-50/50 border-b border-slate-100">
-                                  <td colSpan={3} className="px-4 py-2 text-right text-xs text-slate-500 font-medium">
-                                    Total Sessions:
-                                  </td>
-                                  {[1, 2, 3, 4, 5, 6].map(m => (
-                                    <td key={m} className="px-2 py-2 text-center align-top">
-                                      <div className="flex flex-col items-center gap-1">
-                                        <input 
-                                          type="number" 
-                                          className="w-12 text-center text-xs border-gray-200 rounded focus:ring-indigo-500 focus:border-indigo-500 py-1"
-                                          placeholder="0"
-                                          value={monthTotals[m] || ''}
-                                          onChange={(e) => setMonthTotals(prev => ({ ...prev, [m]: parseInt(e.target.value) || 0 }))}
-                                        />
-                                        <button 
-                                          onClick={() => handleGenerate(m)}
-                                          disabled={generating[m]}
-                                          className="text-indigo-600 hover:text-indigo-800 disabled:text-slate-400"
-                                          title="Generate Plan"
-                                        >
-                                          <Zap className={`h-4 w-4 ${generating[m] ? 'animate-pulse' : ''}`} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  ))}
-                                  <td></td>
-                                </tr>
+
                               </thead>
                               <tbody className="divide-y divide-slate-50">
                                 {courses.map((course, idx) => {

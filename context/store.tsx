@@ -62,8 +62,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (classesRes.ok) {
           const classesData = await classesRes.json();
           if (Array.isArray(classesData)) {
+            console.log('[Store] Loaded classes:', classesData.length);
             setClasses(classesData as any);
+          } else {
+            console.error('[Store] Classes data is not an array:', classesData);
           }
+        } else {
+          const text = await classesRes.text();
+          console.error('[Store] Failed to fetch classes:', classesRes.status, classesRes.statusText, text);
         }
       } catch (e) {
         console.error('Failed to fetch classes via API', e);
@@ -108,10 +114,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
           role: role,
           name: session.user.user_metadata.full_name || session.user.email,
         });
-        fetchData();
       } else {
         setUser(null);
       }
+      // Always try to fetch data. 
+      // API-based data (classes) should work regardless of RLS if the API is public/service-role.
+      // Supabase-based data (books) will obey RLS (empty if not logged in).
+      fetchData(); 
       setLoading(false);
     });
 
@@ -125,16 +134,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
           role: role,
           name: session.user.user_metadata.full_name || session.user.email,
         });
-        fetchData();
       } else {
         setUser(null);
         setBooks([]);
         setCourses([]);
         setHolidays([]);
-        setClasses([]);
+        // Do not clear classes here, let fetchData refresh them. 
+        // Or clear them if you want to ensure no stale data.
+        // Since classes are public-ish, we can leave them or clear them.
+        // Let's clear allocations and user-specific data.
         setAllocations([]);
         setSpecialDates({});
       }
+      fetchData();
       setLoading(false);
     });
 
