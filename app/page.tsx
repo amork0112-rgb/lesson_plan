@@ -29,7 +29,7 @@ export default function GuidePage() {
           <h1 className="text-4xl font-bold text-slate-900 mb-6 tracking-tight">
             FRAGE Lesson Plan Generator Guide
           </h1>
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed whitespace-pre-line">
+          <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed whitespace-pre-line break-keep">
             FRAGE Lesson Plan Generator는 실제 수업 환경을 최대한 정확하게 반영하여,
             각 반(Class)의 수업 흐름과 교재 진행을 체계적으로 관리하기 위해 설계된 자동화 시스템입니다.
             
