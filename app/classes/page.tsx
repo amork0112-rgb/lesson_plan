@@ -210,6 +210,54 @@ export default function ClassesPage() {
     }
   };
 
+  const handleGenerateAll = async () => {
+    if (!expandedClassId) return;
+    
+    const monthsToGenerate = [1, 2, 3, 4, 5, 6].filter(m => monthTotals[m] && monthTotals[m] > 0);
+    
+    if (monthsToGenerate.length === 0) {
+      alert('Please set Total Sessions for at least one month.');
+      return;
+    }
+
+    if (!confirm(`Generate plans for ${monthsToGenerate.length} months?`)) return;
+
+    let successCount = 0;
+    for (const m of monthsToGenerate) {
+       try {
+         // Re-implementing logic to avoid alerts in loop
+         setGenerating(prev => ({ ...prev, [m]: true }));
+         const res = await fetch(`/api/classes/${expandedClassId}/month-plan/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              month_index: m,
+              total_sessions: monthTotals[m],
+              save: true
+            })
+         });
+         
+         if (!res.ok) throw new Error('Failed');
+         successCount++;
+       } catch (e) {
+         console.error(`Failed to generate month ${m}`, e);
+       } finally {
+         setGenerating(prev => ({ ...prev, [m]: false }));
+       }
+    }
+    
+    // Refresh once at the end
+    const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
+    const json = await refresh.json();
+    setCourses(json as CourseView[]);
+    
+    if (successCount === monthsToGenerate.length) {
+      alert('All selected months generated successfully!');
+    } else {
+      alert(`Generated ${successCount}/${monthsToGenerate.length} months. Check console for errors.`);
+    }
+  };
+
   const handleGenerate = async (monthIndex: number) => {
     if (!expandedClassId) return;
     const total = monthTotals[monthIndex];
@@ -297,30 +345,34 @@ export default function ClassesPage() {
                 {/* Expanded Content */}
                 {isExpanded && (
                   <div className="p-6 bg-slate-50/50">
-                    <div className="flex gap-8">
-                      {/* Left: Quick Add */}
-                      <div className="w-1/3 min-w-[300px] bg-white rounded-xl shadow-sm border border-slate-200 p-5 h-fit">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Quick Add Book</h3>
-                        <div className="relative mb-4">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                          <input
-                            type="text"
-                            placeholder="Search books..."
-                            value={bookSearchTerm}
-                            onChange={(e) => setBookSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                          />
+                    <div className="flex flex-col gap-6">
+                      {/* Top: Quick Add */}
+                      <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+                        <div className="flex items-center gap-6 mb-3">
+                          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Quick Add Book</h3>
+                          <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                              type="text"
+                              placeholder="Search books..."
+                              value={bookSearchTerm}
+                              onChange={(e) => setBookSearchTerm(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-1 max-h-[400px] overflow-y-auto pr-1">
+                        
+                        {/* List - Limit height to approx 2 items (~80-90px) */}
+                        <div className="space-y-1 max-h-[90px] overflow-y-auto pr-1">
                           {filteredBooks.length === 0 ? (
-                            <div className="text-sm text-slate-400 text-center py-4">No books found</div>
+                            <div className="text-sm text-slate-400 text-center py-2">No books found</div>
                           ) : (
                             filteredBooks.map(b => (
-                              <div key={b.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group">
+                              <div key={b.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg group border border-transparent hover:border-slate-100">
                                 <div className="text-sm text-slate-700 truncate mr-2">{b.name}</div>
                                 <button
                                   onClick={() => handleAddCourse(b)}
-                                  className="text-xs bg-indigo-600 text-white px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-indigo-700"
+                                  className="text-xs bg-indigo-600 text-white px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-indigo-700"
                                 >
                                   Add
                                 </button>
@@ -330,10 +382,17 @@ export default function ClassesPage() {
                         </div>
                       </div>
 
-                      {/* Right: Assigned Courses Table */}
-                      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-white">
+                      {/* Bottom: Assigned Courses Table */}
+                      <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between">
                           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Courses</h3>
+                          <button
+                            onClick={handleGenerateAll}
+                            className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded font-medium transition-colors flex items-center gap-1"
+                          >
+                            <Zap className="h-3 w-3" />
+                            Generate All
+                          </button>
                         </div>
                         
                         {loadingCourses ? (

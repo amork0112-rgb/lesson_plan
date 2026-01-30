@@ -13,9 +13,10 @@ interface GenerateLessonInput {
   selectedDays: string[];
   books: Book[];
   scpType?: string | null;
+  initialProgress?: Record<string, { unit: number; day: number }>;
 }
 
-function getDaysPerUnit(book?: Book) {
+export function getDaysPerUnit(book?: Book) {
   if (!book) return 3;
   const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
   if (isTrophy) {
@@ -28,14 +29,14 @@ function getDaysPerUnit(book?: Book) {
 }
 
 export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
-  const { classId, monthPlans, planDates, selectedDays, books, scpType } = input;
+  const { classId, monthPlans, planDates, selectedDays, books, scpType, initialProgress } = input;
   if (!Array.isArray(books) || books.length === 0) return [];
   const slotsPerDay = getSlotsPerDay(selectedDays);
   let displayOrder = 1;
   let scpDay = 1;
 
   const lessons: LessonPlan[] = [];
-  const globalProgress: Record<string, { unit: number; day: number }> = {};
+  const globalProgress: Record<string, { unit: number; day: number }> = initialProgress ? { ...initialProgress } : {};
 
   const sortedPlans = [...monthPlans].sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;

@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, BookOpen, LayoutDashboard, Users } from 'lucide-react';
+import { Calendar, BookOpen, LayoutDashboard, Users, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Guide', href: '/', icon: FileText },
+  { name: 'Generator', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Classes', href: '/classes', icon: Users },
   { name: 'Books', href: '/books', icon: BookOpen },
