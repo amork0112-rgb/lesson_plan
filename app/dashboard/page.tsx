@@ -584,15 +584,28 @@ export default function Home() {
          const allocations: BookAllocation[] = [];
          
          courses.forEach((course, courseIdx) => {
+             // 🔥 Critical: Validate that the book exists in the global book list
+             const bookExists = books.find(b => b.id === course.book.id);
+             if (!bookExists) {
+                 console.warn(`[Critical Warning] Book not found in global books: ${course.book.name} (ID: ${course.book.id}). This may cause display issues.`);
+             }
+
              // Simply assign the book without quantity constraints
              // "sessions_by_month ... 전부 제거"
+             
+             // 🔥 Critical: Apply override ONLY for the first month to ensure correct start value
+             // Subsequent months will carry over automatically via bookFlow logic
+             const isFirstMonth = idx === 0;
+
              allocations.push({
                  id: Math.random().toString(),
                  class_id: cId,
                  book_id: course.book.id,
                  sessions_per_week: 2, // Legacy field, effectively ignored
                  priority: courseIdx + 1,
-                 // manual_used removed - we rely on calendar calculation
+                 total_sessions_override: isFirstMonth 
+                    ? (books.find(b => b.id === course.book.id)?.total_sessions ?? 24) 
+                    : undefined
              });
          });
          

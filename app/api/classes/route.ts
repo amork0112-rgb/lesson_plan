@@ -27,7 +27,6 @@ function parseWeekdays(input?: string | number[] | null): string[] | null {
         .map((n) => WEEKDAY_INT_MAP[n])
         .filter(Boolean);
     }
-    // If strings, return as is (assuming valid 'Mon', 'Tue' etc)
     return input as unknown as string[];
   }
 

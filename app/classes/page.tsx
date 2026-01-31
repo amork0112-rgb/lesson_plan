@@ -315,8 +315,8 @@ export default function ClassesPage() {
                                   <th className="px-4 py-3 w-48">Book</th>
                                   <th className="px-2 py-3 text-center w-16">Total</th>
                                   <th className="px-2 py-3 text-center w-16">Left</th>
-                                  {[1, 2, 3, 4, 5, 6].map(m => (
-                                    <th key={m} className="px-2 py-3 text-center w-14">Month {m}</th>
+                                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <th key={m} className="px-2 py-3 text-center w-14">M{m}</th>
                                   ))}
                                   <th className="px-4 py-3 text-right w-24">Action</th>
                                 </tr>
