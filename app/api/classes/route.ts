@@ -16,16 +16,39 @@ const WEEKDAY_INT_MAP: Record<number, string> = {
 
 function parseWeekdays(input?: string | number[] | null): string[] | null {
   if (!input) return null;
+
+  // Case 1: Already an array
   if (Array.isArray(input)) {
-    // If it's number[], map to strings
-    if (input.length > 0 && typeof input[0] === 'number') {
-      return (input as number[]).map((n) => WEEKDAY_INT_MAP[n]).filter(Boolean);
+    if (input.length === 0) return [];
+    
+    // If numbers, map to strings
+    if (typeof input[0] === 'number') {
+      return (input as number[])
+        .map((n) => WEEKDAY_INT_MAP[n])
+        .filter(Boolean);
     }
-    // If already strings, return as is
+    // If strings, return as is (assuming valid 'Mon', 'Tue' etc)
     return input as unknown as string[];
   }
-  // If string, assume it might be comma separated numbers or strings?
-  // For safety, let's assume if it comes from DB as string, it might be string representation
+
+  // Case 2: Comma-separated string (e.g. "Mon,Tue" or "mon,tue" or "1,2")
+  if (typeof input === 'string') {
+    return input.split(',').map(s => {
+      const trimmed = s.trim();
+      // If it's a number string like "1"
+      if (!isNaN(Number(trimmed))) {
+        return WEEKDAY_INT_MAP[Number(trimmed)];
+      }
+      // If it's "mon", "Mon", etc.
+      // Capitalize first letter
+      const lower = trimmed.toLowerCase();
+      const map: Record<string, string> = {
+        mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun'
+      };
+      return map[lower] || trimmed; // Fallback to original if not found
+    }).filter(Boolean);
+  }
+
   return null;
 }
 

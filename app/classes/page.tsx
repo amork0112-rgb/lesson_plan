@@ -6,7 +6,7 @@ import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react
 import { Weekday } from '@/types';
 
 // Types
-type ClassView = {
+export type ClassView = {
   class_id: string;
   class_name: string;
   campus?: string | null;
