@@ -401,12 +401,21 @@ export default function Home() {
       setSelectedDays(selectedClass.days || []);
       setStartTime(selectedClass.start_time);
       setEndTime(selectedClass.end_time);
+      // Reset plans and generation state when class changes
+      setMonthPlans([]);
+      setIsGenerated(false);
+      setGeneratedPlan([]);
     } else {
         setClassName('');
     }
   };
 
   const handleDayToggle = (day: Weekday) => {
+    // Reset plans when schedule structure changes
+    setMonthPlans([]);
+    setIsGenerated(false);
+    setGeneratedPlan([]);
+    
     if (selectedDays.includes(day)) {
       setSelectedDays(selectedDays.filter(d => d !== day));
     } else {
@@ -756,7 +765,7 @@ export default function Home() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-nowrap gap-2">
                   {ALL_WEEKDAYS.map(day => (
                     <button
                       key={day}
