@@ -495,6 +495,10 @@ export default function Home() {
       
       console.log('[Debug] Generated plans from DB:', newPlans);
       setMonthPlans(newPlans);
+      // Show calendar for the first month by default
+      if (newPlans.length > 0) {
+        setExpandedMonthId(newPlans[0].id);
+      }
       
     } catch (e) {
       console.error('Error loading class configuration:', e);
@@ -508,7 +512,9 @@ export default function Home() {
       console.log('[Debug] Selected class:', selectedClass);
       setClassId(cid);
       setClassName(selectedClass.name);
-      setYear(selectedClass.year);
+      // Ensure year is a number
+      const cYear = typeof selectedClass.year === 'number' ? selectedClass.year : parseInt(selectedClass.year as any) || 2026;
+      setYear(cYear);
       
       setStartTime(selectedClass.start_time);
       setEndTime(selectedClass.end_time);
@@ -519,7 +525,7 @@ export default function Home() {
       setGeneratedPlan([]);
       
       // Load assigned courses immediately
-      loadClassConfiguration(cid, selectedClass.year, startMonth, duration);
+      loadClassConfiguration(cid, cYear, startMonth, duration);
       
     } else {
         setClassName('');
@@ -998,22 +1004,10 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       {(() => {
-                        // Calculate Academic Month Index (March = 1, ..., Feb = 12)
-                        const academicMonthIndex = ((plan.month - 2 + 12) % 12) + 1;
-                        
-                        const totalSessions = assignedCourses.reduce(
-                          (sum, course) => {
-                            // JSON keys are strings ("1"), but we use number for index. Check both or standard access.
-                            // The interface defines Record<number, number> but JSON might be strings.
-                            // Safe access:
-                            return sum + (course.sessions_by_month?.[academicMonthIndex] ?? 0);
-                          },
-                          0
-                        );
-
+                        const sessionsPerMonth = selectedDays.length * 4;
                         return (
                           <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
-                            {totalSessions} Sessions
+                            {sessionsPerMonth} Sessions
                           </span>
                         );
                       })()}
