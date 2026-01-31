@@ -18,36 +18,33 @@ export async function GET(req: Request) {
 
   // Build queries
   let holidaysQuery = supabase.from('holidays').select('*');
-  let eventsQuery = supabase.from('events').select('*');
+  let specialDatesQuery = supabase.from('special_dates').select('*');
 
   if (start) {
     holidaysQuery = holidaysQuery.gte('date', start);
-    // For events, we want any event that overlaps or touches the range
-    // Event ends after start date
-    eventsQuery = eventsQuery.gte('end_date', start);
+    specialDatesQuery = specialDatesQuery.gte('date', start);
   }
 
   if (end) {
     holidaysQuery = holidaysQuery.lte('date', end);
-    // Event starts before end date
-    eventsQuery = eventsQuery.lte('start_date', end);
+    specialDatesQuery = specialDatesQuery.lte('date', end);
   }
 
   // Execute in parallel
-  const [holidaysRes, eventsRes] = await Promise.all([
+  const [holidaysRes, specialDatesRes] = await Promise.all([
     holidaysQuery,
-    eventsQuery
+    specialDatesQuery
   ]);
 
   if (holidaysRes.error) {
     return NextResponse.json({ error: holidaysRes.error.message }, { status: 500 });
   }
-  if (eventsRes.error) {
-    return NextResponse.json({ error: eventsRes.error.message }, { status: 500 });
+  if (specialDatesRes.error) {
+    return NextResponse.json({ error: specialDatesRes.error.message }, { status: 500 });
   }
 
   return NextResponse.json({
     holidays: holidaysRes.data || [],
-    special_dates: eventsRes.data || []
+    special_dates: specialDatesRes.data || []
   });
 }

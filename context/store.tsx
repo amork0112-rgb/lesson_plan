@@ -90,17 +90,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { data: allocationsData } = await supabase.from('class_book_allocations').select('*');
       if (allocationsData) setAllocations(allocationsData as any);
 
-      const { data: eventsData } = await supabase.from('events').select('*');
-      if (eventsData) {
+      const { data: specialDatesData } = await supabase.from('special_dates').select('*');
+      if (specialDatesData) {
         const map: Record<string, SpecialDate> = {};
-        eventsData.forEach((e: any) => {
-            // Assume single day events for now or take start_date
-            if (e.start_date) {
-                map[e.start_date] = { 
-                    type: e.type as SpecialDateType, 
-                    name: e.name 
-                };
-            }
+        specialDatesData.forEach((d: any) => {
+            map[d.date] = { 
+                type: d.type as SpecialDateType, 
+                name: d.name 
+            };
         });
         setSpecialDates(map);
       }
@@ -220,13 +217,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     if (data) {
         // Delete existing event on this date first (simple approximation)
-        await supabase.from('events').delete().eq('start_date', date);
+        await supabase.from('special_dates').delete().eq('date', date);
         
-        const { error } = await supabase.from('events').insert({
+        const { error } = await supabase.from('special_dates').insert({
             name: data.name,
             type: data.type,
-            start_date: date,
-            end_date: date // Single day
+            date: date
         });
         
         if (!error) {
@@ -234,7 +230,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
     } else {
         // Delete
-        const { error } = await supabase.from('events').delete().eq('start_date', date);
+        const { error } = await supabase.from('special_dates').delete().eq('date', date);
         if (!error) {
             setSpecialDates(prev => {
                 const next = { ...prev };

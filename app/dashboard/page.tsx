@@ -145,8 +145,33 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
 export default function Home() {
   const { books, classes, allocations: globalAllocations, setAllocations, loading } = useData();
   const supabase = getSupabase();
-  const [holidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
+  const [holidays, setHolidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
+  
+  // -- Calendar Data Loading --
+  useEffect(() => {
+    async function loadCalendarData() {
+      if (!supabase) return;
+      
+      const { data: h } = await supabase
+        .from('holidays')
+        .select('*');
+
+      const { data: s } = await supabase
+        .from('special_dates')
+        .select('*');
+
+      setHolidays(h ? h as any : []);
+
+      const map: Record<string, SpecialDate> = {};
+      (s ?? []).forEach((d: any) => {
+        map[d.date] = { type: d.type, name: d.name };
+      });
+      setSpecialDates(map);
+    }
+
+    loadCalendarData();
+  }, [supabase]);
   
   // -- Global Settings --
   const [className, setClassName] = useState('');
