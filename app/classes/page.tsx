@@ -328,6 +328,7 @@ export default function ClassesPage() {
                               <thead>
                                 <tr className="bg-slate-50 border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
                                   <th className="px-4 py-3 w-48">Book</th>
+                                  <th className="px-2 py-3 text-center w-24">Section</th>
                                   <th className="px-2 py-3 text-center w-16">Total</th>
                                   <th className="px-2 py-3 text-center w-16">Left</th>
                                   {Array.from({ length: 6 }, (_, i) => i + 1).map(m => (
@@ -346,8 +347,16 @@ export default function ClassesPage() {
                                     <tr key={course.id} className="hover:bg-indigo-50/10">
                                       <td className="px-4 py-3">
                                         <div className="text-sm font-medium text-slate-900">{course.book.name}</div>
-                                        <div className="text-xs text-slate-400">{course.section}</div>
+                                        <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                                          {course.book.level && <span>{course.book.level}</span>}
+                                          {course.book.category && (
+                                            <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium text-[10px]">
+                                              {course.book.category}
+                                            </span>
+                                          )}
+                                        </div>
                                       </td>
+                                      <td className="px-2 py-3 text-center text-sm text-slate-600">{course.section}</td>
                                       <td className="px-2 py-3 text-center text-sm text-slate-600">{course.total_sessions}</td>
                                       <td className={`px-2 py-3 text-center text-sm font-medium ${remaining < 0 ? 'text-red-600' : 'text-slate-600'}`}>
                                         {remaining}

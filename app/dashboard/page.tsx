@@ -215,11 +215,7 @@ export default function Home() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<LessonPlan[]>([]);
   const [pageTitle, setPageTitle] = useState('FRAGE Lesson Plan');
-  const [draggingLessonId, setDraggingLessonId] = useState<string | null>(null);
-  const [addingDateId, setAddingDateId] = useState<string | null>(null);
-  const [addingBookId, setAddingBookId] = useState<string>('');
-  const [addingUnit, setAddingUnit] = useState<number>(1);
-  const [addingDay, setAddingDay] = useState<number>(1);
+
 
   // -- Computed Usage & Flow --
   // We calculate the flow of sessions: Start -> Used -> Remaining -> Next Start
@@ -299,7 +295,8 @@ export default function Home() {
               combined.push({
                   id: c.book.id,
                   name: c.book.name,
-                  category: 'General', // Default
+                  category: c.book.category || 'General',
+                  level: c.book.level,
                   total_units: 0,
                   unit_type: 'unit',
                   days_per_unit: 3, // Default assumption
@@ -564,119 +561,58 @@ export default function Home() {
     }
   };
 
-  const handleCopyPrevious = (currentMonthId: string) => {
-    const currentIndex = monthPlans.findIndex(m => m.id === currentMonthId);
-    if (currentIndex <= 0) return;
-    
-    const prevPlan = monthPlans[currentIndex - 1];
-    
-    setMonthPlans(monthPlans.map(plan => {
-      if (plan.id !== currentMonthId) return plan;
-      
-      return {
-        ...plan,
-        allocations: prevPlan.allocations.map(a => ({
-          ...a,
-          id: Math.random().toString(),
-          total_sessions_override: undefined,
-          manual_used: undefined
-        }))
-      };
-    }));
-  };
-
-  const toggleDateStatus = (dateStr: string) => {
+  const toggleDateStatus = async (dateStr: string) => {
      const current = specialDates[dateStr];
      let nextData: SpecialDate | null = null;
      
      if (!current) {
-        nextData = { type: 'no_class', name: 'No Class' }; // Default to No Class
+        nextData = { type: 'no_class', name: 'No Class' }; 
      } else if (current.type === 'no_class') {
         nextData = { type: 'makeup', name: 'Makeup' };
      } else if (current.type === 'makeup') {
         nextData = { type: 'school_event', name: 'PBL' };
      } else if (current.type === 'school_event') {
-        // Cycle through school event types
         const eventOrder = ['PBL', '정기평가', 'PBL (Tech)', '100Days', 'Vocaton', 'PBL (Econ)'];
         const currentIndex = eventOrder.indexOf(current.name);
         
         if (currentIndex !== -1 && currentIndex < eventOrder.length - 1) {
             nextData = { type: 'school_event', name: eventOrder[currentIndex + 1] };
         } else {
-            nextData = null; // End of cycle
+            nextData = null; 
         }
      } else {
         nextData = null;
      }
      
     if (nextData) {
-      setSpecialDates({ ...specialDates, [dateStr]: nextData });
+      setSpecialDates(prev => ({ ...prev, [dateStr]: nextData! }));
     } else {
-      const rest = { ...specialDates };
-      delete rest[dateStr];
-      setSpecialDates(rest);
+      setSpecialDates(prev => {
+        const rest = { ...prev };
+        delete rest[dateStr];
+        return rest;
+      });
     }
-  };
 
-  const updateAllocation = (monthId: string, allocId: string, field: keyof BookAllocation, value: BookAllocation[keyof BookAllocation]) => {
-    setMonthPlans(monthPlans.map(plan => {
-      if (plan.id !== monthId) return plan;
-      return {
-        ...plan,
-        allocations: plan.allocations.map(a => {
-          if (a.id !== allocId) return a;
-          return { ...a, [field]: value };
-        })
-      };
-    }));
-  };
-
-  // -- Modals --
-  const [isAddBookModalOpen, setIsAddBookModalOpen] = useState(false);
-  const [targetMonthId, setTargetMonthId] = useState<string | null>(null);
-  const [newAllocation, setNewAllocation] = useState<{
-    bookId: string;
-    sessionsPerWeek: number;
-    totalOverride?: number;
-  }>({ bookId: '', sessionsPerWeek: 1 });
-
-  const openAddBookModal = (monthId: string) => {
-    setTargetMonthId(monthId);
-    const defaultBookId = filteredBooks.length > 0 ? filteredBooks[0].id : (books.length > 0 ? books[0].id : '');
-    setNewAllocation({ bookId: defaultBookId, sessionsPerWeek: selectedDays.length > 0 ? selectedDays.length : 2 });
-    setInlineAddMonthId(monthId);
-    setIsAddBookModalOpen(false);
-  };
-
-  const handleSaveNewAllocation = () => {
-    if (!targetMonthId || !newAllocation.bookId) return;
-
-    setMonthPlans(monthPlans.map(plan => {
-      if (plan.id !== targetMonthId) return plan;
-      return {
-        ...plan,
-        allocations: [
-          ...plan.allocations,
-          { 
-            id: Math.random().toString(), 
-            class_id: classId, 
-            book_id: newAllocation.bookId, 
-            sessions_per_week: newAllocation.sessionsPerWeek, 
-            priority: plan.allocations.length + 1,
-            total_sessions_override: newAllocation.totalOverride
-          }
-        ]
-      };
-    }));
-    
-    setIsAddBookModalOpen(false);
-    setTargetMonthId(null);
-    setInlineAddMonthId(null);
-  };
-
-  const cancelInlineAdd = () => {
-    setInlineAddMonthId(null);
-    setTargetMonthId(null);
+    try {
+        if (nextData) {
+            await fetch('/api/calendar/special-dates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: dateStr,
+                    type: nextData.type,
+                    name: nextData.name
+                })
+            });
+        } else {
+            await fetch(`/api/calendar/special-dates/${dateStr}`, {
+                method: 'DELETE'
+            });
+        }
+    } catch (error) {
+        console.error('Failed to save special date:', error);
+    }
   };
 
   const getPlansForMonth = (monthId: string): LessonPlan[] => {
@@ -695,8 +631,6 @@ export default function Home() {
       return y === targetPlan.year && (m - 1) === targetPlan.month;
     });
   };
-
-  // 초기 상태가 []이므로 별도의 reset 효과는 제거
 
   // Removed specialDates reset effect to avoid setState in effect
 
@@ -729,16 +663,6 @@ export default function Home() {
     }
   };
   
-  const removeAllocation = (monthId: string, allocId: string) => {
-    setMonthPlans(monthPlans.map(plan => {
-      if (plan.id !== monthId) return plan;
-      return {
-        ...plan,
-        allocations: plan.allocations.filter(a => a.id !== allocId)
-      };
-    }));
-  };
-
   const moveAllocation = (monthId: string, allocId: string, direction: 'up' | 'down') => {
     setMonthPlans(monthPlans.map(plan => {
       if (plan.id !== monthId) return plan;
@@ -771,8 +695,6 @@ export default function Home() {
     }));
   };
 
-  const [inlineAddMonthId, setInlineAddMonthId] = useState<string | null>(null);
-
   // Removed auto-download effect to avoid setState in effect
 
   const downloadPDF = () => {
@@ -790,7 +712,7 @@ export default function Home() {
 
     const totalAllocations = monthPlans.reduce((sum, p) => sum + p.allocations.length, 0);
     if (totalAllocations === 0) {
-        alert('배정된 교재가 없습니다. "Add Book" 버튼을 눌러 교재를 추가해주세요.');
+        alert('배정된 교재가 없습니다. Class Management 페이지에서 교재를 먼저 배정해주세요.');
         return;
     }
 
@@ -1086,31 +1008,6 @@ export default function Home() {
                         <CalendarIcon className="h-3 w-3" />
                         {expandedMonthId === plan.id ? 'Hide Calendar' : 'Manage Schedule'}
                       </button>
-                     <button 
-                        onClick={() => openAddBookModal(plan.id)}
-                        disabled={!classId}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors ${
-                            !classId 
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        }`}
-                      >
-                        <Plus className="h-3 w-3" /> Add Book
-                      </button>
-                      {/* Copy previous button if empty and not first */}
-                      {index > 0 && plan.allocations.length === 0 && (
-                          <button
-                            onClick={() => handleCopyPrevious(plan.id)}
-                            disabled={!classId}
-                            className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors ${
-                                !classId
-                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                          >
-                            <Copy className="h-3 w-3" /> Copy Previous
-                          </button>
-                      )}
                       <button 
                         onClick={() => saveMonthlyPlan(plan.id)}
                         className="text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded-full hover:bg-green-700 transition-colors"
@@ -1201,23 +1098,19 @@ export default function Home() {
                                             if (special?.type === 'no_class') {
                                                 statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
                                                 title = 'NO CLASS';
-                                                label = 'X';
+                                                label = 'No Class';
                                             } else if (special?.type === 'makeup') {
                                                 statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
                                                 title = 'MAKEUP';
-                                                label = '+';
+                                                label = 'Makeup';
                                             } else if (special?.type === 'school_event') {
                                                 statusClass = 'bg-blue-100 border-blue-200 text-blue-700 font-bold';
                                                 title = special.name;
-                                                if (special.name.includes('PBL')) label = 'PBL';
-                                                else if (special.name.includes('정기')) label = 'TEST';
-                                                else if (special.name.includes('100')) label = '100';
-                                                else if (special.name.includes('Voc')) label = 'VOC';
-                                                else label = special.name.substring(0, 3);
+                                                label = special.name;
                                             } else if (isRelevantHoliday) {
                                                 statusClass = 'bg-red-50 border-red-200 text-red-600 font-bold';
                                                 title = globalHoliday.name;
-                                                label = 'H';
+                                                label = globalHoliday.name;
                                             }
                                             
                                             const today = new Date();
@@ -1228,12 +1121,11 @@ export default function Home() {
                                                 <button
                                                     key={dateStr}
                                                     onClick={() => toggleDateStatus(dateStr)}
-                                                    className={`h-10 rounded-lg border flex flex-col items-center justify-center text-sm transition-all hover:shadow-md ${statusClass}`}
+                                                    className={`h-10 rounded-lg border flex flex-col items-center justify-center text-sm transition-all hover:shadow-md ${statusClass} px-0.5`}
                                                     title={title}
                                                 >
-                                                    {d}
-                                                    {isNextMonth && <span className="text-[9px] leading-none opacity-75">Next</span>}
-                                                    {label && <span className="text-[10px] leading-none">{label}</span>}
+                                                    <span className="text-xs leading-none mb-0.5">{d}</span>
+                                                    {label && <span className="text-[9px] leading-tight text-center break-words w-full truncate">{label}</span>}
                                                 </button>
                                             );
                                         }
@@ -1283,16 +1175,16 @@ export default function Home() {
                                             );
                                         } else {
                                             // Non-Class Day OR Not Current Month = Gray Box (Disabled)
-                                            // If it's a holiday on a non-class day, maybe show it?
-                                            // For simplicity/clarity: Gray out everything that isn't a class day.
-                                            let extraClass = '';
+                                            let bgClass = 'bg-gray-50 text-gray-300';
                                             if (isCurrentMonth && !isClassDay) {
-                                                extraClass = 'bg-gray-100 text-gray-300'; // Darker gray for non-class days in current month
-                                            } else {
-                                                extraClass = 'bg-gray-50/50 text-gray-300'; // Lighter for other months
+                                                bgClass = 'bg-gray-100 text-gray-300';
                                             }
                                             
-                                            content = <div key={`empty-${dateStr}`} className={`h-10 flex items-center justify-center text-xs rounded-lg ${extraClass}`}>{d}</div>;
+                                            content = (
+                                                <div key={dateStr} className={`h-10 rounded-lg border border-transparent flex flex-col items-center justify-center text-sm ${bgClass}`}>
+                                                    {d}
+                                                </div>
+                                            );
                                         }
                                     }
                                     
@@ -1306,7 +1198,7 @@ export default function Home() {
                         <div className="mt-4 flex gap-4 text-xs text-gray-500 justify-center">
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div> Class Day</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div> No Class</div>
-                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div> Makeup (Extra Class)</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div> Makeup</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div> School Event</div>
                         </div>
                     </div>
@@ -1317,10 +1209,8 @@ export default function Home() {
                     <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
                       <tr>
                         <th className="px-6 py-3 w-1/3">Book</th>
-                        <th className="px-4 py-3 text-center">Section</th>
-                        <th className="px-4 py-3 text-center">Weekly</th>
+                        <th className="px-4 py-3 text-center">Used</th>
                         <th className="px-4 py-3 text-center">Order</th>
-                        <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1330,82 +1220,30 @@ export default function Home() {
                                       assignedCourses.find(c => c.book.id === alloc.book_id)?.book;
                          
                          const assignedCourse = assignedCourses.find(c => c.book.id === alloc.book_id);
-                         const sectionName = assignedCourse?.section || '-';
+                         
+                         // Calculate Used Count (Sessions allocated for this month)
+                         const academicMonthIndex = ((plan.month - 2 + 12) % 12) + 1;
+                         const usedCount = assignedCourse?.sessions_by_month?.[academicMonthIndex] || 0;
 
                          return (
                           <tr key={alloc.id} className="group hover:bg-gray-50">
                             <td className="px-6 py-3">
-                              {book && (
-                                <span className="inline-block mb-1.5 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
-                                  {(book as any).category ? (book as any).category.replace('c_', '') : 'General'}
-                                </span>
-                              )}
-                              <select 
-                                value={alloc.book_id}
-                                onChange={(e) => updateAllocation(plan.id, alloc.id, 'book_id', e.target.value)}
-                                disabled={!classId}
-                                className={`block w-full rounded border-gray-200 text-sm p-1.5 focus:ring-indigo-500 focus:border-indigo-500 ${!classId ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
-                              >
-                                {!classId && <option value="">Select a Class First</option>}
-                                {(() => {
-                                  if (!classId) return null;
-                                  
-                                  // Use filteredBooks to strictly respect class level filtering
-                                  let displayBooks = filteredBooks;
-                                  
-                                  // CRITICAL FIX: Ensure the currently assigned book is ALWAYS in the list, 
-                                  // even if it was filtered out by level mismatch OR missing from global books.
-                                  const currentBook = books.find(b => b.id === alloc.book_id) || 
-                                                      assignedCourses.find(c => c.book.id === alloc.book_id)?.book;
-
-                                  if (currentBook && !displayBooks.find(b => b.id === currentBook.id)) {
-                                      displayBooks = [currentBook as Book, ...displayBooks];
-                                  }
-
-                                  const groupedBooks: Record<string, Book[]> = {};
-                                  displayBooks.forEach(b => {
-                                    const level = b.level || 'Others';
-                                    if (!groupedBooks[level]) groupedBooks[level] = [];
-                                    groupedBooks[level].push(b);
-                                  });
-                                  
-                                  // Sort levels: Current class level first, then others alphabetical
-                                  const sortedLevels = Object.keys(groupedBooks).sort((a, b) => {
-                                      // Normalize for comparison
-                                      const normA = a.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                      const normB = b.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                      const normClass = className.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                      
-                                      const aMatch = (normClass && normA) ? (normA.includes(normClass) || normClass.includes(normA)) : false;
-                                      const bMatch = (normClass && normB) ? (normB.includes(normClass) || normClass.includes(normB)) : false;
-                                      
-                                      if (aMatch && !bMatch) return -1;
-                                      if (!aMatch && bMatch) return 1;
-                                      return a.localeCompare(b);
-                                  });
-                                  
-                                  return sortedLevels.map(level => (
-                                    <optgroup key={level} label={level}>
-                                      {groupedBooks[level].map(b => (
-                                        <option key={b.id} value={b.id}>
-                                          {b.name} ({b.category ? b.category.replace('c_', '').toUpperCase() : 'General'})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  ));
-                                })()}
-                              </select>
+                              <div className="flex flex-col">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {book?.name || 'Unknown Book'}
+                                </div>
+                                <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                                  {book?.level && <span>{book.level}</span>}
+                                  {book?.category && (
+                                    <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium text-[10px]">
+                                      {book.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </td>
-                            <td className="px-4 py-3 text-center text-sm text-gray-600">
-                                {sectionName}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <input 
-                                type="number" min="1"
-                                value={alloc.sessions_per_week}
-                                onChange={(e) => updateAllocation(plan.id, alloc.id, 'sessions_per_week', parseInt(e.target.value))}
-                                className="w-16 text-center rounded border-gray-200 p-1.5 text-sm"
-                              />
+                            <td className="px-4 py-3 text-center text-sm font-medium text-gray-900">
+                                {usedCount}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-col items-center gap-1">
@@ -1425,86 +1263,9 @@ export default function Home() {
                                 </button>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right">
-                              <button 
-                                onClick={() => removeAllocation(plan.id, alloc.id)}
-                                className="text-gray-300 hover:text-red-500 transition-colors"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
                           </tr>
                          );
                       })}
-                      {inlineAddMonthId === plan.id && (
-                        <tr className="bg-indigo-50/30">
-                          <td className="px-6 py-3">
-                            {(() => {
-                                const selectedBook = books.find(b => b.id === newAllocation.bookId);
-                                return selectedBook ? (
-                                    <span className="inline-block mb-1.5 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
-                                    {selectedBook.category ? selectedBook.category.replace('c_', '') : 'General'}
-                                    </span>
-                                ) : null;
-                            })()}
-                            <select 
-                              value={newAllocation.bookId}
-                              onChange={(e) => setNewAllocation({...newAllocation, bookId: e.target.value})}
-                              className="block w-full rounded border-gray-200 text-sm p-1.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                            >
-                              {(() => {
-                                const displayBooks = filteredBooks;
-                                const groupedBooks: Record<string, Book[]> = {};
-                                displayBooks.forEach(b => {
-                                  const level = b.level || 'Others';
-                                  if (!groupedBooks[level]) groupedBooks[level] = [];
-                                  groupedBooks[level].push(b);
-                                });
-                                const sortedLevels = Object.keys(groupedBooks).sort((a, b) => a.localeCompare(b));
-                                return sortedLevels.map(level => (
-                                  <optgroup key={level} label={level}>
-                                    {groupedBooks[level].map(b => (
-                                      <option key={b.id} value={b.id}>
-                                        {b.name} ({b.category ? b.category.replace('c_', '').toUpperCase() : 'General'})
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                ));
-                              })()}
-                            </select>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {/* Empty Section Cell */}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <input 
-                              type="number" min="1"
-                              value={newAllocation.sessionsPerWeek}
-                              onChange={(e) => setNewAllocation({...newAllocation, sessionsPerWeek: parseInt(e.target.value) || 1})}
-                              className="w-16 text-center rounded border-gray-200 p-1.5 text-sm"
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs text-gray-400">next</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="flex justify-end gap-2">
-                              <button 
-                                onClick={cancelInlineAdd}
-                                className="px-2 py-1 text-xs rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
-                              >
-                                Cancel
-                              </button>
-                              <button 
-                                onClick={handleSaveNewAllocation}
-                                className="px-2 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1705,21 +1466,9 @@ export default function Home() {
                                       <span className="text-2xl font-semibold tracking-tight text-slate-900">{monthNum}/{dayNum}</span>
                                       <span className="text-xs font-medium uppercase text-slate-500">{weekday}</span>
                                     </div>
-                                    <button
-                                      onClick={() => {
-                                        setAddingDateId(dStr);
-                                        setAddingBookId(filteredBooks[0]?.id || '');
-                                        setAddingUnit(1);
-                                        setAddingDay(1);
-                                      }}
-                                      className="text-xs px-2 py-1 rounded bg-slate-900 text-white"
-                                    >
-                                      Add Lesson
-                                    </button>
                                   </div>
                                   <div
                                     className="p-2 space-y-1"
-                                    onDragOver={(e) => e.preventDefault()}
                                   >
                                     {list.map(item => {
                                       if (item.book_id === 'no_class') {
@@ -1735,21 +1484,9 @@ export default function Home() {
                                       return (
                                         <div
                                           key={item.id}
-                                          draggable
-                                          onDragStart={(e) => {
-                                            setDraggingLessonId(item.id);
-                                            e.dataTransfer.setData('text/plain', item.id);
-                                            e.dataTransfer.effectAllowed = 'move';
-                                          }}
-                                          onDrop={(e) => {
-                                            const srcId = e.dataTransfer.getData('text/plain') || draggingLessonId || '';
-                                            onDropCard(srcId, item.id);
-                                            setDraggingLessonId(null);
-                                          }}
                                           className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between"
                                         >
                                           <div className="flex items-center gap-2">
-                                            <GripVertical className="h-3 w-3 text-slate-400 cursor-move" />
                                             <div className="text-sm font-semibold text-slate-900">{item.book_name}</div>
                                           </div>
                                           <div className="flex items-center gap-2">
@@ -1794,81 +1531,10 @@ export default function Home() {
                                                 />
                                               </>
                                             )}
-                                            <button
-                                              onClick={() => {
-                                                setGeneratedPlan(prev => prev.filter(l => l.id !== item.id));
-                                              }}
-                                              className="text-slate-500 hover:text-red-600"
-                                            >
-                                              <Trash2 className="h-3 w-3" />
-                                            </button>
                                           </div>
                                         </div>
                                       );
                                     })}
-                                    {addingDateId === dStr && (
-                                      <div className="mt-2 p-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50">
-                                        <div className="flex items-center gap-2">
-                                          <select
-                                            value={addingBookId}
-                                            onChange={(e) => setAddingBookId(e.target.value)}
-                                            className="px-2 py-1 border rounded text-xs"
-                                          >
-                                            {filteredBooks.map(b => (
-                                              <option key={b.id} value={b.id}>{b.name}</option>
-                                            ))}
-                                          </select>
-                                          <span className="text-sm text-slate-600">Unit</span>
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            value={addingUnit}
-                                            onChange={(e) => setAddingUnit(parseInt(e.target.value) || 1)}
-                                            className="w-14 px-2 py-1 border rounded text-xs"
-                                          />
-                                          <span className="text-sm text-slate-600">Day</span>
-                                          <input
-                                            type="number"
-                                            min={1}
-                                            value={addingDay}
-                                            onChange={(e) => setAddingDay(parseInt(e.target.value) || 1)}
-                                            className="w-14 px-2 py-1 border rounded text-xs"
-                                          />
-                                          <button
-                                            onClick={() => {
-                                              if (!addingBookId) return;
-                                              const book = books.find(b => b.id === addingBookId);
-                                              if (!book) return;
-                                              const nextPeriod = (byDate[dStr] || []).length + 1;
-                                              const nextOrder = (generatedPlan.reduce((max, l) => Math.max(max, l.display_order || 0), 0)) + 1;
-                                              const nid = `${dStr}_manual_${addingBookId}_${Date.now()}`;
-                                              const nl: LessonPlan = {
-                                                id: nid,
-                                                class_id: classId,
-                                                date: dStr,
-                                                period: nextPeriod,
-                                                display_order: nextOrder,
-                                                is_makeup: false,
-                                                book_id: addingBookId,
-                                                book_name: book.name,
-                                                content: `Unit ${addingUnit} Day ${addingDay}`
-                                              };
-                                              setGeneratedPlan(prev => [...prev, nl]);
-                                              setAddingDateId(null);
-                                            }}
-                                            className="px-2 py-1 rounded bg-indigo-600 text-white text-xs"
-                                          >
-                                            Add
-                                          </button>
-                                          <button
-                                            onClick={() => setAddingDateId(null)}
-                                            className="px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 text-xs"
-                                          >
-                                            Cancel
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               );
@@ -1891,112 +1557,6 @@ export default function Home() {
           />
         </div>
         </>
-      )}
-      {/* Add Book Modal */}
-      {isAddBookModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-800 text-lg">Add Book</h3>
-              <button 
-                onClick={() => setIsAddBookModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XCircle className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Book</label>
-                <select 
-                  value={newAllocation.bookId}
-                  onChange={(e) => setNewAllocation({...newAllocation, bookId: e.target.value})}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                >
-                    {(() => {
-                        const groupedBooks: Record<string, Book[]> = {};
-                        filteredBooks.forEach(b => {
-                        const level = b.level || 'Others';
-                        if (!groupedBooks[level]) groupedBooks[level] = [];
-                        groupedBooks[level].push(b);
-                        });
-                        
-                        const sortedLevels = Object.keys(groupedBooks).sort((a, b) => {
-                            const normA = a.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const normB = b.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            const normClass = className.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            
-                            const aMatch = (normClass && normA) ? (normA.includes(normClass) || normClass.includes(normA)) : false;
-                            const bMatch = (normClass && normB) ? (normB.includes(normClass) || normClass.includes(normB)) : false;
-                            
-                            if (aMatch && !bMatch) return -1;
-                            if (!aMatch && bMatch) return 1;
-                            return a.localeCompare(b);
-                        });
-                        
-                        return sortedLevels.map(level => (
-                        <optgroup key={level} label={level}>
-                            {groupedBooks[level].map(b => (
-                            <option key={b.id} value={b.id}>
-                                {b.name} ({b.category ? b.category.replace('c_', '').toUpperCase() : 'General'})
-                            </option>
-                            ))}
-                        </optgroup>
-                        ));
-                    })()}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Weekly Sessions</label>
-                <div className="flex items-center gap-2">
-                    <input 
-                        type="number" 
-                        min="1" 
-                        max="7"
-                        value={newAllocation.sessionsPerWeek}
-                        onChange={(e) => setNewAllocation({...newAllocation, sessionsPerWeek: parseInt(e.target.value) || 1})}
-                        className="block w-24 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-500">times per week</span>
-                </div>
-              </div>
-
-              <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Total Sessions (Optional Override)
-                 </label>
-                 <input 
-                    type="number" 
-                    min="1"
-                    placeholder="Auto-calculate from book"
-                    value={newAllocation.totalOverride || ''}
-                    onChange={(e) => setNewAllocation({...newAllocation, totalOverride: e.target.value ? parseInt(e.target.value) : undefined})}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                 />
-                 <p className="text-xs text-gray-500 mt-1">Leave empty to use book default or carry over from previous months.</p>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
-              <button 
-                onClick={() => setIsAddBookModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleSaveNewAllocation}
-                disabled={!newAllocation.bookId}
-                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Book
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
