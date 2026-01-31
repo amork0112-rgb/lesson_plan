@@ -251,34 +251,10 @@ export default function Home() {
         }
     }
     
-    // If no saved data, init new
-    // Check if current state matches requirement (optimization)
-    // We can't easily check monthPlans state here without adding it to deps, which causes loop.
-    // So we just create new plans if not saved.
-    // If monthPlans is already populated, this effect running on init might overwrite it?
-    // But this effect is for initialization based on config changes.
-    
-    const newPlans: MonthPlan[] = [];
-    
-    Array.from({ length: duration }).forEach((_, idx) => {
-       // Calculate year and month dynamically
-       // If startMonth is March (2), year 2026
-       // idx=0 -> m=2, y=2026
-       // idx=10 (Jan) -> m=0, y=2027
-       const totalMonths = startMonth + idx;
-       const m = totalMonths % 12;
-       const y = year + Math.floor(totalMonths / 12);
-       
-       newPlans.push({
-         id: `m_${y}_${m}`,
-         year: y,
-         month: m,
-         allocations: [] 
-       });
-    });
-    
-    setTimeout(() => setMonthPlans(newPlans), 0);
-  }, [classId, year, startMonth, duration, isConfigLoaded]); // Removed monthPlans dependency to prevent infinite loop
+    // If no saved data, do not overwrite with empty plans.
+    // Let loadClassConfiguration handle the DB fetch and state update.
+    // The "Init new" logic here was causing race conditions where empty plans overwrote DB plans.
+  }, [classId, year, startMonth, duration, isConfigLoaded]);
 
   // Sync Allocations to Global Context
   useEffect(() => {
@@ -432,13 +408,9 @@ export default function Home() {
       plan.allocations.forEach(alloc => {
         const bookId = alloc.book_id;
         const book = books.find(b => b.id === bookId);
-        // Fallback for total sessions if missing in data
+        // Default to book's total_sessions. If book is missing, it will be 0.
+        // User must ensure all books are registered in the 'books' table.
         let defaultTotal = book?.total_sessions || 0;
-        if (defaultTotal === 0 && book?.total_units) {
-            // Estimate based on unit type
-            const multiplier = book.unit_type === 'day' ? 1 : 2;
-            defaultTotal = book.total_units * multiplier;
-        }
         
         // 1. Determine Start (Total available for this month)
         let start = 0;
@@ -492,7 +464,7 @@ export default function Home() {
     });
     
     return stats;
-  }, [monthPlans, planDates, selectedDays, holidays, classId, books, specialDates]);
+  }, [monthPlans, planDates, selectedDays, holidays, classId, books, specialDates, assignedCourses]);
 
   // -- Handlers --
 
@@ -500,10 +472,17 @@ export default function Home() {
     cId: string, 
     cYear: number, 
     cStartMonth: number, 
-    cDuration: number
+    cDuration: number,
+    clearCache: boolean = false
   ) => {
     try {
       console.log(`[Debug] Loading configuration for class ${cId}`);
+
+      if (clearCache) {
+        const key = `monthPlans_${cId}_${cYear}_${cStartMonth}_${cDuration}`;
+        localStorage.removeItem(key);
+        console.log(`[Debug] Cleared cache for key: ${key}`);
+      }
 
       // 1. Load Class Config (Weekdays) - Critical for correct session calculation
       const configRes = await fetch(`/api/classes/${cId}/config`);
@@ -1066,6 +1045,11 @@ export default function Home() {
                       setYear(y);
                       setIsGenerated(false);
                       setGeneratedPlan([]);
+                      if (classId) {
+                          setMonthPlans([]);
+                          setIsConfigLoaded(false);
+                          loadClassConfiguration(classId, y, startMonth, duration, true);
+                      }
                     }}
                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50 appearance-none"
                   >
@@ -1089,6 +1073,11 @@ export default function Home() {
                     setStartMonth(m);
                     setIsGenerated(false);
                     setGeneratedPlan([]);
+                    if (classId) {
+                        setMonthPlans([]);
+                        setIsConfigLoaded(false);
+                        loadClassConfiguration(classId, year, m, duration, true);
+                    }
                   }}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
@@ -1102,7 +1091,17 @@ export default function Home() {
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Duration</label>
                 <select 
                   value={duration} 
-                  onChange={(e) => setDuration(parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const d = parseInt(e.target.value);
+                    setDuration(d);
+                    setIsGenerated(false);
+                    setGeneratedPlan([]);
+                    if (classId) {
+                        setMonthPlans([]);
+                        setIsConfigLoaded(false);
+                        loadClassConfiguration(classId, year, startMonth, d, true);
+                    }
+                  }}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
                   <option value={1}>1 Month</option>
