@@ -517,11 +517,18 @@ export default function Home() {
         }
 
         if (config.weekdays && Array.isArray(config.weekdays)) {
-           // Ensure valid weekdays (normalize to Title Case: 'mon' -> 'Mon')
+           // Ensure valid weekdays (normalize to Title Case: 'Mon', 'Tue'...)
            const normalizeDay = (d: string) => {
                if (!d) return '';
-               const s = String(d);
-               return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+               const s = String(d).trim().toLowerCase();
+               if (s.startsWith('mon')) return 'Mon';
+               if (s.startsWith('tue')) return 'Tue';
+               if (s.startsWith('wed')) return 'Wed';
+               if (s.startsWith('thu')) return 'Thu';
+               if (s.startsWith('fri')) return 'Fri';
+               if (s.startsWith('sat')) return 'Sat';
+               if (s.startsWith('sun')) return 'Sun';
+               return s.charAt(0).toUpperCase() + s.slice(1);
            };
            
            const validDays = config.weekdays

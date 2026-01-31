@@ -67,6 +67,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
   }
 
+  // Normalize days to 3-letter Title Case (Mon, Tue, Wed...)
+  days = days.map(d => {
+      const s = String(d).trim().toLowerCase();
+      if (s.startsWith('mon')) return 'Mon';
+      if (s.startsWith('tue')) return 'Tue';
+      if (s.startsWith('wed')) return 'Wed';
+      if (s.startsWith('thu')) return 'Thu';
+      if (s.startsWith('fri')) return 'Fri';
+      if (s.startsWith('sat')) return 'Sat';
+      if (s.startsWith('sun')) return 'Sun';
+      // Fallback: Title Case
+      return s.charAt(0).toUpperCase() + s.slice(1);
+  });
+
   return NextResponse.json({
     id: data?.class_id || id,
     name: data?.class_name || '',
