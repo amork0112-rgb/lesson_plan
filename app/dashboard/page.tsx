@@ -1031,6 +1031,9 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
+                {classId && selectedDays.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">⚠️ No days selected. Please select at least one.</p>
+                )}
               </div>
 
               <div className="w-36">
@@ -1142,7 +1145,12 @@ export default function Home() {
                         onClick={() => {
                           handleGenerate(plan.id);
                         }}
-                        className="text-xs font-medium bg-indigo-600 text-white px-3 py-1.5 rounded-full hover:bg-indigo-700 flex items-center gap-1 transition-colors shadow-sm"
+                        disabled={selectedDays.length === 0}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors shadow-sm ${
+                            selectedDays.length === 0 
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
                       >
                         <Play className="h-3 w-3 fill-current" /> Generate
                       </button>
