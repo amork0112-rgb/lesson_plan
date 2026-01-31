@@ -228,6 +228,7 @@ export default function Home() {
         try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
+                // Only log if not already loaded to avoid spam (though effect should run once now)
                 console.log('[Debug] Loaded saved plans for', classId);
                 setTimeout(() => setMonthPlans(parsed), 0);
                 return;
@@ -239,9 +240,10 @@ export default function Home() {
     
     // If no saved data, init new
     // Check if current state matches requirement (optimization)
-    if (monthPlans.length === duration && monthPlans[0].year === year && monthPlans[0].month === startMonth) {
-       return;
-    }
+    // We can't easily check monthPlans state here without adding it to deps, which causes loop.
+    // So we just create new plans if not saved.
+    // If monthPlans is already populated, this effect running on init might overwrite it?
+    // But this effect is for initialization based on config changes.
     
     const newPlans: MonthPlan[] = [];
     
@@ -263,7 +265,7 @@ export default function Home() {
     });
     
     setTimeout(() => setMonthPlans(newPlans), 0);
-  }, [classId, year, startMonth, duration, monthPlans]);
+  }, [classId, year, startMonth, duration]); // Removed monthPlans dependency to prevent infinite loop
 
   // Sync Allocations to Global Context
   useEffect(() => {
@@ -322,14 +324,14 @@ export default function Home() {
     const selectedClass = classes.find(c => c.id === classId);
     
     if (!classId || !selectedClass) {
-        console.log('[Debug] No class selected or found. Returning all books.');
+        // console.log('[Debug] No class selected or found. Returning all books.');
         return books;
     }
     
     // Normalize class name for matching
     // e.g. "R1a/R1b" -> "r1ar1b", "M2" -> "m2"
     const cName = selectedClass.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    console.log(`[Debug] Filtering books for class: ${selectedClass.name} (normalized: ${cName})`);
+    // console.log(`[Debug] Filtering books for class: ${selectedClass.name} (normalized: ${cName})`);
     
     const matches = books.filter(b => {
       if (!b.level) return false;
@@ -344,7 +346,7 @@ export default function Home() {
       return isMatch;
     });
     
-    console.log(`[Debug] Found ${matches.length} matching books.`);
+    // console.log(`[Debug] Found ${matches.length} matching books.`);
     return matches;
   }, [books, classId, classes]);
 
