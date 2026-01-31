@@ -1453,7 +1453,14 @@ export default function Home() {
                                   if (!classId) return null;
                                   
                                   // Use filteredBooks to strictly respect class level filtering
-                                  const displayBooks = filteredBooks;
+                                  let displayBooks = filteredBooks;
+                                  
+                                  // CRITICAL FIX: Ensure the currently assigned book is ALWAYS in the list, 
+                                  // even if it was filtered out by level mismatch.
+                                  const currentBook = books.find(b => b.id === alloc.book_id);
+                                  if (currentBook && !displayBooks.find(b => b.id === currentBook.id)) {
+                                      displayBooks = [currentBook, ...displayBooks];
+                                  }
 
                                   const groupedBooks: Record<string, Book[]> = {};
                                   displayBooks.forEach(b => {
