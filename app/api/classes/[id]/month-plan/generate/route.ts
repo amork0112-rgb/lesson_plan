@@ -1,3 +1,4 @@
+//app/api/classes/[id]/month-plan/generate/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
@@ -50,22 +51,68 @@ export async function POST(
     } = body;
 
     // 1. Fetch Class Info
-    const { data: classData, error: classError } = await supabase
-      .from('classes')
+    // Try to fetch from view first to get aggregated schedules
+    let { data: classData, error: classError } = await supabase
+      .from('v_classes_with_schedules')
       .select('*')
-      .eq('id', class_id)
+      .eq('class_id', class_id)
       .single();
 
+    let rawClass: any = classData;
+
+    // If view fails (e.g. row not found because of join type?), fallback to classes table
     if (classError || !classData) {
-        return NextResponse.json({ error: 'Class not found' }, { status: 404 });
+        const { data: basicClass, error: basicError } = await supabase
+          .from('classes')
+          .select('*')
+          .eq('id', class_id)
+          .single();
+
+        if (basicError || !basicClass) {
+            return NextResponse.json({ error: 'Class not found' }, { status: 404 });
+        }
+        rawClass = basicClass;
     }
     
     // Map weekdays (int[]) to days (string[])
-    const rawClass = classData as any;
     const WEEKDAY_INT_MAP: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
-    const classDays: string[] = Array.isArray(rawClass.weekdays) 
-        ? (rawClass.weekdays as number[]).map(w => WEEKDAY_INT_MAP[w]).filter(Boolean)
-        : (rawClass.days || []);
+    let classDays: string[] = [];
+
+    // Attempt to extract from 'weekdays' field (from View)
+    if (rawClass.weekdays && Array.isArray(rawClass.weekdays)) {
+        if (rawClass.weekdays.length > 0 && typeof rawClass.weekdays[0] === 'number') {
+            classDays = (rawClass.weekdays as number[]).map(w => WEEKDAY_INT_MAP[w]).filter(Boolean);
+        } else {
+            classDays = rawClass.weekdays; // Assume already strings
+        }
+    } else if (rawClass.days && Array.isArray(rawClass.days)) {
+        // Fallback to 'days' field if present (legacy)
+        classDays = rawClass.days;
+    }
+
+    // Fallback: If still empty, explicitly query class_schedules
+    if (classDays.length === 0) {
+        const { data: scheduleData } = await supabase
+            .from('class_schedules')
+            .select('day')
+            .eq('class_id', class_id);
+            
+        if (scheduleData && scheduleData.length > 0) {
+            classDays = scheduleData.map((row: any) => row.day).filter(Boolean);
+        }
+    }
+
+    // Normalize: Ensure ["Mon", "Tue"] format (Title Case)
+    classDays = classDays.map(d => {
+        const s = String(d).trim();
+        if (!s) return '';
+        return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    }).filter(d => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
+
+    // VALIDATION (Priority 3)
+    if (classDays.length === 0) {
+        throw new Error('Class weekdays not configured'); 
+    }
 
     const startYear = inputYear || rawClass.year || 2026;
 
