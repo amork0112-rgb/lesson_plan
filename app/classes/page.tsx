@@ -315,7 +315,7 @@ export default function ClassesPage() {
                                   <th className="px-4 py-3 w-48">Book</th>
                                   <th className="px-2 py-3 text-center w-16">Total</th>
                                   <th className="px-2 py-3 text-center w-16">Left</th>
-                                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                  {Array.from({ length: 6 }, (_, i) => i + 1).map(m => (
                                     <th key={m} className="px-2 py-3 text-center w-14">M{m}</th>
                                   ))}
                                   <th className="px-4 py-3 text-right w-24">Action</th>
@@ -337,7 +337,7 @@ export default function ClassesPage() {
                                       <td className={`px-2 py-3 text-center text-sm font-medium ${remaining < 0 ? 'text-red-600' : 'text-slate-600'}`}>
                                         {remaining}
                                       </td>
-                                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                      {Array.from({ length: 6 }, (_, i) => i + 1).map(m => (
                                         <td key={m} className="px-2 py-3 text-center">
                                           <input
                                             type="number"

@@ -572,7 +572,11 @@ export default function Home() {
       // Config is loaded, safe to proceed with plan generation dependent on weekdays
       // setIsConfigLoaded(true); // Moved inside conditional or timeout above
 
-      const res = await fetch(`/api/classes/${cId}/assigned-courses`);
+      // Calculate Academic Month Index for the start month (March=1, ..., Feb=12)
+      // cStartMonth is 0-indexed (0=Jan, 1=Feb, 2=Mar)
+      const academicStartMonth = ((cStartMonth - 2 + 12) % 12) + 1;
+
+      const res = await fetch(`/api/classes/${cId}/assigned-courses?startMonth=${academicStartMonth}`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
       setAssignedCourses(courses); // Store for rendering logic
