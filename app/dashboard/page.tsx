@@ -194,6 +194,7 @@ export default function Home() {
 
   // -- Monthly Plans --
   const [monthPlans, setMonthPlans] = useState<MonthPlan[]>([]);
+  const [assignedCourses, setAssignedCourses] = useState<CourseView[]>([]); // Added state for correct session calculation
   
   // -- Persistence --
   useEffect(() => {
@@ -446,6 +447,7 @@ export default function Home() {
       const res = await fetch(`/api/classes/${cId}/assigned-courses`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
+      setAssignedCourses(courses); // Store for rendering logic
       console.log('[DEBUG assigned-courses] Fetched courses:', JSON.stringify(courses, null, 2));
 
       if (courses.length > 0) {
@@ -995,9 +997,26 @@ export default function Home() {
                       <h3 className="font-bold text-gray-800 text-lg">
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
-                      <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
-                        {planDates[plan.id]?.length || 0} Sessions
-                      </span>
+                      {(() => {
+                        // Calculate Academic Month Index (March = 1, ..., Feb = 12)
+                        const academicMonthIndex = ((plan.month - 2 + 12) % 12) + 1;
+                        
+                        const totalSessions = assignedCourses.reduce(
+                          (sum, course) => {
+                            // JSON keys are strings ("1"), but we use number for index. Check both or standard access.
+                            // The interface defines Record<number, number> but JSON might be strings.
+                            // Safe access:
+                            return sum + (course.sessions_by_month?.[academicMonthIndex] ?? 0);
+                          },
+                          0
+                        );
+
+                        return (
+                          <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
+                            {totalSessions} Sessions
+                          </span>
+                        );
+                      })()}
                       {(() => {
                         const usageMap = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId);
                         const totalUsed = plan.allocations.reduce((sum, a) => {
