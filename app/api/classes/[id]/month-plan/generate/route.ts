@@ -117,13 +117,52 @@ export async function POST(
     const startYear = inputYear || rawClass.year || 2026;
 
     // 2. Fetch Global Calendar Data
-    const { data: holidaysData } = await supabase.from('holidays').select('*');
-    const { data: specialDatesData } = await supabase.from('special_dates').select('*');
+    const { data: calendarData } = await supabase.from('academic_calendar').select('*');
     
     type DbSpecialDate = SpecialDate & { date: string; id: string };
 
-    const holidays = (holidaysData || []) as Holiday[];
-    const specialDates = (specialDatesData || []) as DbSpecialDate[];
+    const holidays: Holiday[] = [];
+    const specialDates: DbSpecialDate[] = [];
+
+    (calendarData || []).forEach((event: any) => {
+        // Filter by class_scope
+        // If scope is 'all', it applies to everyone.
+        // If scope is specific, it must match class_id.
+        if (event.class_scope && event.class_scope !== 'all' && event.class_scope !== class_id) {
+            return;
+        }
+
+        const start = new Date(event.start_date);
+        const end = new Date(event.end_date);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            
+            if (event.type === '공휴일' || event.type === '방학') {
+                holidays.push({
+                    id: `${event.id}_${dateStr}`,
+                    date: dateStr,
+                    name: event.name,
+                    type: 'national',
+                    year: d.getFullYear(),
+                    affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : [])
+                });
+                specialDates.push({
+                    id: `${event.id}_${dateStr}`,
+                    date: dateStr,
+                    type: 'no_class',
+                    name: event.name
+                });
+            } else if (event.type === '행사') {
+                specialDates.push({
+                    id: `${event.id}_${dateStr}`,
+                    date: dateStr,
+                    type: 'school_event',
+                    name: event.name
+                });
+            }
+        }
+    });
 
     // 3. Fetch Allocations (with books)
     const { data: allocData, error: allocErr } = await supabase

@@ -572,11 +572,7 @@ export default function Home() {
       // Config is loaded, safe to proceed with plan generation dependent on weekdays
       // setIsConfigLoaded(true); // Moved inside conditional or timeout above
 
-      // Calculate Academic Month Index for the start month (March=1, ..., Feb=12)
-      // cStartMonth is 0-indexed (0=Jan, 1=Feb, 2=Mar)
-      const academicStartMonth = ((cStartMonth - 2 + 12) % 12) + 1;
-
-      const res = await fetch(`/api/classes/${cId}/assigned-courses?startMonth=${academicStartMonth}`);
+      const res = await fetch(`/api/classes/${cId}/assigned-courses`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
       setAssignedCourses(courses); // Store for rendering logic
@@ -603,6 +599,15 @@ export default function Home() {
          const allocations: BookAllocation[] = [];
          
          courses.forEach((course, courseIdx) => {
+             // 🎯 Filter: Only include books with active sessions in this specific month
+             // academicMonthIndex (1..12) corresponds to sessions_by_month keys
+             const sessionsThisMonth = course.sessions_by_month?.[academicMonthIndex] ?? 0;
+             
+             // Strict Rule: If sessions are 0, do not show the book at all for this month
+             if (sessionsThisMonth <= 0) {
+                 return;
+             }
+
              // Validate that the book exists in the global book list OR in the assigned courses
              // Global books is preferred, but assigned courses is a valid fallback source
              const bookExists = books.find(b => b.id === course.book.id) || 

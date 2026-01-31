@@ -14,8 +14,6 @@ type AllocationRow = {
 };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { searchParams } = new URL(req.url);
-  const startMonth = Number(searchParams.get('startMonth'));
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
@@ -75,9 +73,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       remaining_sessions: remaining,
       sessions_by_month: sessionsByMonth,
     };
-  }).filter((course) => {
-    if (!startMonth) return true;
-    return (course.sessions_by_month[startMonth] ?? 0) > 0;
   });
   return NextResponse.json(result);
 }

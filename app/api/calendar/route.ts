@@ -1,3 +1,4 @@
+//app/api/calendar/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
@@ -16,35 +17,70 @@ export async function GET(req: Request) {
   const start = searchParams.get('start');
   const end = searchParams.get('end');
 
-  // Build queries
-  let holidaysQuery = supabase.from('holidays').select('*');
-  let specialDatesQuery = supabase.from('special_dates').select('*');
+  // Build query for academic_calendar
+  let query = supabase.from('academic_calendar').select('*');
 
   if (start) {
-    holidaysQuery = holidaysQuery.gte('date', start);
-    specialDatesQuery = specialDatesQuery.gte('date', start);
+    // Overlap logic: event_start <= query_end AND event_end >= query_start
+    // For simplicity, just ensure we catch events that overlap with the range
+    query = query.or(`start_date.lte.${end},end_date.gte.${start}`);
+  }
+  // Note: Simple filtering might be tricky with ranges, so fetching broader range or all might be safer if dataset is small.
+  // Given it's a calendar, dataset for a year is small. Let's just fetch all or filter by year if possible.
+  
+  const { data: events, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (end) {
-    holidaysQuery = holidaysQuery.lte('date', end);
-    specialDatesQuery = specialDatesQuery.lte('date', end);
-  }
+  // Expand events into dates
+  const holidays: any[] = [];
+  const special_dates: any[] = [];
 
-  // Execute in parallel
-  const [holidaysRes, specialDatesRes] = await Promise.all([
-    holidaysQuery,
-    specialDatesQuery
-  ]);
+  const processDate = (dateStr: string, event: any) => {
+    // Map types
+    // 공휴일, 방학 -> No Class (Holiday)
+    // 행사 -> School Event
+    
+    const type = event.type;
+    
+    if (type === '공휴일' || type === '방학') {
+      holidays.push({
+        id: `${event.id}_${dateStr}`,
+        date: dateStr,
+        name: event.name,
+        type: 'national', // or 'custom', used for styling
+        year: parseInt(dateStr.split('-')[0]),
+        affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : [])
+      });
+      
+      special_dates.push({
+        date: dateStr,
+        type: 'no_class',
+        name: event.name
+      });
+    } else if (type === '행사') {
+      special_dates.push({
+        date: dateStr,
+        type: 'school_event',
+        name: event.name
+      });
+    }
+  };
 
-  if (holidaysRes.error) {
-    return NextResponse.json({ error: holidaysRes.error.message }, { status: 500 });
-  }
-  if (specialDatesRes.error) {
-    return NextResponse.json({ error: specialDatesRes.error.message }, { status: 500 });
-  }
+  (events || []).forEach((event: any) => {
+    const start = new Date(event.start_date);
+    const end = new Date(event.end_date);
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+       const dateStr = d.toISOString().split('T')[0];
+       processDate(dateStr, event);
+    }
+  });
 
   return NextResponse.json({
-    holidays: holidaysRes.data || [],
-    special_dates: specialDatesRes.data || []
+    holidays,
+    special_dates
   });
 }

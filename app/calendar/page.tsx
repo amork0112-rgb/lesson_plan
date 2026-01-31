@@ -11,7 +11,7 @@ export default function CalendarPage() {
   const { holidays, addHoliday, deleteHoliday, classes, specialDates, updateSpecialDate } = useData();
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Start at Jan 2026
   const [isAdding, setIsAdding] = useState(false);
-  const [newHoliday, setNewHoliday] = useState<Partial<Holiday>>({ name: '', date: '', type: 'custom', affected_classes: [] });
+  const [newHoliday, setNewHoliday] = useState<Partial<Holiday> & { dbType?: string }>({ name: '', date: '', type: 'custom', affected_classes: [], dbType: '공휴일' });
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -121,8 +121,16 @@ export default function CalendarPage() {
                   />
                </div>
                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Affected Classes</label>
-                  <div className="text-xs text-slate-400 py-2">Select below (Default: All)</div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Type</label>
+                  <select 
+                    value={newHoliday.dbType || '공휴일'}
+                    onChange={e => setNewHoliday({...newHoliday, dbType: e.target.value})}
+                    className="w-full border-b border-slate-200 py-1.5 focus:border-slate-900 focus:outline-none bg-transparent"
+                  >
+                    <option value="공휴일">Holiday (공휴일)</option>
+                    <option value="방학">Vacation (방학)</option>
+                    <option value="행사">School Event (행사)</option>
+                  </select>
                </div>
             </div>
             
