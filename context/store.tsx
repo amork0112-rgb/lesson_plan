@@ -54,8 +54,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { data: coursesData } = await supabase.from('courses').select('*');
       if (coursesData) setCourses(coursesData as any);
 
-      const { data: holidaysData } = await supabase.from('holidays').select('*');
-      if (holidaysData) setHolidays(holidaysData as any);
+      try {
+        const calRes = await fetch('/api/calendar');
+        if (calRes.ok) {
+           const { holidays: hData, special_dates: sData } = await calRes.json();
+           setHolidays(hData || []);
+           
+           const map: Record<string, SpecialDate> = {};
+           (sData || []).forEach((d: any) => {
+                map[d.date] = { 
+                    type: d.type as SpecialDateType, 
+                    name: d.name 
+                };
+           });
+           setSpecialDates(map);
+        }
+      } catch (e) {
+         console.error('Failed to fetch calendar data', e);
+      }
 
       try {
         const classesRes = await fetch('/api/raw-classes');
@@ -89,18 +105,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       const { data: allocationsData } = await supabase.from('class_book_allocations').select('*');
       if (allocationsData) setAllocations(allocationsData as any);
-
-      const { data: specialDatesData } = await supabase.from('special_dates').select('*');
-      if (specialDatesData) {
-        const map: Record<string, SpecialDate> = {};
-        specialDatesData.forEach((d: any) => {
-            map[d.date] = { 
-                type: d.type as SpecialDateType, 
-                name: d.name 
-            };
-        });
-        setSpecialDates(map);
-      }
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -195,15 +199,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const addHoliday = async (holiday: Holiday) => {
-    if (!supabase) return;
-    const { error } = await supabase.from('holidays').insert(holiday);
-    if (!error) setHolidays([...holidays, holiday]);
+    try {
+      const res = await fetch('/api/calendar/holidays', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(holiday)
+      });
+      if (!res.ok) throw new Error('Failed to add holiday');
+      setHolidays([...holidays, holiday]);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const deleteHoliday = async (id: string) => {
-    if (!supabase) return;
-    const { error } = await supabase.from('holidays').delete().eq('id', id);
-    if (!error) setHolidays(holidays.filter(h => h.id !== id));
+    try {
+      const res = await fetch(`/api/calendar/holidays/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete holiday');
+      setHolidays(holidays.filter(h => h.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
   };
   
   const addClass = async (cls: Class) => {
@@ -213,31 +229,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSpecialDate = async (date: string, data: SpecialDate | null) => {
-    if (!supabase) return;
-
-    if (data) {
-        // Delete existing event on this date first (simple approximation)
-        await supabase.from('special_dates').delete().eq('date', date);
-        
-        const { error } = await supabase.from('special_dates').insert({
-            name: data.name,
-            type: data.type,
-            date: date
-        });
-        
-        if (!error) {
+    try {
+        if (data) {
+            const res = await fetch('/api/calendar/special-dates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date, ...data })
+            });
+            if (!res.ok) throw new Error('Failed to update special date');
             setSpecialDates(prev => ({ ...prev, [date]: data }));
-        }
-    } else {
-        // Delete
-        const { error } = await supabase.from('special_dates').delete().eq('date', date);
-        if (!error) {
+        } else {
+            const res = await fetch(`/api/calendar/special-dates/${date}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to delete special date');
             setSpecialDates(prev => {
                 const next = { ...prev };
                 delete next[date];
                 return next;
             });
         }
+    } catch (e) {
+        console.error(e);
     }
   };
 

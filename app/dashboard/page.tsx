@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
-import { getSupabase } from '@/lib/supabase';
 import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
 import { parseLocalDate } from '@/lib/date';
@@ -21,6 +20,15 @@ interface MonthPlan {
   year: number;
   month: number; // 0-11
   allocations: BookAllocation[];
+}
+
+interface CourseView {
+  id: string;
+  section: string;
+  book: { id: string; name: string };
+  total_sessions: number;
+  remaining_sessions: number;
+  sessions_by_month: Record<number, number>;
 }
 
 
@@ -144,34 +152,31 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
 
 export default function Home() {
   const { books, classes, allocations: globalAllocations, setAllocations, loading } = useData();
-  const supabase = getSupabase();
   const [holidays, setHolidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   
   // -- Calendar Data Loading --
   useEffect(() => {
     async function loadCalendarData() {
-      if (!supabase) return;
-      
-      const { data: h } = await supabase
-        .from('holidays')
-        .select('*');
+      try {
+        const res = await fetch('/api/calendar');
+        if (!res.ok) throw new Error('Failed to fetch calendar data');
+        const { holidays: h, special_dates: s } = await res.json();
 
-      const { data: s } = await supabase
-        .from('special_dates')
-        .select('*');
+        setHolidays(h || []);
 
-      setHolidays(h ? h as any : []);
-
-      const map: Record<string, SpecialDate> = {};
-      (s ?? []).forEach((d: any) => {
-        map[d.date] = { type: d.type, name: d.name };
-      });
-      setSpecialDates(map);
+        const map: Record<string, SpecialDate> = {};
+        (s ?? []).forEach((d: any) => {
+          map[d.date] = { type: d.type, name: d.name };
+        });
+        setSpecialDates(map);
+      } catch (e) {
+        console.error('Error loading calendar data:', e);
+      }
     }
 
     loadCalendarData();
-  }, [supabase]);
+  }, []);
   
   // -- Global Settings --
   const [className, setClassName] = useState('');
@@ -416,20 +421,89 @@ export default function Home() {
 
   // -- Handlers --
 
+  const loadClassConfiguration = async (
+    cId: string, 
+    cYear: number, 
+    cStartMonth: number, 
+    cDuration: number
+  ) => {
+    try {
+      console.log(`[Debug] Loading configuration for class ${cId}`);
+      const res = await fetch(`/api/classes/${cId}/assigned-courses`);
+      if (!res.ok) throw new Error('Failed to fetch assigned courses');
+      const courses: CourseView[] = await res.json();
+      
+      const newPlans: MonthPlan[] = [];
+      
+      Array.from({ length: cDuration }).forEach((_, idx) => {
+         const totalMonths = cStartMonth + idx;
+         const m = totalMonths % 12;
+         const y = cYear + Math.floor(totalMonths / 12);
+         
+         // Calculate Academic Month Index (March = 1, April = 2, ..., Feb = 12)
+         // Month is 0-based index from Date object (0=Jan, 1=Feb, 2=Mar)
+         // If m=2 (Mar), index=1. m=3 (Apr), index=2.
+         // Formula: ((m - 2 + 12) % 12) + 1
+         const academicMonthIndex = ((m - 2 + 12) % 12) + 1;
+         
+         const allocations: BookAllocation[] = [];
+         
+         courses.forEach((course, courseIdx) => {
+             const sessions = course.sessions_by_month[academicMonthIndex];
+             if (sessions && sessions > 0) {
+                 allocations.push({
+                     id: Math.random().toString(),
+                     class_id: cId,
+                     book_id: course.book.id,
+                     sessions_per_week: 2, // Default, will be recalculated/ignored if manual_used is set
+                     priority: courseIdx + 1,
+                     manual_used: sessions,
+                     // We set manual_used because this is a fixed plan from the DB configuration
+                 });
+             }
+         });
+         
+         newPlans.push({
+           id: `m_${y}_${m}`,
+           year: y,
+           month: m,
+           allocations
+         });
+      });
+      
+      console.log('[Debug] Generated plans from DB:', newPlans);
+      setMonthPlans(newPlans);
+      
+    } catch (e) {
+      console.error('Error loading class configuration:', e);
+    }
+  };
+
   const handleClassSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const cid = e.target.value;
     const selectedClass = classes.find(c => c.id === cid);
     if (selectedClass) {
+      console.log('[Debug] Selected class:', selectedClass);
       setClassId(cid);
       setClassName(selectedClass.name);
       setYear(selectedClass.year);
-      setSelectedDays(selectedClass.days || []);
+      
+      // Ensure days are updated
+      const newDays = selectedClass.days || [];
+      console.log('[Debug] Updating days to:', newDays);
+      setSelectedDays(newDays);
+      
       setStartTime(selectedClass.start_time);
       setEndTime(selectedClass.end_time);
-      // Reset plans and generation state when class changes
+      
+      // Reset plans and load from DB
       setMonthPlans([]);
       setIsGenerated(false);
       setGeneratedPlan([]);
+      
+      // Load assigned courses immediately
+      loadClassConfiguration(cid, selectedClass.year, startMonth, duration);
+      
     } else {
         setClassName('');
     }
@@ -588,33 +662,29 @@ export default function Home() {
     const monthly = getPlansForMonth(monthId);
     const target = monthPlans.find(p => p.id === monthId);
     if (!target) return;
-    if (!supabase) return;
-    for (const l of monthly) {
-      const { data: existing } = await supabase
-        .from('lesson_plans')
-        .select('*')
-        .eq('class_id', classId)
-        .eq('date', l.date)
-        .limit(1);
-      if (Array.isArray(existing) && existing.length > 0) {
-        await supabase
-          .from('lesson_plans')
-          .update({
-            content: l.content,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', (existing as LessonPlan[])[0].id);
-      } else {
-        await supabase
-          .from('lesson_plans')
-          .insert({
-            class_id: classId,
-            date: l.date,
-            content: l.content
-          });
+
+    try {
+      const res = await fetch('/api/lesson-plans/save-month', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classId,
+          year: target.year,
+          month: target.month,
+          lessons: monthly
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save plan');
       }
+
+      alert('해당 월 플랜을 Supabase에 저장했습니다.');
+    } catch (e: any) {
+      console.error('Save failed:', e);
+      alert(`저장 실패: ${e.message}`);
     }
-    alert('해당 월 플랜을 Supabase에 저장했습니다.');
   };
   
   const removeAllocation = (monthId: string, allocId: string) => {
@@ -755,22 +825,8 @@ export default function Home() {
             const monthName = MONTH_NAMES[targetPlan.month];
             const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
             setPageTitle(fileName);
-        } else {
-            // Fallback: If monthly generation fails/empty, user requested "Generate All" as backup?
-            // Or simply alert?
-            // User said: "dashboard에서 월별로 generate안되면 전체 generate라도 되게해줘"
-            // Meaning: If I try to generate one month and it fails (maybe logic error or empty), 
-            // maybe just show everything so I can at least print the whole thing?
-            // Let's Log warning and fallback to ALL if the user intent was ambiguous, 
-            // BUT usually targetMonthId means "I specifically want this".
-            // If it returns empty, it implies no classes scheduled for that month.
-            // Let's just alert the user but NOT clear the `allPlans` so they can see if there's an issue?
-            // Actually, `allPlans` currently contains EVERYTHING.
-            
+        } else {            
             // If we filter and get 0, it means no lessons for that month.
-            // Let's ask: "No lessons generated for this month. Show all months instead?"
-            // For MVP, let's automatically fallback to showing ALL if the filtered result is empty,
-            // with a toast/alert.
             
             if (confirm(`No lessons generated for ${MONTH_NAMES[targetPlan.month]}. Show full plan instead?`)) {
                 // Do not filter. `allPlans` remains full.
