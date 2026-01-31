@@ -429,6 +429,20 @@ export default function Home() {
   ) => {
     try {
       console.log(`[Debug] Loading configuration for class ${cId}`);
+
+      // 1. Load Class Config (Weekdays) - Critical for correct session calculation
+      const configRes = await fetch(`/api/classes/${cId}/config`);
+      if (configRes.ok) {
+        const config = await configRes.json();
+        console.log('[Debug] Class config loaded:', config);
+        if (config.weekdays && Array.isArray(config.weekdays)) {
+           // Ensure valid weekdays
+           const validDays = config.weekdays.filter((d: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
+           console.log('[Debug] Setting selectedDays from API:', validDays);
+           setSelectedDays(validDays as Weekday[]);
+        }
+      }
+
       const res = await fetch(`/api/classes/${cId}/assigned-courses`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
@@ -493,11 +507,6 @@ export default function Home() {
       setClassId(cid);
       setClassName(selectedClass.name);
       setYear(selectedClass.year);
-      
-      // Ensure days are updated
-      const newDays = selectedClass.days || [];
-      console.log('[Debug] Updating days to:', newDays);
-      setSelectedDays(newDays);
       
       setStartTime(selectedClass.start_time);
       setEndTime(selectedClass.end_time);

@@ -84,12 +84,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
             // 0=Sun, 1=Mon, ..., 6=Sat
             const DAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             
-            const mappedClasses = classesData.map((c: any) => ({
-                ...c,
-                days: Array.isArray(c.weekdays) 
-                    ? c.weekdays.map((w: number) => DAY_MAP[w]).filter(Boolean)
-                    : (c.days || []) // Fallback if already formatted
-            }));
+            const mappedClasses = classesData.map((c: any) => {
+                let days: string[] = [];
+                // Handle both integer and string weekdays
+                if (Array.isArray(c.weekdays) && c.weekdays.length > 0) {
+                    if (typeof c.weekdays[0] === 'number') {
+                        days = c.weekdays.map((w: number) => DAY_MAP[w]).filter(Boolean);
+                    } else {
+                        days = c.weekdays;
+                    }
+                } else {
+                    days = c.days || [];
+                }
+                
+                return {
+                    ...c,
+                    days
+                };
+            });
             
             setClasses(mappedClasses as Class[]);
           } else {

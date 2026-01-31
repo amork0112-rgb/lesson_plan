@@ -337,7 +337,7 @@ export default function ClassesPage() {
                                       <td className={`px-2 py-3 text-center text-sm font-medium ${remaining < 0 ? 'text-red-600' : 'text-slate-600'}`}>
                                         {remaining}
                                       </td>
-                                      {[1, 2, 3, 4, 5, 6].map(m => (
+                                      {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                                         <td key={m} className="px-2 py-3 text-center">
                                           <input
                                             type="number"
