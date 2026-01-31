@@ -1166,8 +1166,6 @@ export default function Home() {
                   }}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
-                  <option value={1}>1 Month</option>
-                  <option value={2}>2 Months</option>
                   <option value={3}>3 Months</option>
                   <option value={6}>6 Months</option>
                   <option value={12}>1 Year</option>

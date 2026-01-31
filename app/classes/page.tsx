@@ -171,26 +171,33 @@ export default function ClassesPage() {
     setCourses(updatedCourses);
   };
 
-  const handleSaveCourse = async (course: CourseView) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveAll = async () => {
+    if (!expandedClassId) return;
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/courses/${course.id}/sessions`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessions_by_month: course.sessions_by_month }),
-      });
+      await Promise.all(courses.map(course => 
+        fetch(`/api/courses/${course.id}/sessions`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions_by_month: course.sessions_by_month }),
+        })
+      ));
       
-      if (!res.ok) throw new Error('Failed to save sessions');
-      
-      // Refresh to get calculated remaining sessions correctly from server if needed,
-      // but optimistic update might be enough. Let's refresh to be safe.
+      // Refresh courses
       const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
       const json = await refresh.json();
       setCourses(json as CourseView[]);
+      alert('All changes saved successfully');
     } catch (e) {
-      alert('Failed to save sessions');
-      console.error(e);
+      console.error('Failed to save all courses', e);
+      alert('Failed to save changes');
+    } finally {
+      setIsSaving(false);
     }
   };
+
 
   const handleDeleteCourse = async (courseId: string) => {
     if (!confirm('Are you sure you want to remove this course?')) return;
@@ -301,6 +308,14 @@ export default function ClassesPage() {
                       <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between">
                           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Courses</h3>
+                          <button
+                            onClick={handleSaveAll}
+                            disabled={isSaving}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                          >
+                            <Save className="h-4 w-4" />
+                            {isSaving ? 'Saving...' : 'Save All Changes'}
+                          </button>
                         </div>
                         
                         {loadingCourses ? (
@@ -350,13 +365,6 @@ export default function ClassesPage() {
                                       ))}
                                       <td className="px-4 py-3 text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                          <button 
-                                            onClick={() => handleSaveCourse(course)}
-                                            className="text-indigo-600 hover:text-indigo-800 p-1"
-                                            title="Save"
-                                          >
-                                            <Save className="h-4 w-4" />
-                                          </button>
                                           <button 
                                             onClick={() => handleDeleteCourse(course.id)}
                                             className="text-slate-400 hover:text-red-600 p-1"
