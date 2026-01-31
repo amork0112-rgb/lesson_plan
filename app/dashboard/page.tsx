@@ -1,3 +1,4 @@
+//app/dashboard/page.tsx
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -86,63 +87,65 @@ function getDatesForMonth(
 function calculateMonthUsage(
   dates: string[],
   allocations: BookAllocation[],
-  classId: string
+  classId: string,
+  selectedDays: Weekday[]
 ): Record<string, number> {
-  // 1. Create Rules from selected days (we assume dates are already filtered by selectedDays)
-  // Actually calculateBookDistribution needs rules to map weekday -> book.
-  // We can construct synthetic rules for the allowed days.
-  // But wait, allocations define the distribution pattern.
-  // We need to know which weekday maps to which book.
-  
-  // We need the full set of rules for the class to determine the pattern.
-  // But here we only have allocations.
-  // The pattern is derived from allocations + available weekdays.
-  // If selectedDays are Mon, Wed, Fri, we need rules for Mon, Wed, Fri.
-  
-  // Let's assume the rules are just "All selected days are active".
-  // But we need to know WHICH day gets WHICH book.
-  // This depends on the rules passed to calculateBookDistribution.
-  
-  // We can infer the rules from the dates.
-  const weekdaysInMonth = new Set<Weekday>();
+  // 1. Fixed Session Count
+  const fixedSessions = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : 0);
+
+  if (fixedSessions === 0 || allocations.length === 0) return {};
+
+  // 2. Calculate "Ratio" based on dates
+  const weekdaySet = new Set<Weekday>();
   dates.forEach(d => {
-    const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dateObj = parseLocalDate(d);
-    weekdaysInMonth.add(dayMap[dateObj.getDay()] as Weekday);
+    const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseLocalDate(d).getDay()] as Weekday;
+    weekdaySet.add(day);
   });
-  
-  const rules: ScheduleRule[] = Array.from(weekdaysInMonth).map(d => ({
+
+  const rules: ScheduleRule[] = Array.from(weekdaySet).map(d => ({
     id: `rule_${d}`,
     class_id: classId,
     weekday: d
   }));
-  
+
   const distribution = calculateBookDistribution(allocations, rules);
-  
-  const usage: Record<string, number> = {};
+
+  const rawUsage: Record<string, number> = {};
   dates.forEach(d => {
-    const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dateObj = parseLocalDate(d);
-    const dayName = dayMap[dateObj.getDay()];
-    const bookId = distribution[dayName];
-    if (bookId) {
-      usage[bookId] = (usage[bookId] || 0) + 1;
-    }
+    const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseLocalDate(d).getDay()];
+    const bookId = distribution[day];
+    if (bookId) rawUsage[bookId] = (rawUsage[bookId] || 0) + 1;
   });
-  
-  return usage;
+
+  // 3. Ratio -> Fixed Session Conversion
+  const totalRaw = Object.values(rawUsage).reduce((a,b)=>a+b,0);
+
+  const finalUsage: Record<string, number> = {};
+  allocations.forEach(a => {
+    const ratio = totalRaw === 0 ? 0 : (rawUsage[a.book_id] || 0) / totalRaw;
+    finalUsage[a.book_id] = Math.round(fixedSessions * ratio);
+  });
+
+  return finalUsage;
 }
 
  
 
 function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates: Record<string, string[]>) {
-  const dates = planDates[planId] || [];
-  const used = dates.length;
+  // ❌ Existing logic removed: const dates = planDates[planId] || []; const used = dates.length;
+  
+  // ✅ Fixed Target based on Weekly Frequency
+  const target = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
+  
+  // ✅ Used is ALWAYS equal to target (Fixed Session Logic)
+  // Calendar date count is ignored for session counting purposes
+  const used = target; 
+  
   return {
-    target: selectedDays.length === 2 ? 8 : 12,
+    target,
     used,
-    remaining: (selectedDays.length === 2 ? 8 : 12) - used,
-    overflow: used - (selectedDays.length === 2 ? 8 : 12),
+    remaining: 0, // Always 0 because we force used = target
+    overflow: 0, 
   };
 }
 
@@ -184,7 +187,8 @@ export default function Home() {
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState(2); // Default March
   const [duration, setDuration] = useState(3); // Default 3 months
-  const [selectedDays, setSelectedDays] = useState<Weekday[]>(['Mon', 'Wed', 'Fri']);
+  const [selectedDays, setSelectedDays] = useState<Weekday[]>([]);
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
   // -- SCP Settings are per Class (scp_type), no global UI toggle
@@ -220,7 +224,10 @@ export default function Home() {
 
   // Load from Persistence
   useEffect(() => {
-    if (!classId) return;
+    if (!classId || !isConfigLoaded) return;
+    
+    // Guard against empty selectedDays to prevent premature generation
+    if (selectedDays.length === 0) return;
     
     const key = `monthPlans_${classId}_${year}_${startMonth}_${duration}`;
     const saved = localStorage.getItem(key);
@@ -265,7 +272,7 @@ export default function Home() {
     });
     
     setTimeout(() => setMonthPlans(newPlans), 0);
-  }, [classId, year, startMonth, duration]); // Removed monthPlans dependency to prevent infinite loop
+  }, [classId, year, startMonth, duration, isConfigLoaded]); // Removed monthPlans dependency to prevent infinite loop
 
   // Sync Allocations to Global Context
   useEffect(() => {
@@ -301,20 +308,65 @@ export default function Home() {
     document.title = pageTitle;
   }, [pageTitle]);
   
-  // 1. Calculate the Fixed Session Dates for each month based on the 8/12 rule
-  // Rule: 2 days/week -> 8 sessions/month. 3 days/week -> 12 sessions/month.
-  // Excess dates flow into the next month.
+  // 1. Calculate Continuous Date Stream & Fixed Sessions
+  // Rule: Sessions are fixed (8 or 12). Calendar is just a date placement tool.
+  // Excess dates flow into the next month's queue.
   const planDates = useMemo(() => {
-    // 월별 개별 계산: manage schedule에서 보이는 유효 날짜만 사용
-    const targetPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
+    // Determine Fixed Sessions per Month
+    const fixedSessions = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
+    
+    // 1. Generate ALL valid dates for the entire duration + buffer
+    // We iterate through the months defined by monthPlans, but maybe we need more if overflow happens?
+    // Actually, monthPlans defines the containers. We fill them.
+    // If we run out of dates, the last plan might be empty or partial.
+    // If we have too many dates, they just don't fit in the defined plans (or we could extend, but duration is fixed).
+    
+    // To ensure we have enough candidates, we might need to scan beyond the last plan's month
+    // if the earlier months were "sparse" (less than 8/12). 
+    // BUT, the requirement says "Excess dates flow". Sparse months would borrow from next?
+    // "초과되는 날짜는 무조건 다음 달로 이월" -> Overflow flows.
+    // If a month has 7 valid dates but needs 8? Then it takes from next month?
+    // The prompt focuses on "Excess". Let's assume we just fill the slots sequentially.
+    
+    const allValidDates: string[] = [];
+    
+    // We need a continuous timeline.
+    // Let's iterate from the start month of the first plan, for enough months to cover the duration.
+    // Safety buffer: duration + 2 months to catch overflows.
+    if (monthPlans.length === 0) return {};
+
+    const firstPlan = monthPlans[0];
+    let currentY = firstPlan.year;
+    let currentM = firstPlan.month;
+    
+    // Generate a pool of dates
+    for (let i = 0; i < monthPlans.length + 2; i++) {
+        const dates = getDatesForMonth(currentY, currentM, selectedDays, holidays, specialDates);
+        // Sort just in case
+        dates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+        allValidDates.push(...dates);
+        
+        // Next month
+        currentM++;
+        if (currentM > 11) {
+            currentM = 0;
+            currentY++;
+        }
+    }
+    
+    // 2. Distribute dates into plans
     const distributed: Record<string, string[]> = {};
+    let dateCursor = 0;
+    
     monthPlans.forEach(plan => {
-      const monthValidDates = getDatesForMonth(plan.year, plan.month, selectedDays, holidays, specialDates)
-        .sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
-      distributed[plan.id] = monthValidDates.slice(0, targetPerMonth);
+        const slotsNeeded = fixedSessions;
+        const assignedDates = allValidDates.slice(dateCursor, dateCursor + slotsNeeded);
+        distributed[plan.id] = assignedDates;
+        dateCursor += slotsNeeded;
     });
+    
     return distributed;
-  }, [monthPlans, selectedDays, holidays, specialDates]); // Dependencies: if holidays/special dates change, we re-calc flow
+  }, [monthPlans, selectedDays, holidays, specialDates]);
 
   // (removed) monthly curriculum grid helpers
 
@@ -367,7 +419,7 @@ export default function Home() {
     sortedPlans.forEach(plan => {
       // Use distributed dates for calculations
       const dates = planDates[plan.id] || [];
-      const calculatedUsages = calculateMonthUsage(dates, plan.allocations, classId);
+      const calculatedUsages = calculateMonthUsage(dates, plan.allocations, classId, selectedDays);
       
       const planStats: Record<string, { start: number, used: number, remaining: number }> = {};
       
@@ -401,12 +453,26 @@ export default function Home() {
         }
         
         // 2. Determine Used
-        let used = 0;
-        if (alloc.manual_used !== undefined) {
-           used = alloc.manual_used;
-        } else {
-           used = calculatedUsages[bookId] || 0;
-        }
+        // "Used = monthlySessions * periodsPerDay"
+        // monthlySessions is fixed (8 or 12).
+        // periodsPerDay: 2 days/week -> 3 periods. 3 days/week -> 2 periods.
+        // Total = 24.
+        
+        // However, we need to respect the *proportion* if multiple books are used.
+        // But the prompt says "monthlyBookTotal = 24". 
+        // If there is only one book, used = 24.
+        // If there are multiple allocations, calculateBookDistribution handles the split.
+        // Wait, calculateMonthUsage returns counting of dates.
+        // "Book table은 소모량 표시용 ... Used = monthSessions" -> No, "monthlyBookTotal = 24".
+        // "Used = session * period".
+        
+        // We need to know how many sessions were assigned to THIS book.
+        // calculatedUsages returns the number of *sessions* (dates) assigned to the book.
+        // So we just multiply that by periodsPerDay.
+        
+        const periodsPerDay = selectedDays.length === 2 ? 3 : 2;
+        const sessionsAssigned = calculatedUsages[bookId] || 0;
+        const used = sessionsAssigned * periodsPerDay;
         
         // 3. Determine Remaining
         const remaining = start - used;
@@ -443,8 +509,19 @@ export default function Home() {
            const validDays = config.weekdays.filter((d: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
            console.log('[Debug] Setting selectedDays from API:', validDays);
            setSelectedDays(validDays as Weekday[]);
+           // Delay to allow state update to propagate
+           setTimeout(() => setIsConfigLoaded(true), 0);
+        } else {
+            // Even if no weekdays, mark config as loaded so we don't hang?
+            // But if no weekdays, we can't generate valid plans.
+            // Let's assume we need weekdays.
+            console.warn('[Debug] No valid weekdays found in config');
+            setIsConfigLoaded(true);
         }
       }
+      
+      // Config is loaded, safe to proceed with plan generation dependent on weekdays
+      // setIsConfigLoaded(true); // Moved inside conditional or timeout above
 
       const res = await fetch(`/api/classes/${cId}/assigned-courses`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
@@ -473,18 +550,16 @@ export default function Home() {
          const allocations: BookAllocation[] = [];
          
          courses.forEach((course, courseIdx) => {
-             const sessions = course.sessions_by_month[academicMonthIndex];
-             if (sessions && sessions > 0) {
-                 allocations.push({
-                     id: Math.random().toString(),
-                     class_id: cId,
-                     book_id: course.book.id,
-                     sessions_per_week: 2, // Default, will be recalculated/ignored if manual_used is set
-                     priority: courseIdx + 1,
-                     manual_used: sessions,
-                     // We set manual_used because this is a fixed plan from the DB configuration
-                 });
-             }
+             // Simply assign the book without quantity constraints
+             // "sessions_by_month ... 전부 제거"
+             allocations.push({
+                 id: Math.random().toString(),
+                 class_id: cId,
+                 book_id: course.book.id,
+                 sessions_per_week: 2, // Legacy field, effectively ignored
+                 priority: courseIdx + 1,
+                 // manual_used removed - we rely on calendar calculation
+             });
          });
          
          newPlans.push({
@@ -525,6 +600,10 @@ export default function Home() {
       setMonthPlans([]);
       setIsGenerated(false);
       setGeneratedPlan([]);
+      
+      // Reset config state to prevent premature plan generation
+      setIsConfigLoaded(false);
+      setSelectedDays([]); 
       
       // Load assigned courses immediately
       loadClassConfiguration(cid, cYear, startMonth, duration);
@@ -940,9 +1019,10 @@ export default function Home() {
                     }}
                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50 appearance-none"
                   >
-                    {[2024, 2025, 2026, 2027, 2028].map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const y = 2026 + i;
+                      return <option key={y} value={y}>{y}</option>;
+                    })}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -1006,7 +1086,7 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       {(() => {
-                        const sessionsPerMonth = selectedDays.length * 4;
+                        const sessionsPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
                         return (
                           <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
                             {sessionsPerMonth} Sessions
@@ -1014,15 +1094,18 @@ export default function Home() {
                         );
                       })()}
                       {(() => {
-                        const usageMap = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId);
-                        const totalUsed = plan.allocations.reduce((sum, a) => {
-                          const u = a.manual_used !== undefined ? a.manual_used : (usageMap[a.book_id] || 0);
-                          return sum + (typeof u === 'number' ? u : 0);
+                        const usageMap = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId, selectedDays);
+                        const totalSessionsAllocated = plan.allocations.reduce((sum, a) => {
+                          return sum + (usageMap[a.book_id] || 0);
                         }, 0);
+                        
+                        const periodsPerDay = selectedDays.length === 2 ? 3 : 2;
+                        const totalLessons = totalSessionsAllocated * periodsPerDay;
+                        
                         const badgeClass = 'bg-green-100 text-green-700';
                         return (
                           <span className={`text-xs px-3 py-1 rounded-full font-semibold ${badgeClass}`}>
-                            {totalUsed}
+                            Lessons: {totalLessons} / 24
                           </span>
                         );
                       })()}
@@ -1302,7 +1385,7 @@ export default function Home() {
                          
                          const stats = bookFlow[plan.id]?.[alloc.book_id] || { start: 0, used: 0, remaining: 0 };
                          const { start, remaining } = stats;
-                         const calculatedUsed = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId)[alloc.book_id] || 0;
+                         const calculatedUsed = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId, selectedDays)[alloc.book_id] || 0;
                          
                          // Color Logic
                          let remainingColor = 'text-green-600 font-bold';
@@ -1417,21 +1500,9 @@ export default function Home() {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-center font-medium">
-                               <input 
-                                type="number" min="0"
-                                value={alloc.manual_used !== undefined ? alloc.manual_used : calculatedUsed}
-                                placeholder={calculatedUsed.toString()}
-                                onChange={(e) => {
-                                    // If user clears input, go back to calculated? or 0?
-                                    // If they type a number, it overrides.
-                                    // If empty, let's treat as undefined (revert to auto).
-                                    const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                                    updateAllocation(plan.id, alloc.id, 'manual_used', val);
-                                }}
-                                className={`w-16 text-center rounded border-gray-200 p-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500 ${
-                                    alloc.manual_used !== undefined ? 'bg-yellow-50 text-yellow-700 font-bold' : 'bg-white text-indigo-600'
-                                }`}
-                              />
+                               <span className="text-indigo-600 font-bold">
+                                 {stats.used}
+                               </span>
                             </td>
                             <td className="px-4 py-3 text-center">
                                <div className={`flex items-center justify-center gap-1.5 ${remainingColor}`}>
