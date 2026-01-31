@@ -45,8 +45,9 @@ function getDatesForMonth(
   year: number,
   month: number,
   selectedDays: Weekday[],
-  holidays: { date: string }[],
-  specialDates: Record<string, SpecialDate> = {}
+  holidays: { date: string; affected_classes?: string[] }[],
+  specialDates: Record<string, SpecialDate> = {},
+  classId?: string
 ): string[] {
   const dates: string[] = [];
   const start = new Date(year, month, 1);
@@ -74,7 +75,16 @@ function getDatesForMonth(
     const currentDayName = dayMap[d.getDay()] as Weekday;
 
     if (allowedDays.has(currentDayName)) {
-      const isHoliday = holidays.some(h => h.date === dateStr);
+      const isHoliday = holidays.some(h => {
+        if (h.date !== dateStr) return false;
+        // If affected_classes is specified, only treat as holiday if this class is affected
+        if (h.affected_classes && h.affected_classes.length > 0) {
+             if (!classId) return false; 
+             return h.affected_classes.includes(classId);
+        }
+        return true; // Global holiday
+      });
+      
       if (!isHoliday) {
         dates.push(dateStr);
       }
@@ -256,7 +266,7 @@ export default function Home() {
     
     // Generate a pool of dates
     for (let i = 0; i < monthPlans.length + 2; i++) {
-        const dates = getDatesForMonth(currentY, currentM, selectedDays, holidays, specialDates);
+        const dates = getDatesForMonth(currentY, currentM, selectedDays, holidays, specialDates, classId);
         // Sort just in case
         dates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
         allValidDates.push(...dates);
@@ -281,7 +291,7 @@ export default function Home() {
     });
     
     return distributed;
-  }, [monthPlans, selectedDays, holidays, specialDates]);
+  }, [monthPlans, selectedDays, holidays, specialDates, classId]);
 
   // (removed) monthly curriculum grid helpers
 
@@ -437,11 +447,10 @@ export default function Home() {
          const m = totalMonths % 12;
          const y = cYear + Math.floor(totalMonths / 12);
          
-         // Calculate Academic Month Index (March = 1, April = 2, ..., Feb = 12)
-         // Month is 0-based index from Date object (0=Jan, 1=Feb, 2=Mar)
-         // If m=2 (Mar), index=1. m=3 (Apr), index=2.
-         // Formula: ((m - 2 + 12) % 12) + 1
-         const academicMonthIndex = ((m - 2 + 12) % 12) + 1;
+         // Calculate Relative Month Index (1-based index relative to the plan start)
+         // User requested: "monthIndex = (currentMonth - startMonth) + 1" which simplifies to idx + 1
+         // This ensures that the first month of the plan always maps to 'Month 1' in the assigned course sessions.
+         const academicMonthIndex = idx + 1;
          
          const allocations: BookAllocation[] = [];
          
@@ -773,8 +782,12 @@ export default function Home() {
         return (a.period || 0) - (b.period || 0);
     });
 
+    let alertMessage: string | null = null;
+
     if (targetMonthId) {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
+      const targetPlanIndex = monthPlans.findIndex(p => p.id === targetMonthId);
+
       if (targetPlan) {
         // Filter plans for this month
         const monthlyPlans = allPlans.filter(l => {
@@ -791,17 +804,16 @@ export default function Home() {
             setPageTitle(fileName);
         } else {            
             // Check if sessions were actually assigned for this month.
-            const m = targetPlan.month; // 0-11
-            // Calculate Academic Month Index (March = 1, ..., Feb = 12)
-            const academicMonthIndex = ((m - 2 + 12) % 12) + 1;
+            // Update: Use Relative Month Index (idx + 1)
+            const academicMonthIndex = targetPlanIndex + 1;
             
             const hasAssignedSessions = assignedCourses.some(c => (c.sessions_by_month?.[academicMonthIndex] || 0) > 0);
 
             if (!hasAssignedSessions) {
-                 alert(`No sessions scheduled for ${MONTH_NAMES[targetPlan.month]}. This class has books, but no sessions assigned to this month.`);
+                 alertMessage = `No sessions scheduled for ${MONTH_NAMES[targetPlan.month]}. This class has books, but no sessions assigned to this month (Month ${academicMonthIndex}).`;
             } else {
                  // Sessions exist, but generator produced nothing (e.g. no valid dates)
-                 alert(`Warning: Sessions are assigned for ${MONTH_NAMES[targetPlan.month]}, but no lessons could be generated. Please check holidays or schedule days.`);
+                 alertMessage = `Warning: Sessions are assigned for ${MONTH_NAMES[targetPlan.month]}, but no lessons could be generated. Please check holidays or schedule days.`;
             }
             
             allPlans = []; // Show empty
@@ -810,6 +822,10 @@ export default function Home() {
     } else {
         // Generate All
         setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
+        
+        if (allPlans.length === 0) {
+             alertMessage = '수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지';
+        }
     }
 
     setGeneratedPlan(allPlans);
@@ -821,8 +837,8 @@ export default function Home() {
       }
     });
 
-    if (allPlans.length === 0) {
-        alert('수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지');
+    if (alertMessage) {
+        alert(alertMessage);
     }
   };
   
@@ -838,22 +854,22 @@ export default function Home() {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
           {/* Top Settings Bar */}
-          <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-wrap gap-6 items-start">
-              <div className="w-full md:w-64">
+          <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap gap-4 items-start">
+              <div className="w-28">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Class Name</label>
                 <select 
                   value={classId} 
                   onChange={handleClassSelect}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white"
                 >
-                  <option value="">Select a Class</option>
+                  <option value="">Select Class</option>
                   {classes.map(c => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="flex-1 min-w-[240px]">
+              <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
                 <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
                   {ALL_WEEKDAYS.map(day => (
@@ -872,12 +888,12 @@ export default function Home() {
                   ))}
                 </div>
                 {classId && selectedDays.length === 0 && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">⚠️ No days selected. Please select at least one.</p>
+                  <p className="text-xs text-red-500 mt-1 font-medium">⚠️ Select days</p>
                 )}
               </div>
 
-              <div className="w-36">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Academic Year</label>
+              <div className="w-24">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Year</label>
                 <div className="relative">
                   <select 
                     value={year} 
@@ -905,7 +921,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="w-36">
+              <div className="w-28">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Start Month</label>
                 <select 
                   value={startMonth} 
@@ -928,7 +944,7 @@ export default function Home() {
                 </select>
               </div>
 
-              <div className="w-36">
+              <div className="w-24">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Duration</label>
                 <select 
                   value={duration} 
@@ -945,9 +961,9 @@ export default function Home() {
                   }}
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
-                  <option value={3}>3 Months</option>
-                  <option value={6}>6 Months</option>
-                  <option value={12}>1 Year</option>
+                  <option value={3}>3 Mo</option>
+                  <option value={6}>6 Mo</option>
+                  <option value={12}>1 Yr</option>
                 </select>
               </div>
 
