@@ -63,7 +63,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
           const classesData = await classesRes.json();
           if (Array.isArray(classesData)) {
             console.log('[Store] Loaded classes:', classesData.length);
-            setClasses(classesData as any);
+            
+            // Map raw 'weekdays' (integers) to 'days' (Weekday strings)
+            // 0=Sun, 1=Mon, ..., 6=Sat
+            const DAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            
+            const mappedClasses = classesData.map((c: any) => ({
+                ...c,
+                days: Array.isArray(c.weekdays) 
+                    ? c.weekdays.map((w: number) => DAY_MAP[w]).filter(Boolean)
+                    : (c.days || []) // Fallback if already formatted
+            }));
+            
+            setClasses(mappedClasses as Class[]);
           } else {
             console.error('[Store] Classes data is not an array:', classesData);
           }

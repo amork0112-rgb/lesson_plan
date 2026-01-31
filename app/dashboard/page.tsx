@@ -752,24 +752,25 @@ export default function Home() {
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
-                <div className="mt-4">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_WEEKDAYS.map(day => (
-                      <button
-                        key={day}
-                        onClick={() => handleDayToggle(day)}
-                        className={`
-                          px-3 py-1.5 rounded-full text-xs font-medium transition-colors
-                          ${selectedDays.includes(day) 
-                            ? 'bg-indigo-600 text-white shadow-md' 
-                            : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
-                        `}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_WEEKDAYS.map(day => (
+                    <button
+                      key={day}
+                      onClick={() => handleDayToggle(day)}
+                      className={`
+                        px-3 py-1.5 rounded-full text-xs font-medium transition-colors
+                        ${selectedDays.includes(day) 
+                          ? 'bg-indigo-600 text-white shadow-md' 
+                          : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
+                      `}
+                    >
+                      {day}
+                    </button>
+                  ))}
                 </div>
               </div>
 
