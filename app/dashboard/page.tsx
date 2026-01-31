@@ -154,7 +154,7 @@ function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates
  
 
 export default function Home() {
-  const { books, classes, allocations: globalAllocations, setAllocations, loading } = useData();
+  const { books, classes, allocations: globalAllocations, setAllocations, loading, refreshBooks } = useData();
   const [holidays, setHolidays] = useState<{ id: string; date: string; name: string; type: string; affected_classes?: string[] }[]>([]);
   const [specialDates, setSpecialDates] = useState<Record<string, SpecialDate>>({});
   
@@ -477,6 +477,11 @@ export default function Home() {
   ) => {
     try {
       console.log(`[Debug] Loading configuration for class ${cId}`);
+
+      // Ensure global book list is up-to-date to prevent missing book warnings
+      if (refreshBooks) {
+          await refreshBooks();
+      }
 
       if (clearCache) {
         const key = `monthPlans_${cId}_${cYear}_${cStartMonth}_${cDuration}`;
@@ -1461,6 +1466,11 @@ export default function Home() {
                          return (
                           <tr key={alloc.id} className="group hover:bg-gray-50">
                             <td className="px-6 py-3">
+                              {book && (
+                                <span className="inline-block mb-1.5 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
+                                  {book.category ? book.category.replace('c_', '') : 'General'}
+                                </span>
+                              )}
                               <select 
                                 value={alloc.book_id}
                                 onChange={(e) => updateAllocation(plan.id, alloc.id, 'book_id', e.target.value)}
@@ -1584,6 +1594,14 @@ export default function Home() {
                       {inlineAddMonthId === plan.id && (
                         <tr className="bg-indigo-50/30">
                           <td className="px-6 py-3">
+                            {(() => {
+                                const selectedBook = books.find(b => b.id === newAllocation.bookId);
+                                return selectedBook ? (
+                                    <span className="inline-block mb-1.5 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
+                                    {selectedBook.category ? selectedBook.category.replace('c_', '') : 'General'}
+                                    </span>
+                                ) : null;
+                            })()}
                             <select 
                               value={newAllocation.bookId}
                               onChange={(e) => setNewAllocation({...newAllocation, bookId: e.target.value})}

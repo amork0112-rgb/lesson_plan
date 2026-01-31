@@ -29,6 +29,7 @@ interface DataContextType {
   updateSpecialDate: (date: string, data: SpecialDate | null) => Promise<void>;
   
   signOut: () => Promise<void>;
+  refreshBooks: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -270,6 +271,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
+  const refreshBooks = async () => {
+    if (!supabase) return;
+    const { data: booksData } = await supabase.from('books').select('*');
+    if (booksData) setBooks(booksData as any);
+  };
+
   return (
     <DataContext.Provider value={{ 
       books, courses, holidays, classes, allocations, setAllocations, specialDates, user, loading,
@@ -278,7 +285,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addHoliday, deleteHoliday,
       addClass,
       updateSpecialDate,
-      signOut
+      signOut,
+      refreshBooks
     }}>
       {children}
     </DataContext.Provider>
