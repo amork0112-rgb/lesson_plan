@@ -1209,8 +1209,10 @@ export default function Home() {
                     <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
                       <tr>
                         <th className="px-6 py-3 w-1/3">Book</th>
-                        <th className="px-4 py-3 text-center">Used</th>
+                        <th className="px-4 py-3 text-center">Section</th>
+                        <th className="px-4 py-3 text-center">Weekly</th>
                         <th className="px-4 py-3 text-center">Order</th>
+                        <th className="px-4 py-3 text-center">Used</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1234,16 +1236,14 @@ export default function Home() {
                                 </div>
                                 <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
                                   {book?.level && <span>{book.level}</span>}
-                                  {book?.category && (
-                                    <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium text-[10px]">
-                                      {book.category}
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-center text-sm font-medium text-gray-900">
-                                {usedCount}
+                            <td className="px-4 py-3 text-center text-sm text-gray-600">
+                                {assignedCourse?.section || book?.category || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm text-gray-600">
+                                {alloc.sessions_per_week || 2}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-col items-center gap-1">
@@ -1262,6 +1262,9 @@ export default function Home() {
                                   <ArrowDown className="h-3 w-3" />
                                 </button>
                               </div>
+                            </td>
+                            <td className="px-4 py-3 text-center text-sm font-medium text-gray-900">
+                                {usedCount}
                             </td>
                           </tr>
                          );
