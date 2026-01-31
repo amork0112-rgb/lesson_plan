@@ -189,6 +189,12 @@ export default function Home() {
   const [duration, setDuration] = useState(3); // Default 3 months
   const [selectedDays, setSelectedDays] = useState<Weekday[]>([]);
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+
+  // DEBUG: Check selectedDays
+  useEffect(() => {
+    console.log('[DEBUG] selectedDays:', selectedDays);
+  }, [selectedDays]);
+
   const [startTime, setStartTime] = useState('14:00');
   const [endTime, setEndTime] = useState('15:30');
   // -- SCP Settings are per Class (scp_type), no global UI toggle
@@ -505,8 +511,12 @@ export default function Home() {
         const config = await configRes.json();
         console.log('[Debug] Class config loaded:', config);
         if (config.weekdays && Array.isArray(config.weekdays)) {
-           // Ensure valid weekdays
-           const validDays = config.weekdays.filter((d: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
+           // Ensure valid weekdays (normalize to Title Case: 'mon' -> 'Mon')
+           const normalizeDay = (d: string) => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+           const validDays = config.weekdays
+             .map((d: string) => normalizeDay(d))
+             .filter((d: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
+             
            console.log('[Debug] Setting selectedDays from API:', validDays);
            setSelectedDays(validDays as Weekday[]);
            // Delay to allow state update to propagate
@@ -2088,3 +2098,4 @@ export default function Home() {
     </div>
   );
 }
+
