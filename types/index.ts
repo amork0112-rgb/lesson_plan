@@ -98,7 +98,8 @@ export interface LessonPlan {
   unit_text?: string; 
   book_name?: string;
   content?: string;
-  unit_range?: string;
+  unit_no?: number;
+  day_no?: number;
 }
 
 export interface LessonRow {

@@ -92,7 +92,9 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
           is_makeup: false,
           book_id: picked!.book_id,
           book_name: book.name,
-          content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`
+          content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`,
+          unit_no: p.unit,
+          day_no: p.day
         });
 
         usedToday.add(picked!.book_id);
@@ -116,7 +118,8 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
           is_makeup: false,
           book_id: `scp_${scpType}`,
           book_name: `SCP ${cap}`,
-          content: `SCP ${cap} Day ${scpDay++}`
+          content: `SCP ${cap} Day ${scpDay++}`,
+          day_no: scpDay - 1
         });
       }
     });

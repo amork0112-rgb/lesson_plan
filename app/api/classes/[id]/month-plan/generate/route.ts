@@ -342,7 +342,10 @@ export async function POST(
 
         // C. Generate Content
         // We need to know which books are active this month
-        const activeBooks = monthDistribution.filter(d => d.usedThisMonth > 0).map(d => d.book);
+        // Ensure we only include valid book objects to prevent lookup failures in generateLessons
+        const activeBooks = monthDistribution
+            .filter(d => d.usedThisMonth > 0 && d.book)
+            .map(d => d.book);
         
         // If this is the first iteration and we didn't have previous progress, fetch history
         if (mIdx === indicesToProcess[0] && validDates.length > 0) {
@@ -471,7 +474,9 @@ export async function POST(
                   book_id: p.book_id,
                   book_name: p.book_name,
                   content: p.content,
-                  display_order: p.display_order
+                  display_order: p.display_order,
+                  unit_no: p.unit_no,
+                  day_no: p.day_no
               })));
             if (insertError) throw insertError;
         }
