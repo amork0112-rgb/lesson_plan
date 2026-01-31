@@ -1,3 +1,4 @@
+//app/classes/pages.tsx
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -9,7 +10,7 @@ type ClassView = {
   class_id: string;
   class_name: string;
   campus?: string | null;
-  weekdays?: number[] | null;
+  weekdays?: Weekday[] | null;
   class_start_time?: string | null;
   class_end_time?: string | null;
 };
@@ -43,10 +44,9 @@ function to12h(time?: string | null) {
   return `${twelve}:${mm}`;
 }
 
-function formatWeekdays(nums?: number[] | null) {
-  if (!nums || nums.length === 0) return '';
-  const mapIdx: Record<number, Weekday> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
-  return nums.map(n => DAY_MAP[mapIdx[n] || 'Mon']).join('');
+function formatWeekdays(days?: Weekday[] | null) {
+  if (!days || days.length === 0) return '';
+  return days.map(d => DAY_MAP[d] || d).join('');
 }
 
 export default function ClassesPage() {
