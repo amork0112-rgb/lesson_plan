@@ -1,3 +1,4 @@
+//app/api/classes/[id]/config
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
@@ -32,16 +33,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   
   // Primary source: v_classes_with_schedules
   if (data?.weekdays) {
-      if (Array.isArray(data.weekdays)) {
+      // ✅ CASE 1: string ("mon,tue,wed")
+      if (typeof data.weekdays === 'string') {
+          days = data.weekdays
+              .split(',')
+              .map(d => d.trim())
+              .filter(Boolean);
+      }
+      // ✅ CASE 2: number[]
+      else if (Array.isArray(data.weekdays)) {
           if (data.weekdays.length > 0 && typeof data.weekdays[0] === 'number') {
               // Map integers to strings
               days = data.weekdays.map((w: number) => WEEKDAY_INT_MAP[w]).filter(Boolean);
           } else {
-              // Assume strings
+              // ✅ CASE 3: string[]
               days = data.weekdays;
           }
       }
   }
+
+  // Debug log to verify parsing
+  console.log(`[config API] class ${id} raw weekdays:`, data?.weekdays, 'parsed:', days);
 
   // Fallback source: class_schedules (if view returned nothing)
   if (days.length === 0) {
