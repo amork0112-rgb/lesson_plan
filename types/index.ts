@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'teacher';
 export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 export type UnitType = 'unit' | 'day' | 'lesson';
-export type SpecialDateType = 'event' | 'makeup' | 'school_event';
+export type SpecialDateType = 'no_class' | 'makeup' | 'school_event';
 
 export interface SpecialDate {
   type: SpecialDateType;
@@ -42,15 +42,6 @@ export interface Holiday {
   type: 'national' | 'custom';
   year: number;
   affected_classes?: string[]; // If undefined/empty, applies to all
-}
-
-export interface Event {
-  id: string;
-  name: string;
-  start_date: string; // YYYY-MM-DD
-  end_date: string; // YYYY-MM-DD
-  affected_class?: string | null;
-  type: string;
 }
 
 export interface LessonUnit {

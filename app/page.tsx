@@ -33,7 +33,6 @@ export default function GuidePage() {
             FRAGE Lesson Plan Generator는 실제 수업 환경을 최대한 정확하게 반영하여,
             각 반(Class)의 수업 흐름과 교재 진행을 체계적으로 관리하기 위해 설계된 자동화 시스템입니다.
             
-            이 가이드는 FRAGE의 수업 플래닝이 어떤 원리로 작동하는지, 그리고 각 요소가 어떤 역할을 하는지 설명합니다.
           </p>
           
           <div className="mt-8">

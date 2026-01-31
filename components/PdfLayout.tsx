@@ -69,11 +69,11 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
                               <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium">{head}</div>
                               <div className="p-2 space-y-1">
                                 {list.map(item => {
-                                  if (item.book_id === 'event') {
+                                  if (item.book_id === 'no_class') {
                                     return (
-                                      <div key={item.id} className="flex items-center gap-2 text-gray-800">
-                                        <span className="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Event</span>
-                                        <span className="font-medium">{item.unit_text || 'Event'}</span>
+                                      <div key={item.id} className="flex items-center gap-2 text-gray-800 p-2 bg-red-50 rounded border border-red-100 mb-1">
+                                        <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded font-bold">No Class</span>
+                                        <span className="font-medium text-sm">{item.content || 'No Class'}</span>
                                       </div>
                                     );
                                   }

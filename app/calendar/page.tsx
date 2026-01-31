@@ -58,8 +58,8 @@ export default function CalendarPage() {
     let nextData: any = null;
     
     if (!current) {
-        nextData = { type: 'event', name: 'Event' };
-    } else if (current.type === 'event') {
+        nextData = { type: 'no_class', name: 'No Class' };
+    } else if (current.type === 'no_class') {
         nextData = { type: 'makeup', name: 'Makeup' };
     } else if (current.type === 'makeup') {
         nextData = { type: 'school_event', name: 'PBL' };
@@ -148,7 +148,7 @@ export default function CalendarPage() {
 
             <div className="flex justify-end gap-2 mt-2">
                <button onClick={() => setIsAdding(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
-               <button onClick={handleAddHoliday} className="bg-indigo-600 text-white px-4 py-2 rounded text-sm">Save Event</button>
+               <button onClick={handleAddHoliday} className="bg-indigo-600 text-white px-4 py-2 rounded text-sm">Save</button>
             </div>
           </div>
         )}
@@ -218,7 +218,7 @@ export default function CalendarPage() {
                     {special && (
                         <div className={cn(
                             "group flex flex-col gap-0.5 px-2 py-1.5 rounded border text-xs mb-1",
-                            special.type === 'event' ? "bg-red-100 border-red-200 text-red-700" :
+                            special.type === 'no_class' ? "bg-red-100 border-red-200 text-red-700" :
                             special.type === 'makeup' ? "bg-green-100 border-green-200 text-green-700" :
                             "bg-blue-100 border-blue-200 text-blue-700"
                         )}>
@@ -226,7 +226,7 @@ export default function CalendarPage() {
                                <span className="font-bold truncate">{special.name}</span>
                             </div>
                             <div className="text-[10px] leading-tight opacity-75 uppercase">
-                               {special.type === 'school_event' ? 'School Event' : special.type}
+                               {special.type === 'school_event' ? 'School Event' : (special.type === 'no_class' ? 'No Class' : special.type)}
                             </div>
                         </div>
                     )}

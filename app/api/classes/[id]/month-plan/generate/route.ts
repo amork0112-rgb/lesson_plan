@@ -2,20 +2,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 import { generateLessons, getDaysPerUnit } from '@/lib/lessonEngine';
-import { addDays, format, getDay, isSameDay, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { Book, BookAllocation, Class, Holiday, Weekday } from '@/types';
+import { format, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { Class, Holiday, Weekday, SpecialDate } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
-// Helper to map 1-6 to calendar months (assuming Start = March)
-const MONTH_MAP: Record<number, number> = {
-  1: 2, // March (0-indexed)
-  2: 3, // April
-  3: 4, // May
-  4: 5, // June
-  5: 6, // July
-  6: 7, // August
-};
+function getCalendarInfo(startYear: number, startMonth: number, monthIndex: number) {
+  // startMonth is 1-based (e.g., 3 for March)
+  // monthIndex is 1-based (1 for first month)
+  
+  const totalMonths = (startMonth - 1) + (monthIndex - 1);
+  const year = startYear + Math.floor(totalMonths / 12);
+  const month = totalMonths % 12; // 0-11
+  return { year, month };
+}
 
 type AllocationRow = {
   id: string;
@@ -25,6 +25,9 @@ type AllocationRow = {
   priority: number;
   sessions_per_week: number;
   book?: any;
+  used?: number;
+  remaining?: number;
+  remaining_after?: number;
 };
 
 export async function POST(
@@ -36,15 +39,39 @@ export async function POST(
   
   try {
     const body = await req.json();
-    const { month_index, total_sessions, save } = body;
+    const { 
+        month_index, 
+        indices, // New: support specific list of indices
+        total_sessions, // Used if single month generation
+        save, 
+        generate_all,
+        start_month = 3,
+        year: inputYear
+    } = body;
 
-    if (!month_index || !total_sessions) {
-      return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+    // 1. Fetch Class Info
+    const { data: classData, error: classError } = await supabase
+      .from('classes')
+      .select('*')
+      .eq('id', class_id)
+      .single();
+
+    if (classError || !classData) {
+        return NextResponse.json({ error: 'Class not found' }, { status: 404 });
     }
+    const cls = classData as Class;
+    const startYear = inputYear || cls.year || 2026;
 
-    // --- STEP 1: ALLOCATION (Distribute Sessions) ---
+    // 2. Fetch Global Calendar Data
+    const { data: holidaysData } = await supabase.from('holidays').select('*');
+    const { data: specialDatesData } = await supabase.from('special_dates').select('*');
     
-    // Fetch allocations with Book info (needed for both steps)
+    type DbSpecialDate = SpecialDate & { date: string; id: string };
+
+    const holidays = (holidaysData || []) as Holiday[];
+    const specialDates = (specialDatesData || []) as DbSpecialDate[];
+
+    // 3. Fetch Allocations (with books)
     const { data: allocData, error: allocErr } = await supabase
       .from('class_book_allocations')
       .select('*, book:books(*)')
@@ -58,250 +85,314 @@ export async function POST(
         return NextResponse.json({ error: 'No books assigned' }, { status: 400 });
     }
 
-    // Fetch existing usage (to calculate remaining)
-    const allocIds = allocations.map(a => a.id);
-    const { data: sessData, error: sessErr } = await supabase
-        .from('course_sessions')
-        .select('class_book_allocation_id,month_index,sessions')
-        .in('class_book_allocation_id', allocIds);
-        
-    if (sessErr) throw new Error(sessErr.message);
+    // 4. Determine Scope
+    let indicesToProcess: number[] = [];
+    if (Array.isArray(indices) && indices.length > 0) {
+        indicesToProcess = indices;
+    } else if (generate_all) {
+        indicesToProcess = [1, 2, 3, 4, 5, 6];
+    } else if (month_index) {
+        indicesToProcess = [month_index];
+    } else {
+        indicesToProcess = [1];
+    }
+
+    // 5. Initialize State
+    // We need to track 'remaining' for each allocation across the loop if generate_all is true.
+    // If not generate_all, we need to fetch what was used in other months.
+    
+    // Calculate initial remaining for all allocations
+    // If generate_all, we assume fresh start or we respect existing usage?
+    // "Generate All" usually implies a full recalculation.
+    // Let's reset 'used' count for the scope we are generating.
     
     const usedTotalByAlloc: Record<string, number> = {};
-    (Array.isArray(sessData) ? sessData : []).forEach((s: { class_book_allocation_id: string; month_index: number; sessions: number | null }) => {
-        // Exclude current month from "used" if we are re-generating it?
-        // Actually, "remaining" should be "Total - (Used by OTHER months)".
-        // If we include current month in "used", then re-generating might reduce available sessions.
-        // Let's exclude current month from calculation to allow re-distribution.
-        if (s.month_index !== month_index) {
-            usedTotalByAlloc[s.class_book_allocation_id] = (usedTotalByAlloc[s.class_book_allocation_id] || 0) + (s.sessions ?? 0);
-        }
-    });
-
-    const items = allocations
-        .map(a => {
-            const total = a.total_sessions ?? 0;
-            const used = usedTotalByAlloc[a.id] || 0;
-            const remaining = Math.max(0, total - used);
-            return { ...a, remaining };
-        })
-        .filter(a => a.remaining > 0)
-        .sort((a, b) => a.priority - b.priority);
-
-    if (items.length === 0) {
-        return NextResponse.json({ error: 'No remaining sessions available for any book' }, { status: 400 });
-    }
-
-    // Distribute sessions
-    const totalWeight = items.reduce((sum, a) => sum + Math.max(1, a.sessions_per_week || 1), 0);
-    const initialAlloc = items.map(a => {
-        const share = Math.max(1, a.sessions_per_week || 1) / totalWeight;
-        const target = Math.floor(total_sessions * share);
-        const capped = Math.min(target, a.remaining);
-        return { 
-            id: a.id, 
-            book_id: a.book_id, 
-            priority: a.priority, 
-            used: capped, 
-            remaining_after: a.remaining - capped,
-            book: a.book // Pass book info
-        };
-    });
-
-    let usedSum = initialAlloc.reduce((sum, x) => sum + x.used, 0);
-    let leftover = Math.max(0, total_sessions - usedSum);
     
-    // Distribute leftover
-    while (leftover > 0) {
-        let progressed = false;
-        for (const a of initialAlloc) {
-            if (leftover <= 0) break;
-            if (a.remaining_after > 0) {
-                a.used += 1;
-                a.remaining_after -= 1;
-                leftover -= 1;
-                usedSum += 1;
-                progressed = true;
+    if (!generate_all) {
+        // Fetch usage from OTHER months to subtract
+        const allocIds = allocations.map(a => a.id);
+        const { data: sessData } = await supabase
+            .from('course_sessions')
+            .select('class_book_allocation_id,month_index,sessions')
+            .in('class_book_allocation_id', allocIds);
+            
+        (Array.isArray(sessData) ? sessData : []).forEach((s: any) => {
+            if (s.month_index !== month_index) {
+                usedTotalByAlloc[s.class_book_allocation_id] = (usedTotalByAlloc[s.class_book_allocation_id] || 0) + (s.sessions ?? 0);
             }
-        }
-        if (!progressed) break;
+        });
     }
 
-    // Prepare distribution result
-    const distributionPlan = initialAlloc.map(p => ({
-        class_book_allocation_id: p.id,
-        month_index,
-        sessions: p.used
+    // Initialize allocations state
+    const runningAllocations = allocations.map(a => ({
+        ...a,
+        used: 0, // This will track usage WITHIN the current generation scope
+        remaining: Math.max(0, (a.total_sessions || 0) - (usedTotalByAlloc[a.id] || 0)),
+        book: a.book
     }));
 
-    // Save distribution
-    if (save) {
-        const { error: saveErr } = await supabase
-            .from('course_sessions')
-            .upsert(distributionPlan, { onConflict: 'class_book_allocation_id,month_index' });
-            
-        if (saveErr) throw new Error(`Allocation Save failed: ${saveErr.message}`);
+    // Initialize Progress (Unit/Day) for continuity
+    // If generate_all, we start from 1-1 (or fetch previous history before startYear/startMonth?)
+    // If single month, we fetch history up to that month.
+    
+    const currentProgress: Record<string, { unit: number, day: number }> = {};
+    runningAllocations.forEach(a => {
+        if (a.book) currentProgress[a.book.id] = { unit: 1, day: 1 };
+    });
+
+    // If not generate_all, we must fetch history to set initial progress correctly
+    if (!generate_all) {
+         // This part is tricky because 'generateLessons' handles history fetching internally if we pass 'initialProgress'.
+         // But here we want to be explicit.
+         // Let's rely on the logic inside the loop to fetch history if needed, OR
+         // Use the fact that we are generating ONE month, so we just need history up to that month.
+         
+         // We will handle history fetching inside the loop logic for the first iteration if needed.
     }
 
-    // --- STEP 2: CONTENT GENERATION (Lesson Plans) ---
+    const allGeneratedLessons: any[] = [];
+    const allDistributionPlans: any[] = [];
 
-    // 1. Fetch Class Info
-    const { data: classData, error: classError } = await supabase
-      .from('classes')
-      .select('*')
-      .eq('id', class_id)
-      .single();
+    // --- MAIN LOOP ---
+    for (const mIdx of indicesToProcess) {
+        if (!mIdx) continue;
 
-    if (classError || !classData) throw new Error('Class not found');
-    const cls = classData as Class;
-    const year = cls.year || 2026;
-    const month = MONTH_MAP[month_index];
-
-    // 2. Calculate Dates
-    if (month === undefined) throw new Error('Invalid month index');
-    const start = new Date(year, month, 1);
-    const end = endOfMonth(start);
-    const allDays = eachDayOfInterval({ start, end });
-
-    const { data: holidaysData } = await supabase
-      .from('holidays')
-      .select('*')
-      .eq('year', year);
-    const holidays = (holidaysData || []) as Holiday[];
-
-    const validDates = allDays.filter(d => {
-      const dayName = format(d, 'EEE') as Weekday;
-      const isClassDay = cls.days.includes(dayName);
-      if (!isClassDay) return false;
-      const dStr = format(d, 'yyyy-MM-dd');
-      const isHoliday = holidays.some(h => h.date === dStr);
-      if (isHoliday) return false;
-      return true;
-    });
-
-    const datesToUse = validDates.map(d => format(d, 'yyyy-MM-dd')).slice(0, total_sessions);
-
-    // 3. Prepare Input for Generator
-    // Use 'initialAlloc' where used > 0
-    const activeAllocations = initialAlloc.filter(a => a.used > 0);
-    
-    // We need 'books' array for generator
-    const books = activeAllocations.map(a => a.book);
-    
-    // 4. Calculate Continuity (Initial Progress)
-    const initialProgress: Record<string, { unit: number, day: number }> = {};
-    books.forEach((b: any) => {
-        initialProgress[b.id] = { unit: 1, day: 1 };
-    });
-
-    // Fetch history (all previous plans for this class)
-    // We need to fetch plans BEFORE this month to establish continuity.
-    // Assuming plans are stored with dates.
-    // If we are generating Month 2 (April), we need history up to March 31.
-    // But 'datesToUse[0]' is start of this month.
-    
-    if (datesToUse.length > 0) {
-        const firstDate = datesToUse[0];
+        const { year: currentYear, month: currentMonth } = getCalendarInfo(startYear, start_month, mIdx);
         
-        const { data: previousPlans } = await supabase
-            .from('lesson_plans')
-            .select('*')
-            .eq('class_id', class_id)
-            .lt('date', firstDate) // Everything before this month
-            .order('date', { ascending: true });
+        // A. Calculate Capacity (Valid Dates)
+        const start = new Date(currentYear, currentMonth, 1);
+        const end = endOfMonth(start);
+        const allDays = eachDayOfInterval({ start, end });
 
-        if (previousPlans) {
-            previousPlans.forEach((p: any) => {
-                const unitMatch = p.content.match(/(?:Unit\s+|[A-Za-z0-9]+-)(\d+)\s+Day\s+(\d+)/);
-                if (unitMatch) {
-                    const u = parseInt(unitMatch[1]);
-                    const d = parseInt(unitMatch[2]);
-                    initialProgress[p.book_id] = { unit: u, day: d };
-                    
-                    // Advance logic
-                    const book = books.find((b: any) => b.id === p.book_id);
-                    // Note: 'books' here only contains books for THIS month. 
-                    // If a book was used previously but not this month, we don't care about its progress for this generation.
-                    // But if it IS used this month, we need its progress.
-                    if (book) {
-                        const dpu = getDaysPerUnit(book);
-                        if (initialProgress[p.book_id].day < dpu) {
-                            initialProgress[p.book_id].day++;
-                        } else {
-                            initialProgress[p.book_id].unit++;
-                            initialProgress[p.book_id].day = 1;
-                        }
+        const validDates = allDays.filter(d => {
+            const dStr = format(d, 'yyyy-MM-dd');
+            const sd = specialDates.find(s => s.date === dStr);
+            
+            // Priority 1: No Class (Cancel)
+            if (sd && (sd.type === 'no_class' || sd.type === 'school_event')) return false;
+            
+            // Priority 2: Makeup (Force Add)
+            if (sd && sd.type === 'makeup') return true;
+            
+            // Priority 3: Standard Schedule
+            const dayName = format(d, 'EEE') as Weekday;
+            if (cls.days.includes(dayName)) {
+                if (holidays.some(h => h.date === dStr)) return false;
+                return true;
+            }
+            return false;
+        }).map(d => format(d, 'yyyy-MM-dd'));
+
+        const capacity = validDates.length; // This is the total sessions available for this month
+
+        // B. Distribute Sessions
+        // If generate_all, capacity is dynamic. If single month, user might have passed 'total_sessions' override?
+        // But for consistency, let's use calculated capacity unless overridden.
+        // Actually, the user's "total_sessions" in single generation often matches capacity, but maybe they want less?
+        // Let's use calculated capacity as default, or min(capacity, override).
+        
+        let sessionsToFill = capacity;
+        if (!generate_all && total_sessions) {
+            sessionsToFill = Math.min(capacity, total_sessions);
+        }
+
+        // Filter active allocations (those with remaining > 0)
+        const activeItems = runningAllocations
+            .filter(a => a.remaining > 0)
+            .sort((a, b) => a.priority - b.priority);
+
+        // Distribute logic
+        // Reset 'used' for this month's calculation
+        const monthDistribution = activeItems.map(a => ({ ...a, usedThisMonth: 0 }));
+        
+        if (monthDistribution.length > 0) {
+            const totalWeight = monthDistribution.reduce((sum, a) => sum + Math.max(1, a.sessions_per_week || 1), 0);
+            
+            // 1. Proportional Distribution
+            monthDistribution.forEach(a => {
+                const share = Math.max(1, a.sessions_per_week || 1) / totalWeight;
+                const target = Math.floor(sessionsToFill * share);
+                const actual = Math.min(target, a.remaining);
+                a.usedThisMonth = actual;
+                a.remaining -= actual; // Deduct from running total
+            });
+
+            // 2. Distribute Leftover
+            let currentUsed = monthDistribution.reduce((sum, a) => sum + a.usedThisMonth, 0);
+            let leftover = sessionsToFill - currentUsed;
+
+            while (leftover > 0) {
+                let progressed = false;
+                for (const a of monthDistribution) {
+                    if (leftover <= 0) break;
+                    if (a.remaining > 0) {
+                        a.usedThisMonth += 1;
+                        a.remaining -= 1;
+                        leftover -= 1;
+                        progressed = true;
                     }
                 }
-            });
+                if (!progressed) break;
+            }
+        }
+
+        // Store distribution for this month
+        monthDistribution.forEach(d => {
+            if (d.usedThisMonth > 0) {
+                allDistributionPlans.push({
+                    class_book_allocation_id: d.id,
+                    month_index: mIdx,
+                    sessions: d.usedThisMonth
+                });
+            }
+        });
+
+        // C. Generate Content
+        // We need to know which books are active this month
+        const activeBooks = monthDistribution.filter(d => d.usedThisMonth > 0).map(d => d.book);
+        
+        // If this is the first iteration and we didn't have previous progress, fetch history
+        if (mIdx === indicesToProcess[0] && validDates.length > 0) {
+             const firstDate = validDates[0];
+             const { data: previousPlans } = await supabase
+                .from('lesson_plans')
+                .select('*')
+                .eq('class_id', class_id)
+                .lt('date', firstDate)
+                .order('date', { ascending: true });
+             
+             if (previousPlans) {
+                 previousPlans.forEach((p: any) => {
+                     const unitMatch = p.content.match(/(?:Unit\s+|[A-Za-z0-9]+-)(\d+)\s+Day\s+(\d+)/);
+                     if (unitMatch && p.book_id) {
+                         const u = parseInt(unitMatch[1]);
+                         const d = parseInt(unitMatch[2]);
+                         // Update progress if this is later than what we have
+                         // Actually, we just want the state AFTER the last plan.
+                         // Simple approach: Apply all history sequentially
+                         if (currentProgress[p.book_id]) {
+                             // Advance logic
+                             const book = runningAllocations.find(a => a.book_id === p.book_id)?.book;
+                             if (book) {
+                                currentProgress[p.book_id] = { unit: u, day: d };
+                                // Move to NEXT slot
+                                const dpu = getDaysPerUnit(book);
+                                if (currentProgress[p.book_id].day < dpu) {
+                                    currentProgress[p.book_id].day++;
+                                } else {
+                                    currentProgress[p.book_id].unit++;
+                                    currentProgress[p.book_id].day = 1;
+                                }
+                             }
+                         }
+                     }
+                 });
+             }
+        }
+
+        // Prepare input for generator
+        const monthPlanInput = {
+            id: `plan-${currentYear}-${currentMonth}`,
+            year: currentYear,
+            month: currentMonth,
+            allocations: monthDistribution.filter(d => d.usedThisMonth > 0).map(d => ({
+                id: d.id,
+                class_id,
+                book_id: d.book_id,
+                priority: d.priority,
+                sessions_per_week: 1 // Dummy, distribution is already done via planDates
+            }))
+        };
+
+        const planDates = {
+            [`plan-${currentYear}-${currentMonth}`]: validDates.slice(0, sessionsToFill)
+        };
+
+        // Generate!
+        const generated = generateLessons({
+            classId: class_id,
+            monthPlans: [monthPlanInput],
+            planDates,
+            selectedDays: cls.days,
+            books: activeBooks,
+            initialProgress: JSON.parse(JSON.stringify(currentProgress)) // Deep copy
+        });
+
+        allGeneratedLessons.push(...generated);
+
+        // Update Progress for next iteration
+        generated.forEach(l => {
+            const unitMatch = l.content ? l.content.match(/(?:Unit\s+|[A-Za-z0-9]+-)(\d+)\s+Day\s+(\d+)/) : null;
+            if (unitMatch && l.book_id) {
+                 const u = parseInt(unitMatch[1]);
+                 const d = parseInt(unitMatch[2]);
+                 // We need to set the START of the NEXT lesson
+                 const book = activeBooks.find(b => b.id === l.book_id);
+                 if (book) {
+                    currentProgress[l.book_id] = { unit: u, day: d };
+                    const dpu = getDaysPerUnit(book);
+                    if (currentProgress[l.book_id].day < dpu) {
+                        currentProgress[l.book_id].day++;
+                    } else {
+                        currentProgress[l.book_id].unit++;
+                        currentProgress[l.book_id].day = 1;
+                    }
+                 }
+            }
+        });
+    }
+
+    // 6. Save Results
+    if (save) {
+        // Save Distributions
+        if (allDistributionPlans.length > 0) {
+             const { error: saveErr } = await supabase
+                .from('course_sessions')
+                .upsert(allDistributionPlans, { onConflict: 'class_book_allocation_id,month_index' });
+             if (saveErr) throw new Error(`Allocation Save failed: ${saveErr.message}`);
+        }
+
+        // Save Lessons
+        if (allGeneratedLessons.length > 0) {
+            // Determine range to clear
+            // If generate_all, we clear everything from start of Month 1 to end of Month 6?
+            // Or just the months we processed.
+            
+            const dates = allGeneratedLessons.map(l => l.date).sort();
+            const minDate = dates[0];
+            const maxDate = dates[dates.length - 1];
+
+            await supabase
+              .from('lesson_plans')
+              .delete()
+              .eq('class_id', class_id)
+              .gte('date', minDate)
+              .lte('date', maxDate);
+
+            const { error: insertError } = await supabase
+              .from('lesson_plans')
+              .insert(allGeneratedLessons.map(p => ({
+                  class_id: p.class_id,
+                  date: p.date,
+                  period: p.period,
+                  book_id: p.book_id,
+                  book_name: p.book_name,
+                  content: p.content,
+                  display_order: p.display_order
+              })));
+            if (insertError) throw insertError;
         }
     }
 
-    // 5. Generate
-    const monthPlanInput = {
-        id: `plan-${year}-${month}`,
-        year: year,
-        month: month,
-        allocations: activeAllocations.map(a => ({
-            id: a.id,
-            class_id: class_id,
-            book_id: a.book_id,
-            priority: a.priority,
-            sessions_per_week: 1 
-        })),
-    };
-    
-    // We pass the *distribution* to generateLessons via planDates logic
-    const planDates = {
-        [`plan-${year}-${month}`]: datesToUse
-    };
-    
-    const selectedDays = cls.days;
-    
-    const generated = generateLessons({
-        classId: class_id,
-        monthPlans: [monthPlanInput],
-        planDates,
-        selectedDays,
-        books, // Only active books
-        initialProgress 
-    });
-    
-    if (save && generated.length > 0) {
-        const startDate = datesToUse[0];
-        const endDate = datesToUse[datesToUse.length - 1];
-        
-        // Delete existing lesson plans for this period
-        await supabase
-          .from('lesson_plans')
-          .delete()
-          .eq('class_id', class_id)
-          .gte('date', startDate)
-          .lte('date', endDate);
-          
-        const { error: insertError } = await supabase
-          .from('lesson_plans')
-          .insert(generated.map(p => ({
-              class_id: p.class_id,
-              date: p.date,
-              period: p.period,
-              book_id: p.book_id,
-              book_name: p.book_name,
-              content: p.content,
-              display_order: p.display_order
-          })));
-          
-        if (insertError) throw insertError;
-    }
-
-    return NextResponse.json({ 
-        success: true, 
-        count: generated.length,
-        distribution: distributionPlan 
+    return NextResponse.json({
+        success: true,
+        count: allGeneratedLessons.length,
+        distribution: allDistributionPlans,
+        generated: allGeneratedLessons
     });
 
   } catch (error: any) {
-    console.error('Generation error:', error);
+    console.error('Generate Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

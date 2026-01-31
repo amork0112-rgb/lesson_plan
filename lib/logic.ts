@@ -1,5 +1,5 @@
 import { 
-  Class, ScheduleRule, Holiday, Event, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
+  Class, ScheduleRule, Holiday, Book, BookAllocation, LessonPlan, Weekday, LessonUnit, SpecialDate 
 } from '@/types';
 import { parseLocalDate } from './date';
 
@@ -8,11 +8,6 @@ const WEEKDAYS: Weekday[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Helper to check if a date string is in a holiday list
 const isHoliday = (dateStr: string, holidays: Holiday[]): boolean => {
   return holidays.some(h => h.date === dateStr);
-};
-
-// Helper to check if a date is in an event range
-const isEvent = (dateStr: string, events: Event[]): boolean => {
-  return events.some(e => dateStr >= e.start_date && dateStr <= e.end_date);
 };
 
 export function generateBookUnits(book: Book): LessonUnit[] {
@@ -158,32 +153,6 @@ export function buildMonthPlansFromAnnual(
   });
 
   return monthPlans;
-}
-export function generateClassDates(
-  year: number,
-  rules: ScheduleRule[],
-  holidays: Holiday[],
-  events: Event[]
-): string[] {
-  const dates: string[] = [];
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
-  
-  // Create a set of allowed weekdays for O(1) lookup
-  const allowedDays = new Set(rules.map(r => r.weekday));
-
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dayName = WEEKDAYS[d.getDay()];
-    // Use local date string for consistency
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    if (allowedDays.has(dayName)) {
-      if (!isHoliday(dateStr, holidays) && !isEvent(dateStr, events)) {
-        dates.push(dateStr);
-      }
-    }
-  }
-  return dates;
 }
 
 export function calculateBookDistribution(

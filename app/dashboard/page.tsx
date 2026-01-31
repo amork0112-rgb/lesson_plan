@@ -49,8 +49,8 @@ function getDatesForMonth(
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const special = specialDates[dateStr];
 
-    // If it's an event (cancellation), skip it regardless of weekday
-    if (special?.type === 'event') {
+    // If it's a no_class (cancellation), skip it regardless of weekday
+    if (special?.type === 'no_class') {
       continue;
     }
 
@@ -474,8 +474,8 @@ export default function Home() {
      let nextData: SpecialDate | null = null;
      
      if (!current) {
-        nextData = { type: 'event', name: 'Event' }; // Default to Event
-     } else if (current.type === 'event') {
+        nextData = { type: 'no_class', name: 'No Class' }; // Default to No Class
+     } else if (current.type === 'no_class') {
         nextData = { type: 'makeup', name: 'Makeup' };
      } else if (current.type === 'makeup') {
         nextData = { type: 'school_event', name: 'PBL' };
@@ -699,7 +699,45 @@ export default function Home() {
       books,
       scpType: classes.find(c => c.id === classId)?.scp_type ?? null
     });
-    let allPlans: LessonPlan[] = allLessons;
+
+    // Inject 'no_class' items for display in PDF
+    const noClassLessons: LessonPlan[] = [];
+    monthPlans.forEach(plan => {
+        const start = new Date(plan.year, plan.month, 1);
+        const end = new Date(plan.year, plan.month + 1, 0);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            
+            // Check if it is a scheduled weekday
+            const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayName = dayMap[d.getDay()] as Weekday;
+            if (!selectedDays.includes(dayName)) continue;
+            
+            // Check if it is no_class
+            const special = specialDates[dateStr];
+            if (special?.type === 'no_class') {
+                noClassLessons.push({
+                    id: `nc_${dateStr}`,
+                    class_id: classId,
+                    date: dateStr,
+                    display_order: 0,
+                    is_makeup: false,
+                    book_id: 'no_class',
+                    book_name: 'No Class',
+                    content: special.name || 'No Class',
+                    period: 0
+                });
+            }
+        }
+    });
+
+    let allPlans: LessonPlan[] = [...allLessons, ...noClassLessons].sort((a, b) => {
+        const da = parseLocalDate(a.date);
+        const db = parseLocalDate(b.date);
+        if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime();
+        return (a.period || 0) - (b.period || 0);
+    });
 
     if (targetMonthId) {
       const targetPlan = monthPlans.find(p => p.id === targetMonthId);
@@ -788,9 +826,9 @@ export default function Home() {
                 </select>
               </div>
 
-              <div>
+              <div className="flex-1 min-w-[240px]">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
-                <div className="flex flex-nowrap gap-2">
+                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
                   {ALL_WEEKDAYS.map(day => (
                     <button
                       key={day}
@@ -1045,9 +1083,9 @@ export default function Home() {
                                             let title = 'Class Day';
                                             let label = null;
 
-                                            if (special?.type === 'event') {
+                                            if (special?.type === 'no_class') {
                                                 statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
-                                                title = 'EVENT';
+                                                title = 'NO CLASS';
                                                 label = 'X';
                                             } else if (special?.type === 'makeup') {
                                                 statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
@@ -1095,9 +1133,9 @@ export default function Home() {
                                             let title = 'No Class';
                                             let label = null;
 
-                                            if (special?.type === 'event') {
+                                            if (special?.type === 'no_class') {
                                                 statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
-                                                title = 'EVENT';
+                                                title = 'NO CLASS';
                                                 label = 'X';
                                             } else if (special?.type === 'makeup') {
                                                 statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
@@ -1152,7 +1190,7 @@ export default function Home() {
                         </div>
                         <div className="mt-4 flex gap-4 text-xs text-gray-500 justify-center">
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div> Class Day</div>
-                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div> Event (No Class)</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div> No Class</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div> Makeup (Extra Class)</div>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div> School Event</div>
                         </div>
@@ -1614,11 +1652,11 @@ export default function Home() {
                                     onDragOver={(e) => e.preventDefault()}
                                   >
                                     {list.map(item => {
-                                      if (item.book_id === 'event') {
+                                      if (item.book_id === 'no_class') {
                                         return (
                                           <div key={item.id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                                            <span className="text-xs font-semibold text-amber-700">EVENT</span>
-                                            <span className="text-sm font-medium text-amber-900">{item.unit_text || 'Event'}</span>
+                                            <span className="text-xs font-semibold text-amber-700">NO CLASS</span>
+                                            <span className="text-sm font-medium text-amber-900">{item.unit_text || 'No Class'}</span>
                                           </div>
                                         );
                                       }

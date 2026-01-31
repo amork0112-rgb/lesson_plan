@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Book, Course, Holiday, Class, User, Role, BookAllocation, SpecialDate, Event, SpecialDateType } from '@/types';
+import { Book, Course, Holiday, Class, User, Role, BookAllocation, SpecialDate, SpecialDateType } from '@/types';
 import { getSupabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
