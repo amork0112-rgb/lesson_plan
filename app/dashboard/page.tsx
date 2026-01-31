@@ -7,7 +7,7 @@ import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
 import { parseLocalDate } from '@/lib/date';
 import PdfLayout from '@/components/PdfLayout';
-import { BookAllocation, ScheduleRule, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
+import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save } from 'lucide-react';
 
 async function exportPdf(_element: HTMLElement) {
@@ -26,7 +26,7 @@ interface MonthPlan {
 interface CourseView {
   id: string;
   section: string;
-  book: { id: string; name: string };
+  book: { id: string; name: string; category?: string; level?: string };
   total_sessions: number;
   remaining_sessions: number;
   sessions_by_month: Record<number, number>;
@@ -84,70 +84,7 @@ function getDatesForMonth(
   return dates;
 }
 
-function calculateMonthUsage(
-  dates: string[],
-  allocations: BookAllocation[],
-  classId: string,
-  selectedDays: Weekday[]
-): Record<string, number> {
-  // 1. Fixed Session Count
-  const fixedSessions = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : 0);
 
-  if (fixedSessions === 0 || allocations.length === 0) return {};
-
-  // 2. Calculate "Ratio" based on dates
-  const weekdaySet = new Set<Weekday>();
-  dates.forEach(d => {
-    const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseLocalDate(d).getDay()] as Weekday;
-    weekdaySet.add(day);
-  });
-
-  const rules: ScheduleRule[] = Array.from(weekdaySet).map(d => ({
-    id: `rule_${d}`,
-    class_id: classId,
-    weekday: d
-  }));
-
-  const distribution = calculateBookDistribution(allocations, rules);
-
-  const rawUsage: Record<string, number> = {};
-  dates.forEach(d => {
-    const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseLocalDate(d).getDay()];
-    const bookId = distribution[day];
-    if (bookId) rawUsage[bookId] = (rawUsage[bookId] || 0) + 1;
-  });
-
-  // 3. Ratio -> Fixed Session Conversion
-  const totalRaw = Object.values(rawUsage).reduce((a,b)=>a+b,0);
-
-  const finalUsage: Record<string, number> = {};
-  allocations.forEach(a => {
-    const ratio = totalRaw === 0 ? 0 : (rawUsage[a.book_id] || 0) / totalRaw;
-    finalUsage[a.book_id] = Math.round(fixedSessions * ratio);
-  });
-
-  return finalUsage;
-}
-
- 
-
-function getMonthlySlotStatus(planId: string, selectedDays: Weekday[], planDates: Record<string, string[]>) {
-  // ❌ Existing logic removed: const dates = planDates[planId] || []; const used = dates.length;
-  
-  // ✅ Fixed Target based on Weekly Frequency
-  const target = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
-  
-  // ✅ Used is ALWAYS equal to target (Fixed Session Logic)
-  // Calendar date count is ignored for session counting purposes
-  const used = target; 
-  
-  return {
-    target,
-    used,
-    remaining: 0, // Always 0 because we force used = target
-    overflow: 0, 
-  };
-}
 
  
 
@@ -407,95 +344,8 @@ export default function Home() {
     return matches;
   }, [effectiveBooks, classId, classes]);
 
-  const bookFlow = useMemo(() => {
-    // Structure: map[monthId][bookId] = { start, used, remaining }
-    const stats: Record<string, Record<string, { start: number, used: number, remaining: number }>> = {};
-    
-    // Ensure plans are processed chronologically for correct flow
-    const sortedPlans = [...monthPlans].sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.month - b.month;
-    });
+  // Removed bookFlow calculation as per user request to simplify dashboard logic
 
-    // Running remaining sessions from previous months
-    // map[bookId] = number
-    const runningRemaining: Record<string, number> = {};
-
-    sortedPlans.forEach(plan => {
-      // Use distributed dates for calculations
-      const dates = planDates[plan.id] || [];
-      const calculatedUsages = calculateMonthUsage(dates, plan.allocations, classId, selectedDays);
-      
-      const planStats: Record<string, { start: number, used: number, remaining: number }> = {};
-      
-      plan.allocations.forEach(alloc => {
-        const bookId = alloc.book_id;
-        
-        // 1. Try to find full book in global state
-        const globalBook = books.find(b => b.id === bookId);
-        
-        // 2. Determine Default Total
-        // Priority: Global Book > Assigned Course > 24
-        let defaultTotal = globalBook?.total_sessions;
-        
-        if (defaultTotal === undefined || defaultTotal === 0) {
-            const assigned = assignedCourses.find(c => c.book.id === bookId);
-            defaultTotal = assigned?.total_sessions ?? 24;
-        }
-        
-        // 1. Determine Start (Total available for this month)
-        let start = 0;
-        
-        // If user explicitly sets total override for this specific allocation (usually first month), use it.
-        // BUT, if it's a subsequent month, we usually carry over.
-        // Let's say: if total_sessions_override is present, it RESETS the flow (New Book Volume logic).
-        if (alloc.total_sessions_override !== undefined) {
-           start = alloc.total_sessions_override;
-        } else {
-           // Otherwise, take from previous remaining
-           if (runningRemaining[bookId] !== undefined) {
-              start = runningRemaining[bookId];
-           } else {
-              // First time seeing this book in the chain
-              start = defaultTotal;
-           }
-        }
-        
-        // 2. Determine Used
-        // "Used = monthlySessions * periodsPerDay"
-        // monthlySessions is fixed (8 or 12).
-        // periodsPerDay: 2 days/week -> 3 periods. 3 days/week -> 2 periods.
-        // Total = 24.
-        
-        // However, we need to respect the *proportion* if multiple books are used.
-        // But the prompt says "monthlyBookTotal = 24". 
-        // If there is only one book, used = 24.
-        // If there are multiple allocations, calculateBookDistribution handles the split.
-        // Wait, calculateMonthUsage returns counting of dates.
-        // "Book table은 소모량 표시용 ... Used = monthSessions" -> No, "monthlyBookTotal = 24".
-        // "Used = session * period".
-        
-        // We need to know how many sessions were assigned to THIS book.
-        // calculatedUsages returns the number of *sessions* (dates) assigned to the book.
-        // So we just multiply that by periodsPerDay.
-        
-        const periodsPerDay = selectedDays.length === 2 ? 3 : 2;
-        const sessionsAssigned = calculatedUsages[bookId] || 0;
-        const used = sessionsAssigned * periodsPerDay;
-        
-        // 3. Determine Remaining
-        const remaining = start - used;
-        
-        // Update state
-        planStats[bookId] = { start, used, remaining };
-        runningRemaining[bookId] = remaining;
-      });
-      
-      stats[plan.id] = planStats;
-    });
-    
-    return stats;
-  }, [monthPlans, planDates, selectedDays, holidays, classId, books, specialDates, assignedCourses]);
 
   // -- Handlers --
 
@@ -1018,14 +868,21 @@ export default function Home() {
             const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
             setPageTitle(fileName);
         } else {            
-            // If we filter and get 0, it means no lessons for that month.
+            // Check if sessions were actually assigned for this month.
+            const m = targetPlan.month; // 0-11
+            // Calculate Academic Month Index (March = 1, ..., Feb = 12)
+            const academicMonthIndex = ((m - 2 + 12) % 12) + 1;
             
-            if (confirm(`No lessons generated for ${MONTH_NAMES[targetPlan.month]}. Show full plan instead?`)) {
-                // Do not filter. `allPlans` remains full.
-                setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
+            const hasAssignedSessions = assignedCourses.some(c => (c.sessions_by_month?.[academicMonthIndex] || 0) > 0);
+
+            if (!hasAssignedSessions) {
+                 alert(`No sessions scheduled for ${MONTH_NAMES[targetPlan.month]}. This class has books, but no sessions assigned to this month.`);
             } else {
-                allPlans = []; // User declined, show empty
+                 // Sessions exist, but generator produced nothing (e.g. no valid dates)
+                 alert(`Warning: Sessions are assigned for ${MONTH_NAMES[targetPlan.month]}, but no lessons could be generated. Please check holidays or schedule days.`);
             }
+            
+            allPlans = []; // Show empty
         }
       }
     } else {
@@ -1202,22 +1059,7 @@ export default function Home() {
                           </span>
                         );
                       })()}
-                      {(() => {
-                        const usageMap = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId, selectedDays);
-                        const totalSessionsAllocated = plan.allocations.reduce((sum, a) => {
-                          return sum + (usageMap[a.book_id] || 0);
-                        }, 0);
-                        
-                        const periodsPerDay = selectedDays.length === 2 ? 3 : 2;
-                        const totalLessons = totalSessionsAllocated * periodsPerDay;
-                        
-                        const badgeClass = 'bg-green-100 text-green-700';
-                        return (
-                          <span className={`text-xs px-3 py-1 rounded-full font-semibold ${badgeClass}`}>
-                            Lessons: {totalLessons} / 24
-                          </span>
-                        );
-                      })()}
+
                    </div>
                    <div className="flex items-center gap-2">
                      <button 
@@ -1269,28 +1111,18 @@ export default function Home() {
                             <Copy className="h-3 w-3" /> Copy Previous
                           </button>
                       )}
-                      {(() => {
-                        const slotStatus = getMonthlySlotStatus(plan.id, selectedDays, planDates);
-                        if (slotStatus.used === slotStatus.target) {
-                          return (
-                            <>
-                              <button 
-                                onClick={() => saveMonthlyPlan(plan.id)}
-                                className="text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded-full hover:bg-green-700 transition-colors"
-                              >
-                                Save
-                              </button>
-                              <button 
-                                onClick={() => setExpandedMonthId(plan.id)}
-                                className="text-xs font-medium bg-yellow-500 text-white px-3 py-1.5 rounded-full hover:bg-yellow-600 transition-colors"
-                              >
-                                Edit
-                              </button>
-                            </>
-                          );
-                        }
-                        return null;
-                      })()}
+                      <button 
+                        onClick={() => saveMonthlyPlan(plan.id)}
+                        className="text-xs font-medium bg-green-600 text-white px-3 py-1.5 rounded-full hover:bg-green-700 transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button 
+                        onClick={() => setExpandedMonthId(plan.id)}
+                        className="text-xs font-medium bg-yellow-500 text-white px-3 py-1.5 rounded-full hover:bg-yellow-600 transition-colors"
+                      >
+                        Edit
+                      </button>
                    </div>
                 </div>
                 
@@ -1485,11 +1317,9 @@ export default function Home() {
                     <thead className="text-xs text-gray-500 uppercase bg-gray-50/50 border-b border-gray-100">
                       <tr>
                         <th className="px-6 py-3 w-1/3">Book</th>
+                        <th className="px-4 py-3 text-center">Section</th>
                         <th className="px-4 py-3 text-center">Weekly</th>
                         <th className="px-4 py-3 text-center">Order</th>
-                        <th className="px-4 py-3 text-center text-gray-400">Total</th>
-                        <th className="px-4 py-3 text-center text-indigo-600">Used</th>
-                        <th className="px-4 py-3 text-center">Remaining</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -1499,26 +1329,8 @@ export default function Home() {
                          const book = books.find(b => b.id === alloc.book_id) || 
                                       assignedCourses.find(c => c.book.id === alloc.book_id)?.book;
                          
-                         const stats = bookFlow[plan.id]?.[alloc.book_id] || { start: 0, used: 0, remaining: 0 };
-                         const { start, remaining } = stats;
-                         const calculatedUsed = calculateMonthUsage(planDates[plan.id] || [], plan.allocations, classId, selectedDays)[alloc.book_id] || 0;
-                         
-                         // Color Logic
-                         let remainingColor = 'text-green-600 font-bold';
-                         
-                         // Calculate percentage based on the START value of this month (or original total? user wants flow)
-                         // If we use Start as the denominator, it shows progress for THIS month's chunk?
-                         // Or should we compare against Book Total?
-                         // "Remaining acts like Next Month's Total" -> So remaining is the absolute number left.
-                         // Color logic: if remaining < 0 -> Red.
-                         
-                         if (remaining < 0) {
-                            remainingColor = 'text-red-600 font-black';
-                         } else if (remaining <= 4) { // Warning if less than 2 weeks approx
-                            remainingColor = 'text-red-500 font-bold';
-                         } else if (remaining <= 8) {
-                            remainingColor = 'text-yellow-600 font-bold';
-                         }
+                         const assignedCourse = assignedCourses.find(c => c.book.id === alloc.book_id);
+                         const sectionName = assignedCourse?.section || '-';
 
                          return (
                           <tr key={alloc.id} className="group hover:bg-gray-50">
@@ -1584,6 +1396,9 @@ export default function Home() {
                                 })()}
                               </select>
                             </td>
+                            <td className="px-4 py-3 text-center text-sm text-gray-600">
+                                {sectionName}
+                            </td>
                             <td className="px-4 py-3 text-center">
                               <input 
                                 type="number" min="1"
@@ -1609,35 +1424,6 @@ export default function Home() {
                                   <ArrowDown className="h-3 w-3" />
                                 </button>
                               </div>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                {index === 0 && (
-                                    <input 
-                                        type="number" min="0"
-                                        value={alloc.total_sessions_override !== undefined ? alloc.total_sessions_override : ''}
-                                        placeholder={(book as any)?.total_sessions?.toString()}
-                                        onChange={(e) => {
-                                            const val = e.target.value === '' ? undefined : parseInt(e.target.value);
-                                            updateAllocation(plan.id, alloc.id, 'total_sessions_override', val);
-                                        }}
-                                        className="w-16 text-center rounded border-gray-200 p-1.5 text-sm bg-gray-50 focus:bg-white"
-                                    />
-                                )}
-                                {index > 0 && (
-                                    <span className="text-gray-500 font-mono text-sm">{start}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center font-medium">
-                               <span className="text-indigo-600 font-bold">
-                                 {stats.used}
-                               </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                               <div className={`flex items-center justify-center gap-1.5 ${remainingColor}`}>
-                                  {remaining}
-                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button 
@@ -1688,6 +1474,9 @@ export default function Home() {
                             </select>
                           </td>
                           <td className="px-4 py-3 text-center">
+                            {/* Empty Section Cell */}
+                          </td>
+                          <td className="px-4 py-3 text-center">
                             <input 
                               type="number" min="1"
                               value={newAllocation.sessionsPerWeek}
@@ -1697,20 +1486,6 @@ export default function Home() {
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-xs text-gray-400">next</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <input 
-                              type="number" min="0"
-                              value={newAllocation.totalOverride || ''}
-                              onChange={(e) => setNewAllocation({...newAllocation, totalOverride: e.target.value ? parseInt(e.target.value) : undefined})}
-                              className="w-16 text-center rounded border-gray-200 p-1.5 text-sm bg-gray-50 focus:bg-white"
-                            />
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs text-indigo-600">auto</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs text-gray-400">calc</span>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">

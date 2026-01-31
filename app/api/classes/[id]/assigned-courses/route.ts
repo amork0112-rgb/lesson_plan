@@ -10,7 +10,7 @@ type AllocationRow = {
   section: string | null;
   book_id: string;
   total_sessions: number | null;
-  books?: { id: string; name: string } | { id: string; name: string }[];
+  books?: { id: string; name: string; category: string; level: string } | { id: string; name: string; category: string; level: string }[];
 };
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       section,
       book_id,
       total_sessions,
-      books:class_book_allocations_book_id_fkey (id,name)
+      books:class_book_allocations_book_id_fkey (id,name,category,level)
     `
     )
     .eq('class_id', id)
@@ -68,7 +68,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return {
       id: r.id,
       section: r.section ?? 'others',
-      book: { id: b?.id ?? r.book_id, name: b?.name ?? '' },
+      book: { 
+        id: b?.id ?? r.book_id, 
+        name: b?.name ?? '',
+        category: b?.category ?? 'General',
+        level: b?.level ?? ''
+      },
       total_sessions: total,
       remaining_sessions: remaining,
       sessions_by_month: sessionsByMonth,

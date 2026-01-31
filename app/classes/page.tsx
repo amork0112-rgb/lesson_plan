@@ -28,7 +28,7 @@ type BookLite = {
 type CourseView = {
   id: string; // allocation_id
   section: string;
-  book: { id: string; name: string };
+  book: { id: string; name: string; category?: string; level?: string };
   total_sessions: number;
   remaining_sessions: number;
   sessions_by_month: Record<number, number>;
@@ -381,6 +381,7 @@ export default function ClassesPage() {
                               <tfoot className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-900">
                                 <tr>
                                   <td className="px-4 py-3 text-sm">TOTAL</td>
+                                  <td className="px-4 py-3"></td>
                                   <td className="px-2 py-3 text-center text-sm">
                                     {courses.reduce((sum, c) => sum + (c.total_sessions || 0), 0)}
                                   </td>
