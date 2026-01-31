@@ -510,21 +510,38 @@ export default function Home() {
       if (configRes.ok) {
         const config = await configRes.json();
         console.log('[Debug] Class config loaded:', config);
+        
+        // Update class name if provided by API (Source of Truth)
+        if (config.name) {
+            setClassName(config.name);
+        }
+
         if (config.weekdays && Array.isArray(config.weekdays)) {
            // Ensure valid weekdays (normalize to Title Case: 'mon' -> 'Mon')
-           const normalizeDay = (d: string) => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+           const normalizeDay = (d: string) => {
+               if (!d) return '';
+               const s = String(d);
+               return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+           };
+           
            const validDays = config.weekdays
              .map((d: string) => normalizeDay(d))
              .filter((d: string) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].includes(d));
              
            console.log('[Debug] Setting selectedDays from API:', validDays);
-           setSelectedDays(validDays as Weekday[]);
+           
+           if (validDays.length > 0) {
+               setSelectedDays(validDays as Weekday[]);
+           } else {
+               console.warn('[Debug] Weekdays array exists but no valid days found after normalization');
+               // Do not set empty if we want to preserve previous state? 
+               // No, handleClassSelect cleared it. So it remains empty.
+           }
+           
            // Delay to allow state update to propagate
            setTimeout(() => setIsConfigLoaded(true), 0);
         } else {
             // Even if no weekdays, mark config as loaded so we don't hang?
-            // But if no weekdays, we can't generate valid plans.
-            // Let's assume we need weekdays.
             console.warn('[Debug] No valid weekdays found in config');
             setIsConfigLoaded(true);
         }

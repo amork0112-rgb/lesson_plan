@@ -30,7 +30,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // Parse weekdays safely
   let days: string[] = [];
   
-  if (data.weekdays) {
+  // Primary source: v_classes_with_schedules
+  if (data?.weekdays) {
       if (Array.isArray(data.weekdays)) {
           if (data.weekdays.length > 0 && typeof data.weekdays[0] === 'number') {
               // Map integers to strings
@@ -42,9 +43,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
   }
 
+  // Fallback source: class_schedules (if view returned nothing)
+  if (days.length === 0) {
+      const { data: scheduleData } = await supabase
+        .from('class_schedules')
+        .select('day')
+        .eq('class_id', id);
+      
+      if (scheduleData && scheduleData.length > 0) {
+          days = scheduleData.map((row: any) => row.day).filter(Boolean);
+      }
+  }
+
   return NextResponse.json({
-    id: data.class_id,
-    name: data.class_name,
+    id: data?.class_id || id,
+    name: data?.class_name || '',
     weekdays: days // Return normalized strings
   });
 }
