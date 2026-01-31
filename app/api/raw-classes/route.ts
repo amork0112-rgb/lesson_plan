@@ -3,6 +3,10 @@ import { getSupabaseService } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
+const WEEKDAY_INT_MAP: Record<number, string> = {
+  0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat',
+};
+
 export async function GET() {
   const supabase = getSupabaseService();
   
@@ -15,5 +19,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // Transform weekdays (int[]) to days (string[])
+  const transformed = data.map((cls: any) => ({
+    ...cls,
+    days: Array.isArray(cls.weekdays)
+      ? cls.weekdays.map((w: number) => WEEKDAY_INT_MAP[w]).filter(Boolean)
+      : (cls.days || [])
+  }));
+
+  return NextResponse.json(transformed);
 }

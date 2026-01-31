@@ -1,24 +1,32 @@
+//app/api/classes/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
 export const dynamic = 'force-dynamic';
 
-const WEEKDAY_MAP: Record<string, number> = {
-  sun: 0,
-  mon: 1,
-  tue: 2,
-  wed: 3,
-  thu: 4,
-  fri: 5,
-  sat: 6,
+const WEEKDAY_INT_MAP: Record<number, string> = {
+  0: 'Sun',
+  1: 'Mon',
+  2: 'Tue',
+  3: 'Wed',
+  4: 'Thu',
+  5: 'Fri',
+  6: 'Sat',
 };
-function parseWeekdays(input?: string | number[] | null): number[] | null {
+
+function parseWeekdays(input?: string | number[] | null): string[] | null {
   if (!input) return null;
-  if (Array.isArray(input)) return input as number[];
-  return (input as string)
-    .split(',')
-    .map((s) => WEEKDAY_MAP[s.trim().toLowerCase()])
-    .filter((n) => n !== undefined);
+  if (Array.isArray(input)) {
+    // If it's number[], map to strings
+    if (input.length > 0 && typeof input[0] === 'number') {
+      return (input as number[]).map((n) => WEEKDAY_INT_MAP[n]).filter(Boolean);
+    }
+    // If already strings, return as is
+    return input as unknown as string[];
+  }
+  // If string, assume it might be comma separated numbers or strings?
+  // For safety, let's assume if it comes from DB as string, it might be string representation
+  return null;
 }
 
 type BookJoin = {

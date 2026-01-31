@@ -59,8 +59,15 @@ export async function POST(
     if (classError || !classData) {
         return NextResponse.json({ error: 'Class not found' }, { status: 404 });
     }
-    const cls = classData as Class;
-    const startYear = inputYear || cls.year || 2026;
+    
+    // Map weekdays (int[]) to days (string[])
+    const rawClass = classData as any;
+    const WEEKDAY_INT_MAP: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+    const classDays: string[] = Array.isArray(rawClass.weekdays) 
+        ? (rawClass.weekdays as number[]).map(w => WEEKDAY_INT_MAP[w]).filter(Boolean)
+        : (rawClass.days || []);
+
+    const startYear = inputYear || rawClass.year || 2026;
 
     // 2. Fetch Global Calendar Data
     const { data: holidaysData } = await supabase.from('holidays').select('*');
@@ -176,7 +183,7 @@ export async function POST(
             
             // Priority 3: Standard Schedule
             const dayName = format(d, 'EEE') as Weekday;
-            if (cls.days.includes(dayName)) {
+            if (classDays.includes(dayName)) {
                 if (holidays.some(h => h.date === dStr)) return false;
                 return true;
             }
@@ -313,7 +320,7 @@ export async function POST(
             classId: class_id,
             monthPlans: [monthPlanInput],
             planDates,
-            selectedDays: cls.days,
+            selectedDays: classDays as Weekday[],
             books: activeBooks,
             initialProgress: JSON.parse(JSON.stringify(currentProgress)) // Deep copy
         });

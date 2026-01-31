@@ -432,6 +432,12 @@ export default function Home() {
       const res = await fetch(`/api/classes/${cId}/assigned-courses`);
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
+      console.log('[DEBUG assigned-courses] Fetched courses:', JSON.stringify(courses, null, 2));
+
+      if (courses.length > 0) {
+        console.log('[DEBUG assigned-courses] First course sessions:', courses[0].sessions_by_month);
+        console.log('[DEBUG assigned-courses] Keys:', Object.keys(courses[0].sessions_by_month));
+      }
       
       const newPlans: MonthPlan[] = [];
       
@@ -884,13 +890,13 @@ export default function Home() {
 
               <div className="flex-1 min-w-[240px]">
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Schedule Days</label>
-                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+                <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
                   {ALL_WEEKDAYS.map(day => (
                     <button
                       key={day}
                       onClick={() => handleDayToggle(day)}
                       className={`
-                        px-3 py-1.5 rounded-full text-xs font-medium transition-colors
+                        px-2.5 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap
                         ${selectedDays.includes(day) 
                           ? 'bg-indigo-600 text-white shadow-md' 
                           : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}
