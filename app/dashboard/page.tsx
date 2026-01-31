@@ -352,6 +352,29 @@ export default function Home() {
 
   // (removed) monthly curriculum grid helpers
 
+  // Combine global books with fallback books from assignedCourses
+  const effectiveBooks = useMemo(() => {
+      const combined = [...books];
+      const existingIds = new Set(books.map(b => b.id));
+      
+      assignedCourses.forEach(c => {
+          if (!existingIds.has(c.book.id)) {
+              combined.push({
+                  id: c.book.id,
+                  name: c.book.name,
+                  category: 'General', // Default
+                  total_units: 0,
+                  unit_type: 'unit',
+                  days_per_unit: 3, // Default assumption
+                  total_sessions: c.total_sessions || 24,
+                  // Minimal required fields to satisfy Book type
+              } as Book);
+              existingIds.add(c.book.id);
+          }
+      });
+      return combined;
+  }, [books, assignedCourses]);
+
   // Filter books based on selected class
   const filteredBooks = useMemo(() => {
     // Rely on classId to find the current class name ensuring sync
@@ -359,7 +382,7 @@ export default function Home() {
     
     if (!classId || !selectedClass) {
         // console.log('[Debug] No class selected or found. Returning all books.');
-        return books;
+        return effectiveBooks;
     }
     
     // Normalize class name for matching
@@ -367,7 +390,7 @@ export default function Home() {
     const cName = selectedClass.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     // console.log(`[Debug] Filtering books for class: ${selectedClass.name} (normalized: ${cName})`);
     
-    const matches = books.filter(b => {
+    const matches = effectiveBooks.filter(b => {
       if (!b.level) return false;
       const bLevel = b.level.toLowerCase().replace(/[^a-z0-9]/g, '');
       
@@ -382,7 +405,7 @@ export default function Home() {
     
     // console.log(`[Debug] Found ${matches.length} matching books.`);
     return matches;
-  }, [books, classId, classes]);
+  }, [effectiveBooks, classId, classes]);
 
   const bookFlow = useMemo(() => {
     // Structure: map[monthId][bookId] = { start, used, remaining }
@@ -407,10 +430,18 @@ export default function Home() {
       
       plan.allocations.forEach(alloc => {
         const bookId = alloc.book_id;
-        const book = books.find(b => b.id === bookId);
-        // Default to book's total_sessions. If book is missing, it will be 0.
-        // User must ensure all books are registered in the 'books' table.
-        let defaultTotal = book?.total_sessions || 0;
+        
+        // 1. Try to find full book in global state
+        const globalBook = books.find(b => b.id === bookId);
+        
+        // 2. Determine Default Total
+        // Priority: Global Book > Assigned Course > 24
+        let defaultTotal = globalBook?.total_sessions;
+        
+        if (defaultTotal === undefined || defaultTotal === 0) {
+            const assigned = assignedCourses.find(c => c.book.id === bookId);
+            defaultTotal = assigned?.total_sessions ?? 24;
+        }
         
         // 1. Determine Start (Total available for this month)
         let start = 0;
@@ -568,10 +599,13 @@ export default function Home() {
          const allocations: BookAllocation[] = [];
          
          courses.forEach((course, courseIdx) => {
-             // 🔥 Critical: Validate that the book exists in the global book list
-             const bookExists = books.find(b => b.id === course.book.id);
+             // Validate that the book exists in the global book list OR in the assigned courses
+             // Global books is preferred, but assigned courses is a valid fallback source
+             const bookExists = books.find(b => b.id === course.book.id) || 
+                                courses.find(c => c.book.id === course.book.id);
+                                
              if (!bookExists) {
-                 console.warn(`[Critical Warning] Book not found in global books: ${course.book.name} (ID: ${course.book.id}). This may cause display issues.`);
+                 console.warn(`[Critical Warning] Book not found in global books AND assigned courses: ${course.book.name} (ID: ${course.book.id}). This may cause display issues.`);
              }
 
              // Simply assign the book without quantity constraints
@@ -581,6 +615,20 @@ export default function Home() {
              // Subsequent months will carry over automatically via bookFlow logic
              const isFirstMonth = idx === 0;
 
+             // Calculate override for first month
+             let initialTotal = 24; // Default
+             
+             // 1. Try global book
+             const globalBook = books.find(b => b.id === course.book.id);
+             if (globalBook?.total_sessions) {
+                 initialTotal = globalBook.total_sessions;
+             } else {
+                 // 2. Try assigned course data
+                 if (course.total_sessions) {
+                     initialTotal = course.total_sessions;
+                 }
+             }
+
              allocations.push({
                  id: Math.random().toString(),
                  class_id: cId,
@@ -588,7 +636,7 @@ export default function Home() {
                  sessions_per_week: 2, // Legacy field, effectively ignored
                  priority: courseIdx + 1,
                  total_sessions_override: isFirstMonth 
-                    ? (books.find(b => b.id === course.book.id)?.total_sessions ?? 24) 
+                    ? initialTotal
                     : undefined
              });
          });
@@ -778,7 +826,7 @@ export default function Home() {
       monthPlans,
       planDates,
       selectedDays,
-      books,
+      books: effectiveBooks,
       scpType: classes.find(c => c.id === classId)?.scp_type ?? null
     });
     const targetPlan = monthPlans.find(p => p.id === monthId);
@@ -1440,7 +1488,9 @@ export default function Home() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {plan.allocations.map((alloc, index) => {
-                         const book = books.find(b => b.id === alloc.book_id);
+                         // Fallback Strategy for UI: Global Books > Assigned Courses
+                         const book = books.find(b => b.id === alloc.book_id) || 
+                                      assignedCourses.find(c => c.book.id === alloc.book_id)?.book;
                          
                          const stats = bookFlow[plan.id]?.[alloc.book_id] || { start: 0, used: 0, remaining: 0 };
                          const { start, remaining } = stats;
@@ -1468,7 +1518,7 @@ export default function Home() {
                             <td className="px-6 py-3">
                               {book && (
                                 <span className="inline-block mb-1.5 text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wider">
-                                  {book.category ? book.category.replace('c_', '') : 'General'}
+                                  {(book as any).category ? (book as any).category.replace('c_', '') : 'General'}
                                 </span>
                               )}
                               <select 
@@ -1485,10 +1535,12 @@ export default function Home() {
                                   let displayBooks = filteredBooks;
                                   
                                   // CRITICAL FIX: Ensure the currently assigned book is ALWAYS in the list, 
-                                  // even if it was filtered out by level mismatch.
-                                  const currentBook = books.find(b => b.id === alloc.book_id);
+                                  // even if it was filtered out by level mismatch OR missing from global books.
+                                  const currentBook = books.find(b => b.id === alloc.book_id) || 
+                                                      assignedCourses.find(c => c.book.id === alloc.book_id)?.book;
+
                                   if (currentBook && !displayBooks.find(b => b.id === currentBook.id)) {
-                                      displayBooks = [currentBook, ...displayBooks];
+                                      displayBooks = [currentBook as Book, ...displayBooks];
                                   }
 
                                   const groupedBooks: Record<string, Book[]> = {};
@@ -1557,7 +1609,7 @@ export default function Home() {
                                     <input 
                                         type="number" min="0"
                                         value={alloc.total_sessions_override !== undefined ? alloc.total_sessions_override : ''}
-                                        placeholder={book?.total_sessions?.toString()}
+                                        placeholder={(book as any)?.total_sessions?.toString()}
                                         onChange={(e) => {
                                             const val = e.target.value === '' ? undefined : parseInt(e.target.value);
                                             updateAllocation(plan.id, alloc.id, 'total_sessions_override', val);
