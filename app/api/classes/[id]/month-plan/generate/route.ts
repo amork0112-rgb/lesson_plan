@@ -51,7 +51,8 @@ export async function POST(
         year: inputYear,
         weekdays, // Allow frontend to override
         special_dates: inputSpecialDates, // Allow frontend to override special dates
-        plan_dates: inputPlanDates // Allow frontend to override plan dates
+        plan_dates: inputPlanDates, // Allow frontend to override plan dates
+        initial_progress
     } = body;
 
     // 1. Fetch Class Info
@@ -241,9 +242,18 @@ export async function POST(
     // If single month, we fetch history up to that month.
     
     const currentProgress: Record<string, { unit: number, day: number }> = {};
-    runningAllocations.forEach(a => {
-        if (a.book) currentProgress[a.book.id] = { unit: 1, day: 1 };
-    });
+    
+    // 1. Initialize from Payload (Frontend Preview State)
+    if (initial_progress) {
+        Object.entries(initial_progress).forEach(([bid, prog]: [string, any]) => {
+            currentProgress[bid] = { unit: prog.unit, day: prog.day };
+        });
+        console.log('[DEBUG] Using provided initial_progress:', currentProgress);
+    } else {
+        runningAllocations.forEach(a => {
+            if (a.book) currentProgress[a.book.id] = { unit: 1, day: 1 };
+        });
+    }
 
     // If not generate_all, we must fetch history to set initial progress correctly
     if (!generate_all) {
@@ -414,7 +424,8 @@ export async function POST(
             .map(d => d.book);
         
         // If this is the first iteration and we didn't have previous progress, fetch history
-        if (mIdx === indicesToProcess[0] && validDates.length > 0) {
+        // Skip DB fetch if initial_progress was provided (Assume frontend has latest state)
+        if (!initial_progress && mIdx === indicesToProcess[0] && validDates.length > 0) {
              const firstDate = validDates[0];
              const { data: previousPlans } = await supabase
                 .from('lesson_plans')

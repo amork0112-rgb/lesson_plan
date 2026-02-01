@@ -238,27 +238,10 @@ export default function Home() {
   // Rule: Sessions are fixed (8 or 12). Calendar is just a date placement tool.
   // Excess dates flow into the next month's queue.
   const planDates = useMemo(() => {
-    // Determine Fixed Sessions per Month
     const fixedSessions = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
-    
-    // 1. Generate ALL valid dates for the entire duration + buffer
-    // We iterate through the months defined by monthPlans, but maybe we need more if overflow happens?
-    // Actually, monthPlans defines the containers. We fill them.
-    // If we run out of dates, the last plan might be empty or partial.
-    // If we have too many dates, they just don't fit in the defined plans (or we could extend, but duration is fixed).
-    
-    // To ensure we have enough candidates, we might need to scan beyond the last plan's month
-    // if the earlier months were "sparse" (less than 8/12). 
-    // BUT, the requirement says "Excess dates flow". Sparse months would borrow from next?
-    // "초과되는 날짜는 무조건 다음 달로 이월" -> Overflow flows.
-    // If a month has 7 valid dates but needs 8? Then it takes from next month?
-    // The prompt focuses on "Excess". Let's assume we just fill the slots sequentially.
     
     const allValidDates: string[] = [];
     
-    // We need a continuous timeline.
-    // Let's iterate from the start month of the first plan, for enough months to cover the duration.
-    // Safety buffer: duration + 2 months to catch overflows.
     if (monthPlans.length === 0) return {};
 
     const firstPlan = monthPlans[0];
@@ -267,9 +250,58 @@ export default function Home() {
     
     // Generate a pool of dates
     for (let i = 0; i < monthPlans.length + 2; i++) {
-        const dates = getDatesForMonth(currentY, currentM, selectedDays, holidays, specialDates, classId);
-        // Sort just in case
-        dates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+        // For the very first month, we want to include days from the previous month 
+        // if they fall in the same week (e.g. Mar 31 Mon in Apr view)
+        // But only if we are at the start of the sequence.
+        
+        let dates: string[] = [];
+        if (i === 0) {
+             // Custom logic for first month to include "Calendar Start"
+             const startOfMonth = new Date(currentY, currentM, 1);
+             const startOfWeekDate = startOfWeek(startOfMonth, { weekStartsOn: 0 }); // Sunday
+             const endOfMonth = new Date(currentY, currentM + 1, 0);
+             
+             const dateSet = new Set<string>();
+             
+             for (let d = new Date(startOfWeekDate); d <= endOfMonth; d.setDate(d.getDate() + 1)) {
+                 const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                 
+                 // Apply filters (weekday, holiday, etc) - Reusing logic from getDatesForMonth would be cleaner but tricky with custom range
+                 // Let's replicate the filter logic briefly or extract it
+                 
+                 // We need to check if it's a valid class day
+                 const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                 const currentDayName = dayMap[d.getDay()] as Weekday;
+                 
+                 const special = specialDates[dateStr];
+                 if (special?.type === 'no_class') continue;
+                 if (special?.type === 'makeup') {
+                     dateSet.add(dateStr);
+                     continue;
+                 }
+                 
+                 if (selectedDays.includes(currentDayName)) {
+                     const isHoliday = holidays.some(h => {
+                        if (h.date !== dateStr) return false;
+                        if (h.affected_classes && h.affected_classes.length > 0) {
+                             if (!classId) return false; 
+                             return h.affected_classes.includes(classId);
+                        }
+                        return true;
+                     });
+                     
+                     if (!isHoliday) {
+                         dateSet.add(dateStr);
+                     }
+                 }
+             }
+             dates = Array.from(dateSet).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+             
+        } else {
+             dates = getDatesForMonth(currentY, currentM, selectedDays, holidays, specialDates, classId);
+             dates.sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+        }
+
         allValidDates.push(...dates);
         
         // Next month
@@ -286,6 +318,10 @@ export default function Home() {
     
     monthPlans.forEach(plan => {
         const slotsNeeded = fixedSessions;
+        // Ensure unique dates in distributed chunks?
+        // allValidDates might have duplicates if our logic overlaps? 
+        // i=0 logic goes to end of month. i=1 logic starts from next month 1st. No overlap.
+        
         const assignedDates = allValidDates.slice(dateCursor, dateCursor + slotsNeeded);
         distributed[plan.id] = assignedDates;
         dateCursor += slotsNeeded;
@@ -625,9 +661,13 @@ export default function Home() {
     const targetPlan = monthPlans.find(p => p.id === monthId);
     if (!targetPlan) return [];
     
+    // Instead of strict date checking, check if the date belongs to this plan's allocation
+    // This allows dates from prev/next month (rollovers) to appear in this month's view
+    const allocatedDates = planDates[monthId] || [];
+
     return generatedPlan.filter(l => {
-      const [y, m] = l.date.split('-').map(Number);
-      return y === targetPlan.year && (m - 1) === targetPlan.month && l.book_id !== 'no_class';
+      if (l.book_id === 'no_class') return false;
+      return allocatedDates.includes(l.date);
     });
   };
 
@@ -754,6 +794,39 @@ export default function Home() {
             planDatesMap[idx + 1] = pDates;
         });
 
+        // NEW: Calculate Initial Progress from Previous Month (if exists)
+        let initialProgress: Record<string, { unit: number, day: number }> | undefined;
+        
+        if (targetMonthId) {
+             const targetIdx = monthPlans.findIndex(p => p.id === targetMonthId);
+             if (targetIdx > 0) {
+                 const prevPlan = monthPlans[targetIdx - 1];
+                 const prevDates = planDates[prevPlan.id] || [];
+                 // Find last lessons for each book in the previous plan's dates
+                 const prevLessons = generatedPlan.filter(l => prevDates.includes(l.date));
+                 
+                 if (prevLessons.length > 0) {
+                     initialProgress = {};
+                     // Sort to get the last one
+                     const sorted = [...prevLessons].sort((a, b) => {
+                         if (a.date !== b.date) return a.date.localeCompare(b.date);
+                         return (a.period || 0) - (b.period || 0);
+                     });
+                     
+                     sorted.forEach(l => {
+                         if (!l.book_id || l.book_id === 'no_class' || l.book_id === 'school_event') return;
+                         // Use type assertion for unit_no/day_no as they might not be in LessonPlan type yet
+                         const u = (l as any).unit_no;
+                         const d = (l as any).day_no;
+                         if (u && d) {
+                             initialProgress![l.book_id] = { unit: u, day: d };
+                         }
+                     });
+                     console.log('[Debug] Calculated Initial Progress:', initialProgress);
+                 }
+             }
+        }
+
         // Prepare API Payload
         const payload: any = {
             year,
@@ -762,7 +835,8 @@ export default function Home() {
             indices: [],
             weekdays: selectedDays, // Pass current UI selection
             special_dates: specialDates, // Pass current UI special dates
-            plan_dates: planDatesMap // Pass calculated dates for sync
+            plan_dates: planDatesMap, // Pass calculated dates for sync
+            initial_progress: initialProgress // Pass progress state
         };
 
         if (targetMonthId) {
@@ -878,7 +952,22 @@ export default function Home() {
             }
         }
 
-        setGeneratedPlan(allPlans);
+        if (targetMonthId) {
+            setGeneratedPlan(prev => {
+                 const targetDates = planDates[targetMonthId] || [];
+                 // Remove existing lessons for these dates to avoid duplicates
+                 const others = prev.filter(l => !targetDates.includes(l.date));
+                 const merged = [...others, ...allPlans];
+                 return merged.sort((a, b) => {
+                    const da = parseLocalDate(a.date);
+                    const db = parseLocalDate(b.date);
+                    if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime();
+                    return (a.period || 0) - (b.period || 0);
+                 });
+            });
+        } else {
+            setGeneratedPlan(allPlans);
+        }
         setIsGenerated(true);
         requestAnimationFrame(() => {
             const el = document.getElementById('preview-root');
