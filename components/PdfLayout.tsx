@@ -2,6 +2,7 @@
 
 import { LessonPlan } from '@/types';
 import { parseLocalDate } from '@/lib/date';
+import { Shield } from 'lucide-react';
 
 interface Props {
   lessons: LessonPlan[];
@@ -17,6 +18,17 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
     'January','February','March','April','May','June',
     'July','August','September','October','November','December'
   ];
+
+  // Helper for colors based on book name keywords
+  const getBookStyle = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes('wonder') || n.includes('reading')) return 'text-lime-600';
+    if (n.includes('speak') || n.includes('english')) return 'text-sky-500';
+    if (n.includes('word') || n.includes('voca')) return 'text-pink-400';
+    if (n.includes('scp') || n.includes('writing')) return 'text-orange-400';
+    if (n.includes('grammar')) return 'text-purple-500';
+    return 'text-gray-800';
+  };
 
   let groups: { key: string; items: LessonPlan[]; year: number; month: number }[] = [];
 
@@ -46,11 +58,12 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
   }
 
   return (
-    <div id="pdf-root" className="print-only pt-16 px-8">
+    <div id="pdf-root" className="print-only bg-white">
       {groups.map(({ key, items, year, month }, index, array) => {
         const byDate: Record<string, LessonPlan[]> = {};
         items.forEach(l => (byDate[l.date] ||= []).push(l));
         const uniqueDates = Object.keys(byDate).sort((a,b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+        
         const monthDatesRange = (() => {
           if (uniqueDates.length === 0) return '';
           const s = parseLocalDate(uniqueDates[0]);
@@ -58,68 +71,104 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
           const fmt = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
           return `${fmt(s)} ~ ${fmt(e)}`;
         })();
-        
+
+        // Holiday Summary
+        const holidays = Array.from(new Set(
+          items
+            .filter(l => l.book_id === 'no_class')
+            .map(l => l.content || '')
+            .filter(c => c && c !== 'No Class') // Filter out generic "No Class" if it has no specific name, but usually content is the name
+        )).slice(0, 3).join(', '); // Limit to 3 to avoid clutter
+
         return (
-          <div key={key} className={index < array.length - 1 ? "" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
-            <div className="mb-0 text-center">
-              <h1 className="text-xl font-bold text-gray-900">{className} {MONTH_NAMES[month]} Lesson Plan</h1>
-              <p className="text-gray-600 text-xs">{selectedDays.join(' ')} {timeRange} • {MONTH_NAMES[month]} {year} [{monthDatesRange}]</p>
-            </div>
-            <div className="space-y-2">
-              {(() => {
-                const cols = selectedDays.length === 3 ? 3 : 2;
-                const rows: string[][] = [];
-                for (let i = 0; i < uniqueDates.length; i += cols) {
-                  rows.push(uniqueDates.slice(i, i + cols));
-                }
-                return rows.map((datesRow, ri) => (
-                  <div key={ri} className={`grid gap-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                    {datesRow.map(dStr => {
-                      const list = (byDate[dStr] || []).sort((a, b) => {
-                        const pa = typeof a.period === 'number' ? a.period : 0;
-                        const pb = typeof b.period === 'number' ? b.period : 0;
-                        return pa - pb;
-                      });
+          <div key={key} className="w-full h-screen p-8 box-border flex flex-col relative print:h-screen print:break-after-page">
+            {/* Outer Blue Frame */}
+            <div className="flex-1 border-[3px] border-sky-200 rounded-[2rem] p-6 relative flex flex-col shadow-[0_0_0_1px_rgba(224,242,254,0.5)]">
+              
+              {/* Spiral Binding Effect */}
+              <div className="absolute -top-3 left-0 w-full flex justify-center gap-6 px-12 z-10">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="w-4 h-8 bg-gradient-to-b from-gray-100 to-gray-300 border border-gray-400 rounded-full shadow-sm"></div>
+                ))}
+              </div>
+
+              {/* Header */}
+              <div className="text-center mb-6 mt-2">
+                <h1 className="text-3xl font-bold text-indigo-900 tracking-tight">{className} Lesson Plan</h1>
+                <div className="flex justify-center items-center gap-3 mt-2">
+                   <h2 className="text-xl font-bold text-gray-900">
+                     {MONTH_NAMES[month]} <span className="text-gray-800">[{monthDatesRange}]</span>
+                   </h2>
+                   {holidays && (
+                      <span className="text-red-400 font-bold text-sm bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
+                        {holidays}
+                      </span>
+                   )}
+                </div>
+              </div>
+
+              {/* Grid / Table Container */}
+              <div className="flex-1">
+                 <div className="border-t border-l border-gray-300">
+                  {(() => {
+                    const cols = selectedDays.length === 3 ? 3 : 2; // Default to 3 columns if 3 days, else 2 (or 3 if 2 days? user image has 3 cols)
+                    // The user image shows 3 cols for Tue/Thu/Fri.
+                    // If selectedDays is 2 (Tue/Thu), maybe we still use 3 cols or just 2? 
+                    // Let's stick to matching selectedDays count, but max 3 looks good.
+                    // Actually, if we want strict table look, we should fill the row.
+                    
+                    const gridColsClass = cols === 3 ? 'grid-cols-3' : 'grid-cols-2';
+                    
+                    const rows: string[][] = [];
+                    for (let i = 0; i < uniqueDates.length; i += cols) {
+                      rows.push(uniqueDates.slice(i, i + cols));
+                    }
+
+                    return rows.map((datesRow, ri) => (
+                      <div key={ri} className={`grid ${gridColsClass}`}>
+                        {datesRow.map((dStr, colIndex) => {
+                          const list = (byDate[dStr] || []).sort((a, b) => {
+                            const pa = typeof a.period === 'number' ? a.period : 0;
+                            const pb = typeof b.period === 'number' ? b.period : 0;
+                            return pa - pb;
+                          });
                           const dd = parseLocalDate(dStr);
-                          const head = `${dd.getMonth()+1}/${dd.getDate()} ${dd.toLocaleDateString('en-US',{weekday:'short'})}`;
-                          const isTrophyContent = (s?: string) => {
-                            if (!s) return false;
-                            return /^[A-Za-z0-9]+-\d+\s+Day\s+\d+$/i.test(s.trim());
-                          };
+                          const dayName = dd.toLocaleDateString('en-US',{weekday:'short'}); // Fri, Tue
+                          const dateText = `${dd.getMonth()+1}/${dd.getDate()} ${dayName}`;
+                          
+                          // Determine if this is the last item in row or column to manage borders?
+                          // Tailwind grid gap-0 + borders on items usually requires handling double borders.
+                          // We used border-t border-l on container.
+                          // So items need border-r and border-b.
+                          
                           return (
-                            <div key={dStr} className="border rounded-lg overflow-hidden h-full flex flex-col">
-                              <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium shrink-0">{head}</div>
-                              <div className="p-2 space-y-1 grow">
+                            <div key={dStr} className="border-r border-b border-gray-300 flex flex-col h-full min-h-[120px]">
+                              {/* Date Header */}
+                              <div className="bg-gray-100 py-1.5 px-3 text-center font-bold text-gray-800 text-sm border-b border-gray-200">
+                                {dateText}
+                              </div>
+                              
+                              {/* Content */}
+                              <div className="p-3 space-y-2 flex-1 flex flex-col justify-start items-center">
                                 {list.map(item => {
-                                  if (item.book_id === 'no_class') {
-                                    return (
-                                      <div key={item.id} className="flex items-center gap-2 text-gray-800 p-2 bg-red-50 rounded border border-red-100 mb-1">
-                                        <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded font-bold">No Class</span>
-                                        <span className="font-medium text-sm">{item.content || 'No Class'}</span>
-                                      </div>
-                                    );
+                                  if (item.book_id === 'no_class' || item.book_id === 'school_event') {
+                                      const isNoClass = item.book_id === 'no_class';
+                                      return (
+                                        <div key={item.id} className={`w-full text-center py-2 rounded ${isNoClass ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                            <div className="font-bold text-sm">{item.content}</div>
+                                        </div>
+                                      );
                                   }
-                                  if (item.book_id === 'school_event') {
-                                    return (
-                                      <div key={item.id} className="flex items-center gap-2 text-gray-800 p-2 bg-blue-50 rounded border border-blue-100 mb-1">
-                                        <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-bold">Event</span>
-                                        <span className="font-medium text-sm">{item.content || 'School Event'}</span>
-                                      </div>
-                                    );
-                                  }
-                                  const m = item.content?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
-                                  const u = m ? parseInt(m[1]) : undefined;
-                                  const d = m ? parseInt(m[2]) : undefined;
-                                  const isScp = item.book_id?.startsWith('scp_');
+
+                                  const colorClass = getBookStyle(item.book_name || '');
+                                  
                                   return (
-                                    <div key={item.id} className={`p-2 rounded-lg border ${isScp ? 'border-yellow-300 bg-yellow-50' : 'border-slate-200 bg-white'}`}>
-                                      <div className="text-sm font-bold text-slate-900">{item.book_name}</div>
-                                      <div className="mt-0.5 text-xs text-slate-600">
-                                        {isTrophyContent(item.content)
-                                          ? (item.content || '')
-                                          : (typeof u === 'number' && typeof d === 'number'
-                                              ? `Unit ${u} · Day ${d}`
-                                              : (item.content || ''))}
+                                    <div key={item.id} className="text-center w-full">
+                                      <div className={`font-bold text-sm leading-tight ${colorClass} mb-0.5`}>
+                                        {item.book_name}
+                                      </div>
+                                      <div className="text-xs text-gray-600 font-medium">
+                                        {item.content}
                                       </div>
                                     </div>
                                   );
@@ -128,9 +177,27 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                             </div>
                           );
                         })}
+                        {/* Fill empty cells if row is incomplete to maintain grid borders? */}
+                        {datesRow.length < cols && Array.from({ length: cols - datesRow.length }).map((_, emptyIdx) => (
+                             <div key={`empty-${emptyIdx}`} className="border-r border-b border-gray-300 bg-gray-50/30"></div>
+                        ))}
+                      </div>
+                    ));
+                  })()}
+                 </div>
+              </div>
+
+              {/* Footer */}
+              <div className="mt-4 pt-4 border-t-2 border-gray-100 flex flex-col items-center justify-center gap-2">
+                  <p className="text-xs text-gray-500 font-medium">SCP = Speaking Certification Program 스피킹인증제</p>
+                  <div className="flex items-center gap-2">
+                      <div className="bg-indigo-900 text-white rounded p-1">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <span className="text-indigo-900 font-bold text-lg tracking-wide">FRAGE EDU</span>
                   </div>
-                ));
-              })()}
+              </div>
+
             </div>
           </div>
         );
