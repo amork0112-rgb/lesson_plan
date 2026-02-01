@@ -13,6 +13,8 @@ export default function CalendarPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [newHoliday, setNewHoliday] = useState<Partial<Holiday> & { dbType?: string }>({ name: '', date: '', type: 'custom', affected_classes: [], dbType: '공휴일', sessions: 0 });
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -28,36 +30,47 @@ export default function CalendarPage() {
     if (!newHoliday.name || !newHoliday.date) return;
     
     // Logic Split:
-    // 1. If it's a "School Event" AND has "sessions > 0", it goes to special_dates.
-    // 2. Otherwise (Holiday, Vacation, or 0-session Event), it goes to academic_calendar.
+    // 1. If it's a "School Event" / "No Class" / "Makeup", it goes to special_dates.
+    // 2. Otherwise (Holiday, Vacation), it goes to academic_calendar.
     
-    if (newHoliday.dbType === '행사' && (newHoliday.sessions || 0) > 0) {
+    const isSpecialDateType = ['행사', '휴강', '보강'].includes(newHoliday.dbType || '');
+
+    if (isSpecialDateType) {
         // Special Date Logic
         const dateStr = newHoliday.date;
+        let type = 'school_event';
+        if (newHoliday.dbType === '휴강') type = 'no_class';
+        if (newHoliday.dbType === '보강') type = 'makeup';
+
         const data = {
-            type: 'school_event',
+            type,
             name: newHoliday.name,
-            sessions: newHoliday.sessions
+            sessions: newHoliday.sessions || 0
         };
         
-        await updateSpecialDate(dateStr, data as any); // Type cast if needed
-        // Note: updateSpecialDate currently replaces any existing special date on that day.
-        // This aligns with "Toggle" behavior.
+        await updateSpecialDate(dateStr, data as any);
     } else {
-        // Academic Calendar Logic (Holiday/Vacation/Full Day Event)
+        // Academic Calendar Logic (Holiday/Vacation)
+        
+        // If editing an existing holiday, delete it first
+        if (editingId) {
+            deleteHoliday(editingId);
+        }
+
         addHoliday({
-          id: Math.random().toString(),
+          id: editingId || Math.random().toString(),
           name: newHoliday.name,
           date: newHoliday.date,
           type: 'custom',
           year: parseInt(newHoliday.date.split('-')[0]),
           affected_classes: newHoliday.affected_classes,
-          sessions: 0 // Explicitly 0 because academic_calendar events are full-day
+          sessions: 0
         });
     }
     
     setIsAdding(false);
-    setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0 });
+    setEditingId(null);
+    setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0, dbType: '공휴일' });
   };
 
   const toggleClassSelection = (classId: string) => {
@@ -75,28 +88,48 @@ export default function CalendarPage() {
   };
 
   const handleDateClick = (date: Date) => {
+    // Open Add Form for this date
     const dateStr = format(date, 'yyyy-MM-dd');
-    const current = specialDates[dateStr];
-    let nextData: any = null;
-    
-    if (!current) {
-        nextData = { type: 'no_class', name: 'No Class' };
-    } else if (current.type === 'no_class') {
-        nextData = { type: 'makeup', name: 'Makeup' };
-    } else if (current.type === 'makeup') {
-        nextData = { type: 'school_event', name: 'PBL' };
-    } else if (current.type === 'school_event') {
-        const eventOrder = ['PBL', '정기평가', 'PBL (Tech)', '100Days', 'Vocaton', 'PBL (Econ)'];
-        const currentIndex = eventOrder.indexOf(current.name);
-        if (currentIndex !== -1 && currentIndex < eventOrder.length - 1) {
-             nextData = { type: 'school_event', name: eventOrder[currentIndex + 1] };
-        } else {
-             nextData = null;
-        }
-    } else {
-        nextData = null;
-    }
-    updateSpecialDate(dateStr, nextData);
+    setNewHoliday({
+        name: '',
+        date: dateStr,
+        type: 'custom',
+        affected_classes: [],
+        dbType: '공휴일',
+        sessions: 0
+    });
+    setEditingId(null);
+    setIsAdding(true);
+  };
+
+  const handleEditHoliday = (e: React.MouseEvent, h: Holiday) => {
+      e.stopPropagation();
+      setNewHoliday({
+          ...h,
+          dbType: '공휴일', // Default to Holiday for editing
+          // Note: We lose the original 'Vacation' vs 'Holiday' distinction if not stored, 
+          // but 'custom' type covers both. User can re-select 'Vacation' if needed.
+      });
+      setEditingId(h.id);
+      setIsAdding(true);
+  };
+
+  const handleEditSpecial = (e: React.MouseEvent, dateStr: string, special: any) => {
+      e.stopPropagation();
+      let dbType = '행사';
+      if (special.type === 'no_class') dbType = '휴강';
+      if (special.type === 'makeup') dbType = '보강';
+
+      setNewHoliday({
+          name: special.name,
+          date: dateStr,
+          type: 'custom',
+          affected_classes: [],
+          dbType,
+          sessions: special.sessions || 0
+      });
+      setEditingId(null); // Special dates don't have IDs in this context
+      setIsAdding(true);
   };
 
   return (
@@ -152,6 +185,8 @@ export default function CalendarPage() {
                     <option value="공휴일">Holiday (공휴일)</option>
                     <option value="방학">Vacation (방학)</option>
                     <option value="행사">School Event (행사)</option>
+                    <option value="휴강">No Class (휴강)</option>
+                    <option value="보강">Makeup Class (보강)</option>
                   </select>
                </div>
                <div>
@@ -304,8 +339,8 @@ export default function CalendarPage() {
                       return (
                         <div 
                           key={h.id} 
-                          className={cn("group flex flex-col gap-0.5 px-2 py-1.5 rounded border text-xs mb-1", itemStyle)}
-                          onClick={(e) => e.stopPropagation()} 
+                          className={cn("group flex flex-col gap-0.5 px-2 py-1.5 rounded border text-xs mb-1 cursor-pointer hover:shadow-sm transition-shadow", itemStyle)}
+                          onClick={(e) => handleEditHoliday(e, h)} 
                         >
                           <div className="flex justify-between items-start">
                               <span className="font-semibold truncate">{h.name}</span>

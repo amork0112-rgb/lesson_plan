@@ -9,7 +9,9 @@ import { parseLocalDate } from '@/lib/date';
 import { startOfWeek } from 'date-fns';
 import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
-import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save } from 'lucide-react';
+import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save, Share } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { getSupabase } from '@/lib/supabase';
 
 async function exportPdf(_element: HTMLElement) {
   void _element;
@@ -134,7 +136,7 @@ export default function Home() {
   const [classId, setClassId] = useState('');
   const [year, setYear] = useState(2026);
   const [startMonth, setStartMonth] = useState(2); // Default March
-  const [duration, setDuration] = useState(3); // Default 3 months
+  const [duration, setDuration] = useState(6); // Default 6 months
   const [selectedDays, setSelectedDays] = useState<Weekday[]>([]);
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
 
@@ -1113,6 +1115,63 @@ export default function Home() {
     });
   };
 
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleSharePlan = async () => {
+    if (monthPlans.length === 0) return;
+    setIsSharing(true);
+    try {
+        const element = document.getElementById('plan-container');
+        if (!element) {
+            throw new Error('Plan container not found');
+        }
+
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true
+        } as any);
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('Failed to create image');
+
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('Supabase client not available');
+
+        const filename = `plan_${classId}_${Date.now()}.png`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('plans')
+            .upload(filename, blob, {
+                contentType: 'image/png',
+                upsert: true
+            });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('plans')
+            .getPublicUrl(filename);
+
+        const { error: dbError } = await supabase
+            .from('shared_plans')
+            .insert({
+                class_id: classId,
+                class_name: className,
+                plan_image_url: publicUrl
+            });
+
+        if (dbError) throw dbError;
+
+        alert('Plan shared successfully!');
+
+    } catch (e: any) {
+        console.error('Share failed', e);
+        alert(`Failed to share plan: ${e.message}`);
+    } finally {
+        setIsSharing(false);
+    }
+  };
+
   // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -1287,11 +1346,24 @@ export default function Home() {
                     <Download className="w-4 h-4" />
                     Download PDF
                 </button>
+                <button 
+                    onClick={handleSharePlan}
+                    disabled={monthPlans.length === 0 || isSharing}
+                    className={`
+                        px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
+                        ${monthPlans.length === 0 || isSharing
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md active:transform active:scale-95'}
+                    `}
+                >
+                    <Share className="w-4 h-4" />
+                    {isSharing ? 'Sharing...' : 'Share Plan'}
+                </button>
              </div>
           </div>
 
           {/* Month List Container */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+          <div id="plan-container" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
 
           {/* Monthly Plans List */}
           <div className="p-6 space-y-8 bg-gray-50/50 min-h-[300px]">
@@ -1871,4 +1943,3 @@ export default function Home() {
     </div>
   );
 }
-
