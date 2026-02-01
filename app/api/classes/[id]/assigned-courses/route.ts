@@ -37,7 +37,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     `
     )
     .eq('class_id', id)
-    .neq('book_id', 'system_event')
     .neq('book_id', 'e7e7e7e7-e7e7-e7e7-e7e7-e7e7e7e7e7e7')
     .order('priority', { ascending: true, nullsFirst: true })
     .order('section', { ascending: true });
