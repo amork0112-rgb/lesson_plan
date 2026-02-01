@@ -45,13 +45,13 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
             </div>
             <div className="space-y-2">
               {(() => {
-                const cols = 2;
+                const cols = selectedDays.length === 3 ? 3 : 2;
                 const rows: string[][] = [];
                 for (let i = 0; i < uniqueDates.length; i += cols) {
                   rows.push(uniqueDates.slice(i, i + cols));
                 }
                 return rows.map((datesRow, ri) => (
-                  <div key={ri} className="grid grid-cols-2 gap-2">
+                  <div key={ri} className={`grid gap-2 ${cols === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                     {datesRow.map(dStr => {
                       const list = (byDate[dStr] || []).sort((a, b) => {
                         const pa = typeof a.period === 'number' ? a.period : 0;
