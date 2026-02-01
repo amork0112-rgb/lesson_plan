@@ -119,18 +119,26 @@ export async function POST(
     // 2. Fetch Global Calendar Data
     const { data: calendarData } = await supabase.from('academic_calendar').select('*');
     
+    // Fetch Special Dates (Manual)
+    const { data: specialDatesData } = await supabase
+        .from('special_dates')
+        .select('*')
+        .or(`class_id.is.null,class_id.eq.${class_id}`);
+
     type DbSpecialDate = SpecialDate & { date: string; id: string };
 
     const holidays: Holiday[] = [];
     const specialDates: DbSpecialDate[] = [];
 
+    // Process Academic Calendar -> Holidays (Only '공휴일' or '방학')
     (calendarData || []).forEach((event: any) => {
         // Filter by class_scope
-        // If scope is 'all', it applies to everyone.
-        // If scope is specific, it must match class_id.
         if (event.class_scope && event.class_scope !== 'all' && event.class_scope !== class_id) {
             return;
         }
+
+        // Only process '공휴일' or '방학' as Holidays (No Class)
+        if (event.type !== '공휴일' && event.type !== '방학') return;
 
         const start = new Date(event.start_date);
         const end = new Date(event.end_date);
@@ -138,30 +146,25 @@ export async function POST(
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];
             
-            if (event.type === '공휴일' || event.type === '방학') {
-                holidays.push({
-                    id: `${event.id}_${dateStr}`,
-                    date: dateStr,
-                    name: event.name,
-                    type: 'national',
-                    year: d.getFullYear(),
-                    affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : [])
-                });
-                specialDates.push({
-                    id: `${event.id}_${dateStr}`,
-                    date: dateStr,
-                    type: 'no_class',
-                    name: event.name
-                });
-            } else if (event.type === '행사') {
-                specialDates.push({
-                    id: `${event.id}_${dateStr}`,
-                    date: dateStr,
-                    type: 'school_event',
-                    name: event.name
-                });
-            }
+            holidays.push({
+                id: `${event.id}_${dateStr}`,
+                date: dateStr,
+                name: event.name || event.title,
+                type: 'national',
+                year: d.getFullYear(),
+                affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : [])
+            });
         }
+    });
+
+    // Process Special Dates Table
+    (specialDatesData || []).forEach((sd: any) => {
+        specialDates.push({
+            id: sd.id,
+            date: sd.date,
+            type: sd.type,
+            name: sd.name
+        });
     });
 
     // 3. Fetch Allocations (with books)
@@ -259,27 +262,26 @@ export async function POST(
 
         const validDates = allDays.filter(d => {
             const dStr = format(d, 'yyyy-MM-dd');
+            
+            // 1. Holiday/Vacation -> Exclude
+            const isHoliday = holidays.some(h => h.date === dStr);
+            if (isHoliday) return false;
+
             const sd = specialDates.find(s => s.date === dStr);
             
-            // Priority 1: No Class (Cancel)
-            if (sd && (sd.type === 'no_class' || sd.type === 'school_event')) return false;
+            // 2. special_date.no_class -> Exclude
+            if (sd?.type === 'no_class') return false;
             
-            // Priority 2: Makeup (Force Add)
-            if (sd && sd.type === 'makeup') return true;
+            // 3. special_date.makeup -> Include (Force Add)
+            if (sd?.type === 'makeup') return true;
             
-            // Priority 3: Standard Schedule
+            // 4. Standard Schedule
             const dayName = format(d, 'EEE') as Weekday;
             if (classDays.includes(dayName)) {
-                if (holidays.some(h => h.date === dStr)) return false;
                 return true;
             }
             return false;
         }).map(d => format(d, 'yyyy-MM-dd'));
-
-        console.log('DEBUG classDays:', classDays);
-        console.log('DEBUG specialDates:', specialDates.map(s => s.date));
-        console.log('DEBUG holidays:', holidays.map(h => h.date));
-        console.log('DEBUG validDates:', validDates);
 
         const capacity = validDates.length; // This is the total sessions available for this month
 
