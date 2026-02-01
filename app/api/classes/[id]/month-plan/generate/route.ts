@@ -48,7 +48,8 @@ export async function POST(
         save, 
         generate_all,
         start_month = 3,
-        year: inputYear
+        year: inputYear,
+        weekdays // Allow frontend to override
     } = body;
 
     // 1. Fetch Class Info
@@ -79,8 +80,12 @@ export async function POST(
     const WEEKDAY_INT_MAP: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
     let classDays: string[] = [];
 
-    // Attempt to extract from 'weekdays' field (from View)
-    if (rawClass.weekdays && Array.isArray(rawClass.weekdays)) {
+    // Priority 1: Use weekdays provided in body (UI Override)
+    if (weekdays && Array.isArray(weekdays) && weekdays.length > 0) {
+        classDays = weekdays;
+    } 
+    // Priority 2: Attempt to extract from 'weekdays' field (from View)
+    else if (rawClass.weekdays && Array.isArray(rawClass.weekdays)) {
         if (rawClass.weekdays.length > 0 && typeof rawClass.weekdays[0] === 'number') {
             classDays = (rawClass.weekdays as number[]).map(w => WEEKDAY_INT_MAP[w]).filter(Boolean);
         } else {

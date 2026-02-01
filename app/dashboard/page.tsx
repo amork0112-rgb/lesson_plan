@@ -728,7 +728,8 @@ export default function Home() {
             year,
             start_month: startMonth,
             save: false, // Preview only
-            indices: []
+            indices: [],
+            weekdays: selectedDays // Pass current UI selection
         };
 
         if (targetMonthId) {
