@@ -219,7 +219,7 @@ export async function POST(
             .in('class_book_allocation_id', allocIds);
             
         (Array.isArray(sessData) ? sessData : []).forEach((s: any) => {
-            if (s.month_index !== month_index) {
+            if (!indicesToProcess.includes(s.month_index)) {
                 usedTotalByAlloc[s.class_book_allocation_id] = (usedTotalByAlloc[s.class_book_allocation_id] || 0) + (s.sessions ?? 0);
             }
         });
@@ -260,6 +260,7 @@ export async function POST(
         if (!mIdx) continue;
 
         const { year: currentYear, month: currentMonth } = getCalendarInfo(startYear, start_month, mIdx);
+        console.log(`[DEBUG] Generating for Month Index ${mIdx} -> ${currentYear}-${currentMonth + 1} (start_month=${start_month})`);
         
         // A. Calculate Capacity (Valid Dates)
         const start = new Date(currentYear, currentMonth, 1);

@@ -726,7 +726,7 @@ export default function Home() {
         // Prepare API Payload
         const payload: any = {
             year,
-            start_month: startMonth,
+            start_month: startMonth + 1, // Backend expects 1-based month (e.g. 3 for March)
             save: false, // Preview only
             indices: [],
             weekdays: selectedDays // Pass current UI selection
