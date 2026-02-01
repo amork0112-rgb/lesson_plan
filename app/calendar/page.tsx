@@ -29,44 +29,21 @@ export default function CalendarPage() {
   const handleAddHoliday = async () => {
     if (!newHoliday.name || !newHoliday.date) return;
     
-    // Logic Split:
-    // 1. If it's a "School Event" / "No Class" / "Makeup", it goes to special_dates.
-    // 2. Otherwise (Holiday, Vacation), it goes to academic_calendar.
+    // Unified Logic: Everything goes to special_dates
+    // Map legacy types to special_dates types
+    let type = 'school_event';
+    if (newHoliday.dbType === '휴강' || newHoliday.dbType === '공휴일' || newHoliday.dbType === '방학') type = 'no_class';
+    if (newHoliday.dbType === '보강') type = 'makeup';
+    if (newHoliday.dbType === '행사') type = 'school_event';
+
+    const dateStr = newHoliday.date;
+    const data = {
+        type,
+        name: newHoliday.name,
+        sessions: newHoliday.sessions || 0
+    };
     
-    const isSpecialDateType = ['행사', '휴강', '보강'].includes(newHoliday.dbType || '');
-
-    // If editing an existing holiday, delete it first to prevent duplicates (e.g. if changing type to Special Date)
-    if (editingId) {
-        await deleteHoliday(editingId);
-    }
-
-    if (isSpecialDateType) {
-        // Special Date Logic
-        const dateStr = newHoliday.date;
-        let type = 'school_event';
-        if (newHoliday.dbType === '휴강') type = 'no_class';
-        if (newHoliday.dbType === '보강') type = 'makeup';
-
-        const data = {
-            type,
-            name: newHoliday.name,
-            sessions: newHoliday.sessions || 0
-        };
-        
-        await updateSpecialDate(dateStr, data as any);
-    } else {
-        // Academic Calendar Logic (Holiday/Vacation)
-
-        addHoliday({
-          id: editingId || Math.random().toString(),
-          name: newHoliday.name,
-          date: newHoliday.date,
-          type: 'custom',
-          year: parseInt(newHoliday.date.split('-')[0]),
-          affected_classes: newHoliday.affected_classes,
-          sessions: 0
-        });
-    }
+    await updateSpecialDate(dateStr, data as any);
     
     setIsAdding(false);
     setEditingId(null);

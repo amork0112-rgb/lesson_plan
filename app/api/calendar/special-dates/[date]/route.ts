@@ -5,13 +5,14 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ date:
   const supabase = getSupabaseService();
   const { date } = await params;
   
-  // Delete single-day events on this date from academic_calendar
-  const { error } = await supabase.from('academic_calendar')
+  // Delete from special_dates table
+  const { error } = await supabase
+      .from('special_dates')
       .delete()
-      .eq('start_date', date)
-      .eq('end_date', date);
+      .eq('date', date);
   
   if (error) {
+    console.error('🔥 special-dates DELETE error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ success: true });

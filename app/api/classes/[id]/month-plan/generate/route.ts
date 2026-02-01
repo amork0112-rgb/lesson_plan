@@ -126,55 +126,39 @@ export async function POST(
     const startYear = inputYear || rawClass.year || 2026;
 
     // 2. Fetch Global Calendar Data (All Events)
-    const { data: calendarData } = await supabase
-        .from('academic_calendar')
-        .select('*');
-        // .eq('type', '공휴일'); // Removed to include all events
+    // Deprecated: academic_calendar
     
     // Fetch Special Dates (Manual)
     const { data: specialDatesData } = await supabase
         .from('special_dates')
-        .select('*')
-        .eq('class_id', class_id);
+        .select('*');
 
     type DbSpecialDate = SpecialDate & { date: string; id: string };
 
     const holidays: Holiday[] = [];
     const specialDates: DbSpecialDate[] = [];
 
-    // Process Academic Calendar -> Holidays
-    (calendarData || []).forEach((event: any) => {
-        // Filter by class_scope
-        if (event.class_scope && event.class_scope !== 'all' && event.class_scope !== class_id) {
-            return;
-        }
-
-        const start = new Date(event.start_date);
-        const end = new Date(event.end_date);
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            
-            holidays.push({
-                id: `${event.id}_${dateStr}`,
-                date: dateStr,
-                name: event.name || event.title,
-                type: event.type === '공휴일' ? 'national' : 'custom',
-                year: d.getFullYear(),
-                affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : []),
-                sessions: event.sessions
-            });
-        }
-    });
-
     // Process Special Dates Table
     (specialDatesData || []).forEach((sd: any) => {
         specialDates.push({
-            id: sd.id,
+            id: sd.date, // Use date as ID since it's unique
             date: sd.date,
             type: sd.type,
             name: sd.name
         });
+
+        // Also treat 'no_class' as a holiday to block generation
+        if (sd.type === 'no_class') {
+             holidays.push({
+                id: `sd_${sd.date}`,
+                date: sd.date,
+                name: sd.name || 'No Class',
+                type: 'custom',
+                year: parseInt(sd.date.split('-')[0]),
+                affected_classes: [], // Global
+                sessions: sd.sessions
+            });
+        }
     });
 
     // 3. Fetch Allocations (with books)
