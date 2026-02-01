@@ -2,7 +2,8 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2, Share } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { Weekday } from '@/types';
 
 // Types
@@ -189,7 +190,25 @@ export default function ClassesPage() {
       const refresh = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
       const json = await refresh.json();
       setCourses(json as CourseView[]);
-      alert('All changes saved successfully');
+      
+      // Generate Image for Announcement
+      const element = document.getElementById('assigned-courses-table');
+      if (element) {
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            backgroundColor: '#ffffff'
+        } as any);
+        
+        const image = canvas.toDataURL("image/png");
+        const link = document.createElement('a');
+        link.href = image;
+        // Use class name in filename if possible, otherwise generic
+        const className = classes.find(c => c.class_id === expandedClassId)?.class_name || 'Class';
+        link.download = `${className}_Curriculum_Plan.png`;
+        link.click();
+      }
+
+      alert('Changes saved and announcement image generated!');
     } catch (e) {
       console.error('Failed to save all courses', e);
       alert('Failed to save changes');
@@ -305,7 +324,7 @@ export default function ClassesPage() {
                       </div>
 
                       {/* Bottom: Assigned Courses Table */}
-                      <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div id="assigned-courses-table" className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between">
                           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Assigned Courses</h3>
                           <button
@@ -313,8 +332,8 @@ export default function ClassesPage() {
                             disabled={isSaving}
                             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                           >
-                            <Save className="h-4 w-4" />
-                            {isSaving ? 'Saving...' : 'Save All Changes'}
+                            <Share className="h-4 w-4" />
+                            {isSaving ? 'Processing...' : '소식에 공지하기'}
                           </button>
                         </div>
                         
