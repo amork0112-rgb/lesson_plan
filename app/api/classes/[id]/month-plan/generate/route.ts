@@ -49,7 +49,9 @@ export async function POST(
         generate_all,
         start_month = 3,
         year: inputYear,
-        weekdays // Allow frontend to override
+        weekdays, // Allow frontend to override
+        special_dates: inputSpecialDates, // Allow frontend to override special dates
+        plan_dates: inputPlanDates // Allow frontend to override plan dates
     } = body;
 
     // 1. Fetch Class Info
@@ -264,32 +266,56 @@ export async function POST(
         console.log(`[DEBUG] Generating for Month Index ${mIdx} -> ${currentYear}-${currentMonth + 1} (start_month=${start_month})`);
         
         // A. Calculate Capacity (Valid Dates)
-        const start = new Date(currentYear, currentMonth, 1);
-        const end = endOfMonth(start);
-        const allDays = eachDayOfInterval({ start, end });
+        let validDates: string[] = [];
 
-        const validDates = allDays.filter(d => {
-            const dStr = format(d, 'yyyy-MM-dd');
-            
-            // 1. Holiday/Vacation -> Exclude
-            const isHoliday = holidays.some(h => h.date === dStr);
-            if (isHoliday) return false;
-
-            const sd = specialDates.find(s => s.date === dStr);
-            
-            // 2. special_date.no_class -> Exclude
-            if (sd?.type === 'no_class') return false;
-            
-            // 3. special_date.makeup -> Include (Force Add)
-            if (sd?.type === 'makeup') return true;
-            
-            // 4. Standard Schedule
-            const dayName = format(d, 'EEE') as Weekday;
-            if (classDays.includes(dayName)) {
+        if (inputPlanDates && inputPlanDates[mIdx]) {
+            // Use dates provided by frontend (Exact Sync)
+            const rawDates = inputPlanDates[mIdx];
+            validDates = rawDates.filter((d: string) => {
+                // We still need to filter out 'school_event' so we don't assign books to them
+                // 'no_class' should already be filtered by frontend, but safe to check
+                const sd = (inputSpecialDates && inputSpecialDates[d]) || specialDates.find(s => s.date === d);
+                
+                if (sd?.type === 'school_event') return false; 
                 return true;
-            }
-            return false;
-        }).map(d => format(d, 'yyyy-MM-dd'));
+            });
+            console.log(`[DEBUG] Using provided plan_dates for Month ${mIdx}: ${validDates.length} valid dates`);
+        } else {
+             const start = new Date(currentYear, currentMonth, 1);
+             const end = endOfMonth(start);
+             const allDays = eachDayOfInterval({ start, end });
+
+             validDates = allDays.filter(d => {
+                const dStr = format(d, 'yyyy-MM-dd');
+                
+                // 0. Frontend Overrides (Priority)
+                if (inputSpecialDates && inputSpecialDates[dStr]) {
+                    const sd = inputSpecialDates[dStr];
+                    if (sd.type === 'no_class') return false;
+                    if (sd.type === 'makeup') return true;
+                    if (sd.type === 'school_event') return false; 
+                }
+
+                // 1. Holiday/Vacation -> Exclude
+                const isHoliday = holidays.some(h => h.date === dStr);
+                if (isHoliday) return false;
+
+                const sd = specialDates.find(s => s.date === dStr);
+                
+                // 2. special_date.no_class -> Exclude
+                if (sd?.type === 'no_class') return false;
+                
+                // 3. special_date.makeup -> Include (Force Add)
+                if (sd?.type === 'makeup') return true;
+                
+                // 4. Standard Schedule
+                const dayName = format(d, 'EEE') as Weekday;
+                if (classDays.includes(dayName)) {
+                    return true;
+                }
+                return false;
+            }).map(d => format(d, 'yyyy-MM-dd'));
+        }
 
         const capacity = validDates.length; // This is the total sessions available for this month
 

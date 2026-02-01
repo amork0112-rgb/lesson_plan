@@ -747,13 +747,22 @@ export default function Home() {
     }
 
     try {
+        // Prepare Plan Dates Map (Index -> Dates)
+        const planDatesMap: Record<number, string[]> = {};
+        monthPlans.forEach((plan, idx) => {
+            const pDates = planDates[plan.id] || [];
+            planDatesMap[idx + 1] = pDates;
+        });
+
         // Prepare API Payload
         const payload: any = {
             year,
             start_month: startMonth + 1, // Backend expects 1-based month (e.g. 3 for March)
             save: false, // Preview only
             indices: [],
-            weekdays: selectedDays // Pass current UI selection
+            weekdays: selectedDays, // Pass current UI selection
+            special_dates: specialDates, // Pass current UI special dates
+            plan_dates: planDatesMap // Pass calculated dates for sync
         };
 
         if (targetMonthId) {
@@ -807,6 +816,18 @@ export default function Home() {
                         book_id: 'no_class',
                         book_name: 'No Class',
                         content: special.name || 'No Class',
+                        period: 0
+                    } as LessonPlan);
+                } else if (special?.type === 'school_event') {
+                    noClassLessons.push({
+                        id: `se_${dateStr}`,
+                        class_id: classId,
+                        date: dateStr,
+                        display_order: 0,
+                        is_makeup: false,
+                        book_id: 'school_event',
+                        book_name: 'School Event',
+                        content: special.name || 'Event',
                         period: 0
                     } as LessonPlan);
                 }
@@ -1686,29 +1707,43 @@ export default function Home() {
                                                     <div className="p-3 space-y-2 flex-1">
                                                         {dayLessons.map(lesson => {
                                                             const isNoClass = lesson.book_id === 'no_class';
+                                                            const isSchoolEvent = lesson.book_id === 'school_event';
+                                                            
+                                                            let bgClass = 'bg-white border-gray-200 hover:shadow-md hover:border-indigo-300 cursor-move active:scale-[0.98]';
+                                                            let textClass = 'text-gray-900';
+                                                            let subTextClass = 'text-gray-500';
+
+                                                            if (isNoClass) {
+                                                                bgClass = 'bg-red-50 border-red-100 cursor-default';
+                                                                textClass = 'text-red-700';
+                                                                subTextClass = 'text-red-600';
+                                                            } else if (isSchoolEvent) {
+                                                                bgClass = 'bg-blue-50 border-blue-100 cursor-default';
+                                                                textClass = 'text-blue-700';
+                                                                subTextClass = 'text-blue-600';
+                                                            }
+
                                                             return (
                                                                 <div
                                                                     key={lesson.id}
-                                                                    draggable={!isNoClass}
+                                                                    draggable={!isNoClass && !isSchoolEvent}
                                                                     onDragStart={(e) => handleDragStart(e, lesson.id)}
                                                                     onDrop={(e) => handleDrop(e, dateStr, lesson.id)}
                                                                     className={`
                                                                         group relative p-3 rounded-lg border shadow-sm transition-all
-                                                                        ${isNoClass 
-                                                                            ? 'bg-red-50 border-red-100 cursor-default' 
-                                                                            : 'bg-white border-gray-200 hover:shadow-md hover:border-indigo-300 cursor-move active:scale-[0.98]'}
+                                                                        ${bgClass}
                                                                     `}
                                                                 >
                                                                     <div className="flex justify-between items-start gap-2">
                                                                         <div className="flex-1 min-w-0">
-                                                                            <p className={`font-semibold text-sm truncate ${isNoClass ? 'text-red-700' : 'text-gray-900'}`}>
+                                                                            <p className={`font-semibold text-sm truncate ${textClass}`}>
                                                                                 {lesson.book_name}
                                                                             </p>
-                                                                            <p className={`text-xs mt-0.5 ${isNoClass ? 'text-red-600' : 'text-gray-500'}`}>
+                                                                            <p className={`text-xs mt-0.5 ${subTextClass}`}>
                                                                                 {lesson.content}
                                                                             </p>
                                                                         </div>
-                                                                        {!isNoClass && (
+                                                                        {!isNoClass && !isSchoolEvent && (
                                                                             <GripVertical className="h-4 w-4 text-gray-300 group-hover:text-indigo-400" />
                                                                         )}
                                                                     </div>

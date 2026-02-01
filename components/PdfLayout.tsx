@@ -77,6 +77,14 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
                                       </div>
                                     );
                                   }
+                                  if (item.book_id === 'school_event') {
+                                    return (
+                                      <div key={item.id} className="flex items-center gap-2 text-gray-800 p-2 bg-blue-50 rounded border border-blue-100 mb-1">
+                                        <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded font-bold">Event</span>
+                                        <span className="font-medium text-sm">{item.content || 'School Event'}</span>
+                                      </div>
+                                    );
+                                  }
                                   const m = item.content?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
                                   const u = m ? parseInt(m[1]) : undefined;
                                   const d = m ? parseInt(m[2]) : undefined;
