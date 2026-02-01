@@ -1657,15 +1657,16 @@ export default function Home() {
                     <p className="text-sm">Please check if you have assigned books and selected valid schedule days.</p>
                 </div>
             ) : (
-                /* Group by Month for Display */
-                Object.entries(generatedPlan.reduce((groups, lesson) => {
-                    const d = parseLocalDate(lesson.date);
-                    const key = `${d.getFullYear()}-${d.getMonth()}`;
-                    if (!groups[key]) groups[key] = [];
-                    groups[key].push(lesson);
-                    return groups;
-                }, {} as Record<string, LessonPlan[]>)).map(([key, lessons], index, array) => {
-                    const [y, m] = key.split('-').map(Number);
+                /* Group by Month Plan for Display (Plan-based View) */
+                monthPlans.map((plan, index, array) => {
+                    const allocatedDates = planDates[plan.id] || [];
+                    const lessons = generatedPlan.filter(l => allocatedDates.includes(l.date));
+                    
+                    if (lessons.length === 0) return null;
+
+                    const y = plan.year;
+                    const m = plan.month;
+                    const key = plan.id;
                     
                     // Group by Date for grid
                     const byDate: Record<string, LessonPlan[]> = {};
