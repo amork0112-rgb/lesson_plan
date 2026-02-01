@@ -76,21 +76,20 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
 
       {/* Cover Page */}
       <div className="w-full h-screen flex flex-col justify-center items-center print:break-after-page bg-white">
-          <div className="text-center">
-            <h1 className="text-6xl font-extrabold text-[#310080] mb-4 tracking-tight">{className}</h1>
-            <h2 className="text-3xl font-bold text-gray-600 mb-12">Lesson Plan</h2>
-            
-            {/* Logo */}
-            <div className="flex items-center justify-center gap-4">
+          <div className="text-center transform scale-125">
+             {/* Logo */}
+            <div className="flex items-center justify-center gap-4 mb-8">
                {/* Shield Icon */}
-               <svg width="80" height="90" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+               <svg width="100" height="110" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M50 95C50 95 90 75 90 25V10H10V25C10 75 50 95 50 95Z" fill="#310080" stroke="#009030" strokeWidth="6"/>
-                  {/* Stylized Elephant/F shape */}
                   <path d="M35 30H70C73 30 73 35 70 35H50V45H65C68 45 68 50 65 50H50V75H35V30Z" fill="white"/>
                   <circle cx="68" cy="48" r="3" fill="#009030"/>
                </svg>
-               <span className="text-6xl font-bold text-[#310080] tracking-tight" style={{ fontFamily: 'Arial, sans-serif' }}>FRAGE EDU</span>
+               <span className="text-7xl font-bold text-[#310080] tracking-tight" style={{ fontFamily: 'Arial, sans-serif' }}>FRAGE EDU</span>
             </div>
+            
+            <h1 className="text-5xl font-extrabold text-gray-800 mb-2 tracking-tight">{className}</h1>
+            <h2 className="text-2xl font-medium text-gray-500 uppercase tracking-widest">Lesson Plan</h2>
           </div>
       </div>
 
@@ -116,20 +115,20 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
         )).slice(0, 3).join(', ');
 
         return (
-          <div key={key} className="w-full h-screen px-2 py-6 box-border flex flex-col relative print:h-screen print:break-after-page">
+          <div key={key} className="w-full h-screen px-0 py-4 box-border flex flex-col relative print:h-screen print:break-after-page">
               
               {/* Header */}
-              <div className="text-center mb-2 px-4">
-                <div className="flex justify-between items-end border-b-2 border-[#310080] pb-2">
+              <div className="text-center mb-6 px-4">
+                <div className="flex justify-between items-end pb-2">
                     <div className="text-left">
-                        <h1 className="text-2xl font-bold text-[#310080] tracking-tight">{className} Lesson Plan</h1>
+                        <h1 className="text-3xl font-extrabold text-[#310080] tracking-tight">{className}</h1>
                     </div>
                     <div className="text-right flex flex-col items-end">
-                        <h2 className="text-xl font-bold text-gray-900 leading-none">
-                            {MONTH_NAMES[month]} <span className="text-gray-600 text-lg">[{monthDatesRange}]</span>
+                        <h2 className="text-2xl font-bold text-gray-900 leading-none">
+                            {MONTH_NAMES[month]} <span className="text-gray-400 text-lg font-medium">[{monthDatesRange}]</span>
                         </h2>
                         {holidays && (
-                            <span className="text-red-500 font-bold text-xs mt-1">
+                            <span className="text-red-500 font-bold text-xs mt-1 bg-red-50 px-2 py-0.5 rounded-full">
                                 {holidays}
                             </span>
                         )}
@@ -137,9 +136,9 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                 </div>
               </div>
 
-              {/* Grid / Table Container */}
-              <div className="flex-1 px-1">
-                 <div className="border-t border-l border-gray-300">
+              {/* Grid / Table Container - Minimalist No Borders */}
+              <div className="flex-1 px-4">
+                 <div className="">
                   {(() => {
                     const cols = selectedDays.length === 3 ? 3 : 2;
                     const gridColsClass = cols === 3 ? 'grid-cols-3' : 'grid-cols-2';
@@ -150,7 +149,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                     }
 
                     return rows.map((datesRow, ri) => (
-                      <div key={ri} className={`grid ${gridColsClass}`}>
+                      <div key={ri} className={`grid ${gridColsClass} gap-x-6 gap-y-8 mb-8`}>
                         {datesRow.map((dStr, colIndex) => {
                           const list = (byDate[dStr] || []).sort((a, b) => {
                             const pa = typeof a.period === 'number' ? a.period : 0;
@@ -162,19 +161,20 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                           const dateText = `${dd.getMonth()+1}/${dd.getDate()} ${dayName}`;
                           
                           return (
-                            <div key={dStr} className="border-r border-b border-gray-300 flex flex-col min-h-[100px]">
-                              {/* Date Header */}
-                              <div className="bg-gray-50 py-1 px-2 text-center font-bold text-gray-800 text-sm border-b border-gray-200">
-                                {dateText}
+                            <div key={dStr} className="flex flex-col min-h-[120px]">
+                              {/* Date Header - Minimal Underline */}
+                              <div className="mb-3 border-b-2 border-gray-200 pb-1 flex justify-between items-baseline">
+                                <span className="text-xl font-bold text-gray-800">{dateText.split(' ')[0]}</span>
+                                <span className="text-sm font-medium text-gray-500 uppercase">{dateText.split(' ')[1]}</span>
                               </div>
                               
                               {/* Content */}
-                              <div className="p-2 space-y-1 flex-1 flex flex-col justify-start items-center">
+                              <div className="space-y-3 flex-1 flex flex-col justify-start">
                                 {list.map(item => {
                                   if (item.book_id === 'no_class' || item.book_id === 'school_event') {
                                       const isNoClass = item.book_id === 'no_class';
                                       return (
-                                        <div key={item.id} className={`w-full text-center py-1 rounded ${isNoClass ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                        <div key={item.id} className={`w-full text-center py-1.5 rounded-md ${isNoClass ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
                                             <div className="font-bold text-xs">{item.content}</div>
                                         </div>
                                       );
@@ -183,11 +183,11 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                                   const colorClass = getBookStyle(item.book_name || '');
                                   
                                   return (
-                                    <div key={item.id} className="text-center w-full leading-snug">
+                                    <div key={item.id} className="w-full leading-snug">
                                       <div className={`font-bold text-sm ${colorClass}`}>
                                         {item.book_name}
                                       </div>
-                                      <div className="text-xs text-gray-600 font-medium">
+                                      <div className="text-xs text-gray-600 font-medium pl-1 border-l-2 border-gray-100">
                                         {item.content}
                                       </div>
                                     </div>
@@ -197,10 +197,6 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                             </div>
                           );
                         })}
-                        {/* Fill empty cells */}
-                        {datesRow.length < cols && Array.from({ length: cols - datesRow.length }).map((_, emptyIdx) => (
-                             <div key={`empty-${emptyIdx}`} className="border-r border-b border-gray-300 bg-gray-50/10"></div>
-                        ))}
                       </div>
                     ));
                   })()}
@@ -208,15 +204,15 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
               </div>
 
               {/* Footer */}
-              <div className="mt-2 pt-2 border-t border-gray-200 flex flex-col items-center justify-center gap-1">
+              <div className="mt-auto pt-4 flex flex-col items-center justify-center gap-1 opacity-60">
                   <p className="text-[10px] text-gray-400">SCP = Speaking Certification Program 스피킹인증제</p>
-                  <div className="flex items-center gap-1 opacity-80">
+                  <div className="flex items-center gap-1">
                       {/* Small Logo for Footer */}
-                       <svg width="16" height="18" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                       <svg width="14" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M50 95C50 95 90 75 90 25V10H10V25C10 75 50 95 50 95Z" fill="#310080" stroke="#009030" strokeWidth="8"/>
                           <path d="M35 30H70C73 30 73 35 70 35H50V45H65C68 45 68 50 65 50H50V75H35V30Z" fill="white"/>
                        </svg>
-                      <span className="text-[#310080] font-bold text-sm tracking-wide">FRAGE EDU</span>
+                      <span className="text-[#310080] font-bold text-xs tracking-wide">FRAGE EDU</span>
                   </div>
               </div>
 
