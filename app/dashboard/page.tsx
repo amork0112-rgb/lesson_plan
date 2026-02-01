@@ -1607,6 +1607,7 @@ export default function Home() {
         <>
           <style>{`
             @media print {
+              @page { margin: 15mm; }
               html, body { height: auto; }
               #results { max-height: none !important; overflow: visible !important; box-shadow: none !important; }
               .date-card { page-break-inside: avoid; }
@@ -1683,38 +1684,9 @@ export default function Home() {
                     
                     let rows: (string | null)[][] = [];
 
-                    if (isFixedGrid) {
-                        const dayOrder: Record<string, number> = { 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0 };
-                        // Filter selected days and sort them
-                        const sortedSelectedDays = [...selectedDays].sort((a, b) => (dayOrder[a] || 0) - (dayOrder[b] || 0));
-
-                        // Group dates by Week (Sunday-based)
-                        const byWeek: Record<string, string[]> = {};
-                        uniqueDates.forEach(dStr => {
-                            const d = parseLocalDate(dStr);
-                            const weekStart = startOfWeek(d, { weekStartsOn: 0 }).toISOString();
-                            if (!byWeek[weekStart]) byWeek[weekStart] = [];
-                            byWeek[weekStart].push(dStr);
-                        });
-
-                        const sortedWeeks = Object.keys(byWeek).sort();
-                        sortedWeeks.forEach(weekKey => {
-                            const weekDates = byWeek[weekKey];
-                            const row: (string | null)[] = sortedSelectedDays.map(dayName => {
-                                 // Find the date in weekDates that matches dayName
-                                 return weekDates.find(dStr => {
-                                     const d = parseLocalDate(dStr);
-                                     const dName = d.toLocaleDateString('en-US', { weekday: 'short' }) as Weekday;
-                                     return dName === dayName;
-                                 }) || null;
-                            });
-                            rows.push(row);
-                        });
-                    } else {
-                        // Original simple chunking
-                        for (let i = 0; i < uniqueDates.length; i += cols) {
-                            rows.push(uniqueDates.slice(i, i + cols));
-                        }
+                    // Simple chunking (no gaps)
+                    for (let i = 0; i < uniqueDates.length; i += cols) {
+                        rows.push(uniqueDates.slice(i, i + cols));
                     }
 
                     return (
@@ -1864,6 +1836,8 @@ export default function Home() {
             className={className}
             selectedDays={selectedDays}
             timeRange={`${startTime}~${endTime}`}
+            monthPlans={monthPlans}
+            planDates={planDates}
           />
         </div>
         </>

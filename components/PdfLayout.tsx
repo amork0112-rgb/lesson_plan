@@ -8,25 +8,46 @@ interface Props {
   className: string;
   selectedDays: string[];
   timeRange: string;
+  monthPlans?: { id: string; year: number; month: number }[];
+  planDates?: Record<string, string[]>;
 }
 
-export default function PdfLayout({ lessons, className, selectedDays, timeRange }: Props) {
-  const groups = Object.entries(lessons.reduce((acc, l) => {
-    const d = parseLocalDate(l.date);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    (acc[key] ||= []).push(l);
-    return acc;
-  }, {} as Record<string, LessonPlan[]>));
-
+export default function PdfLayout({ lessons, className, selectedDays, timeRange, monthPlans, planDates }: Props) {
   const MONTH_NAMES = [
     'January','February','March','April','May','June',
     'July','August','September','October','November','December'
   ];
 
+  let groups: { key: string; items: LessonPlan[]; year: number; month: number }[] = [];
+
+  if (monthPlans && planDates) {
+    groups = monthPlans.map(plan => {
+      const allocatedDates = planDates[plan.id] || [];
+      const planLessons = lessons.filter(l => allocatedDates.includes(l.date));
+      return {
+        key: plan.id,
+        items: planLessons,
+        year: plan.year,
+        month: plan.month
+      };
+    }).filter(g => g.items.length > 0);
+  } else {
+    const grouped = lessons.reduce((acc, l) => {
+      const d = parseLocalDate(l.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      (acc[key] ||= []).push(l);
+      return acc;
+    }, {} as Record<string, LessonPlan[]>);
+
+    groups = Object.entries(grouped).map(([key, items]) => {
+      const [y, m] = key.split('-').map(Number);
+      return { key, items, year: y, month: m };
+    });
+  }
+
   return (
-    <div id="pdf-root" className="print-only p-0">
-      {groups.map(([key, items], index, array) => {
-        const [y, m] = key.split('-').map(Number);
+    <div id="pdf-root" className="print-only pt-10 px-4">
+      {groups.map(({ key, items, year, month }, index, array) => {
         const byDate: Record<string, LessonPlan[]> = {};
         items.forEach(l => (byDate[l.date] ||= []).push(l));
         const uniqueDates = Object.keys(byDate).sort((a,b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
@@ -37,11 +58,12 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
           const fmt = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
           return `${fmt(s)} ~ ${fmt(e)}`;
         })();
+        
         return (
           <div key={key} className={index < array.length - 1 ? "" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
             <div className="mb-0 text-center">
-              <h1 className="text-xl font-bold text-gray-900">{className} Lesson Plan</h1>
-              <p className="text-gray-600 text-xs">{selectedDays.join(' ')} {timeRange} • {MONTH_NAMES[m]} {y} [{monthDatesRange}]</p>
+              <h1 className="text-xl font-bold text-gray-900">{className} {MONTH_NAMES[month]} Lesson Plan</h1>
+              <p className="text-gray-600 text-xs">{selectedDays.join(' ')} {timeRange} • {MONTH_NAMES[month]} {year} [{monthDatesRange}]</p>
             </div>
             <div className="space-y-2">
               {(() => {
@@ -65,9 +87,9 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange 
                             return /^[A-Za-z0-9]+-\d+\s+Day\s+\d+$/i.test(s.trim());
                           };
                           return (
-                            <div key={dStr} className="border rounded-lg overflow-hidden">
-                              <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium">{head}</div>
-                              <div className="p-2 space-y-1">
+                            <div key={dStr} className="border rounded-lg overflow-hidden h-full flex flex-col">
+                              <div className="px-2 py-1 bg-gray-100 text-gray-700 font-medium shrink-0">{head}</div>
+                              <div className="p-2 space-y-1 grow">
                                 {list.map(item => {
                                   if (item.book_id === 'no_class') {
                                     return (
