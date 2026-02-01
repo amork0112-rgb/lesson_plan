@@ -59,6 +59,20 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
 
   return (
     <div id="pdf-root" className="print-only bg-white">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: auto;
+            margin: 0mm;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
       {groups.map(({ key, items, year, month }, index, array) => {
         const byDate: Record<string, LessonPlan[]> = {};
         items.forEach(l => (byDate[l.date] ||= []).push(l));
@@ -81,9 +95,9 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
         )).slice(0, 3).join(', '); // Limit to 3 to avoid clutter
 
         return (
-          <div key={key} className="w-full h-screen p-8 box-border flex flex-col relative print:h-screen print:break-after-page">
+          <div key={key} className="w-full h-screen p-4 box-border flex flex-col relative print:h-screen print:break-after-page">
             {/* Outer Blue Frame */}
-            <div className="flex-1 border-[3px] border-sky-200 rounded-[2rem] p-6 relative flex flex-col shadow-[0_0_0_1px_rgba(224,242,254,0.5)]">
+            <div className="flex-1 border-[3px] border-sky-200 rounded-[2rem] p-4 relative flex flex-col shadow-[0_0_0_1px_rgba(224,242,254,0.5)]">
               
               {/* Spiral Binding Effect */}
               <div className="absolute -top-3 left-0 w-full flex justify-center gap-6 px-12 z-10">
@@ -93,9 +107,9 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
               </div>
 
               {/* Header */}
-              <div className="text-center mb-6 mt-2">
+              <div className="text-center mb-4 mt-2">
                 <h1 className="text-3xl font-bold text-indigo-900 tracking-tight">{className} Lesson Plan</h1>
-                <div className="flex justify-center items-center gap-3 mt-2">
+                <div className="flex justify-center items-center gap-3 mt-1">
                    <h2 className="text-xl font-bold text-gray-900">
                      {MONTH_NAMES[month]} <span className="text-gray-800">[{monthDatesRange}]</span>
                    </h2>
