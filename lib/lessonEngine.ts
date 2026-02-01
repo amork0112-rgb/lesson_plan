@@ -1,13 +1,19 @@
 import { LessonPlan, BookAllocation, Book } from '@/types';
 import { getSlotsPerDay, SCP_PERIOD } from './constants';
 
+export interface AllocationInput {
+  book_id: string;
+  sessions: number;
+}
+
 interface GenerateLessonInput {
   classId: string;
   monthPlans: {
     id: string;
     year: number;
     month: number;
-    allocations: BookAllocation[];
+    // We now expect explicit session counts
+    allocations: AllocationInput[];
   }[];
   planDates: Record<string, string[]>;
   selectedDays: string[];
@@ -29,15 +35,15 @@ export function getDaysPerUnit(book?: Book) {
 }
 
 export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
-  const { classId, monthPlans, planDates, selectedDays, books, scpType, initialProgress } = input;
+  const { classId, monthPlans, planDates, selectedDays, books, initialProgress } = input;
   if (!Array.isArray(books) || books.length === 0) return [];
   const slotsPerDay = getSlotsPerDay(selectedDays);
   let displayOrder = 1;
-  let scpDay = 1;
 
   const lessons: LessonPlan[] = [];
   const globalProgress: Record<string, { unit: number; day: number }> = initialProgress ? { ...initialProgress } : {};
 
+  // Sort plans chronologically
   const sortedPlans = [...monthPlans].sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;
     return a.month - b.month;
@@ -47,58 +53,72 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
     if (!plan || !Array.isArray(plan.allocations) || plan.allocations.length === 0) return;
     const dates = planDates[plan.id];
     if (!Array.isArray(dates) || dates.length === 0) return;
-    const allocations = [...plan.allocations].filter(a => a && a.book_id).sort((a, b) => a.priority - b.priority);
 
-    allocations.forEach(a => {
+    // 1. Create the "Deck" of lessons to be distributed
+    const deck: { book_id: string }[] = [];
+    
+    // We respect the order of allocations (Priority)
+    plan.allocations.forEach(alloc => {
+        for (let i = 0; i < alloc.sessions; i++) {
+            deck.push({ book_id: alloc.book_id });
+        }
+    });
+
+    // 2. Initialize progress for any new books
+    plan.allocations.forEach(a => {
       if (!globalProgress[a.book_id]) {
         globalProgress[a.book_id] = { unit: 1, day: 1 };
       }
     });
 
-    let rrIndex = 0;
+    // 3. Distribute Deck into Slots
+    // Slots are determined by Dates * SlotsPerDay
+    // We fill sequentially: Date 1 (Slot 1, Slot 2...), Date 2...
+    
+    let deckIndex = 0;
 
     dates.forEach(date => {
-      const usedToday = new Set<string>();
+        // For each date, we have `slotsPerDay` slots
+        for (let period = 1; period <= slotsPerDay; period++) {
+            if (deckIndex >= deck.length) break; // Run out of allocated sessions
 
-      for (let period = 1; period <= slotsPerDay; period++) {
-        if (allocations.length === 0) break;
+            const item = deck[deckIndex++];
+            const book = books.find(b => b.id === item.book_id);
+            
+            if (!book) continue; // Should not happen if data is consistent
 
-        let picked: BookAllocation | null = null;
-        for (let i = 0; i < allocations.length; i++) {
-          const cand = allocations[(rrIndex + i) % allocations.length];
-          if (!cand.book_id) continue;
-          if (!usedToday.has(cand.book_id)) {
-            picked = cand;
-            rrIndex = (rrIndex + i + 1) % allocations.length;
-            break;
-          }
+            const p = globalProgress[item.book_id];
+            const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
+            const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
+
+            lessons.push({
+              id: `${date}_${item.book_id}_${period}_${Math.random().toString(36).substr(2, 5)}`, // Ensure unique ID
+              class_id: classId,
+              date,
+              period,
+              display_order: displayOrder++,
+              is_makeup: false,
+              book_id: item.book_id,
+              book_name: book.name,
+              content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`,
+              unit_no: p.unit,
+              day_no: p.day
+            });
+
+            // Advance Progress
+            const dpu = getDaysPerUnit(book);
+            if (globalProgress[item.book_id].day < dpu) {
+                globalProgress[item.book_id].day++;
+            } else {
+                globalProgress[item.book_id].unit++;
+                globalProgress[item.book_id].day = 1;
+            }
         }
+    });
+  });
 
-        if (!picked) break;
-
-        const book = books.find(b => b.id === picked!.book_id);
-        if (!book) continue;
-        const dpu = getDaysPerUnit(book);
-        const p = globalProgress[picked!.book_id];
-        const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
-        const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
-
-        lessons.push({
-          id: `${date}_${picked!.book_id}_${period}`,
-          class_id: classId,
-          date,
-          period,
-          display_order: displayOrder++,
-          is_makeup: false,
-          book_id: picked!.book_id,
-          book_name: book.name,
-          content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`,
-          unit_no: p.unit,
-          day_no: p.day
-        });
-
-        usedToday.add(picked!.book_id);
-
+  return lessons;
+}
         if (p.day < dpu) {
           p.day++;
         } else {

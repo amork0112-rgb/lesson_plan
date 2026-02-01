@@ -631,10 +631,10 @@ export default function Home() {
 
   // Removed specialDates reset effect to avoid setState in effect
 
-  const saveMonthlyPlan = async (monthId: string) => {
+  const saveMonthlyPlan = async (monthId: string, silent: boolean = false) => {
     const monthly = getPlansForMonth(monthId);
     const target = monthPlans.find(p => p.id === monthId);
-    if (!target) return;
+    if (!target) return false;
 
     try {
       const res = await fetch('/api/lesson-plans/save-month', {
@@ -653,11 +653,33 @@ export default function Home() {
         throw new Error(err.error || 'Failed to save plan');
       }
 
-      alert('해당 월 플랜을 Supabase에 저장했습니다.');
+      if (!silent) alert('해당 월 플랜을 Supabase에 저장했습니다.');
+      return true;
     } catch (e: any) {
       console.error('Save failed:', e);
-      alert(`저장 실패: ${e.message}`);
+      if (!silent) alert(`저장 실패: ${e.message}`);
+      return false;
     }
+  };
+
+  const handleSaveAll = async () => {
+      if (!confirm('현재 보이는 모든 변경사항을 데이터베이스에 저장하시겠습니까?')) return;
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      // Show loading indicator? For now, just blocking alerts if we didn't silence them, but we will silence them.
+      for (const plan of monthPlans) {
+          const success = await saveMonthlyPlan(plan.id, true);
+          if (success) successCount++;
+          else failCount++;
+      }
+      
+      if (failCount === 0) {
+          alert('모든 월의 플랜이 성공적으로 저장되었습니다.');
+      } else {
+          alert(`${successCount}개 월 저장 성공, ${failCount}개 월 저장 실패.`);
+      }
   };
   
   const moveAllocation = (monthId: string, allocId: string, direction: 'up' | 'down') => {
@@ -852,6 +874,109 @@ export default function Home() {
     }
   };
   
+  // -- Drag & Drop Handlers --
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: string, targetLessonId?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const draggedId = e.dataTransfer.getData('text/plain');
+    
+    setGeneratedPlan(prev => {
+        const cloned = [...prev];
+        const draggedLesson = cloned.find(l => l.id === draggedId);
+        if (!draggedLesson) return prev;
+        
+        const sourceDate = draggedLesson.date;
+        
+        // 1. Remove dragged lesson from the pool
+        const remaining = cloned.filter(l => l.id !== draggedId);
+        
+        // 2. Prepare Target List (items currently in target date)
+        // Clone items to avoid mutating state directly
+        const targetLessons = remaining
+            .filter(l => l.date === targetDate)
+            .map(l => ({ ...l }));
+            
+        targetLessons.sort((a, b) => (a.period || 0) - (b.period || 0));
+        
+        // 3. Insert Dragged Lesson
+        const newLessonState = { ...draggedLesson, date: targetDate };
+        
+        if (targetLessonId) {
+            const targetIndex = targetLessons.findIndex(l => l.id === targetLessonId);
+            if (targetIndex !== -1) {
+                targetLessons.splice(targetIndex, 0, newLessonState);
+            } else {
+                targetLessons.push(newLessonState);
+            }
+        } else {
+            // Dropped on container -> Append
+            targetLessons.push(newLessonState);
+        }
+        
+        // 4. Recalculate Periods for Target Date
+        targetLessons.forEach((l, idx) => {
+            l.period = idx + 1;
+        });
+        
+        // 5. Recalculate Periods for Source Date (if different)
+        let sourceUpdates: any[] = [];
+        if (sourceDate !== targetDate) {
+            const sourceLessons = remaining
+                .filter(l => l.date === sourceDate)
+                .map(l => ({ ...l })); // Clone
+                
+            sourceLessons.sort((a, b) => (a.period || 0) - (b.period || 0));
+            sourceLessons.forEach((l, idx) => {
+                l.period = idx + 1;
+            });
+            sourceUpdates = sourceLessons;
+        }
+        
+        // 6. Reconstruct State
+        const finalMap = new Map();
+        
+        // Add all from remaining (these are untouched refs from prev state)
+        remaining.forEach(l => {
+            // Skip target date items (we have new versions)
+            // Skip source date items (we have new versions)
+            if (l.date !== targetDate && l.date !== sourceDate) {
+                finalMap.set(l.id, l);
+            }
+        });
+        
+        // Add updated source items
+        if (sourceDate !== targetDate) {
+            sourceUpdates.forEach(l => finalMap.set(l.id, l));
+        } else {
+            // If source == target, they are already in targetLessons, so we don't need to add them from 'remaining' 
+            // (actually we skipped them in the loop above? No, we skipped targetDate. If source==target, we skipped them.)
+        }
+        
+        // Add updated target items
+        targetLessons.forEach(l => finalMap.set(l.id, l));
+        
+        // If source != target, we handled source via sourceUpdates.
+        // If source == target, targetLessons covers everything.
+        // But wait, in the 'remaining' loop:
+        // if (l.date !== targetDate && l.date !== sourceDate)
+        // If source == target, this is effectively (l.date !== targetDate).
+        // So we skip them. And then we add 'targetLessons'. Correct.
+        // If source != target, we skip both. We add 'sourceUpdates' and 'targetLessons'. Correct.
+        
+        return Array.from(finalMap.values());
+    });
+  };
+
   // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
     <div className="p-8 max-w-6xl mx-auto">
@@ -1377,6 +1502,13 @@ export default function Home() {
               <p className="text-sm text-gray-500">{generatedPlan.length} sessions scheduled</p>
             </div>
             <button 
+              onClick={() => { handleSaveAll(); }}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-medium transition-colors shadow-sm"
+            >
+              <Save className="h-4 w-4" />
+              Save All Changes
+            </button>
+            <button 
               onClick={() => { downloadPDF(); }}
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
@@ -1395,186 +1527,108 @@ export default function Home() {
             ) : (
                 /* Group by Month for Display */
                 Object.entries(generatedPlan.reduce((groups, lesson) => {
-              const d = parseLocalDate(lesson.date);
-              const key = `${d.getFullYear()}-${d.getMonth()}`;
-              if (!groups[key]) groups[key] = [];
-              groups[key].push(lesson);
-              return groups;
-            }, {} as Record<string, LessonPlan[]>)).map(([key, lessons], index, array) => {
-              const [y, m] = key.split('-').map(Number);
-              
-              return (
-                <div key={key} className={index < array.length - 1 ? "mb-12 print:break-after-page" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
-                   <div className="mb-2 text-center">
-                      <h1 className="text-xl font-bold text-gray-900">{className} Lesson Plan</h1>
-                      <p className="text-gray-600 text-xs">
-                        {selectedDays.join(' ')} {startTime}~{endTime} • {MONTH_NAMES[m]} {y} [
-                          {(() => {
-                            const monthDates = lessons.map(l => l.date).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
-                            if (monthDates.length === 0) return '';
-                            const s = parseLocalDate(monthDates[0]);
-                            const e = parseLocalDate(monthDates[monthDates.length - 1]);
-                            const fmt = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
-                            return `${fmt(s)} ~ ${fmt(e)}`;
-                          })()}
-                        ]
-                      </p>
-                   </div>
+                    const d = parseLocalDate(lesson.date);
+                    const key = `${d.getFullYear()}-${d.getMonth()}`;
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(lesson);
+                    return groups;
+                }, {} as Record<string, LessonPlan[]>)).map(([key, lessons], index, array) => {
+                    const [y, m] = key.split('-').map(Number);
+                    
+                    // Group by Date for grid
+                    const byDate: Record<string, LessonPlan[]> = {};
+                    lessons.forEach(l => {
+                        if (!byDate[l.date]) byDate[l.date] = [];
+                        byDate[l.date].push(l);
+                    });
+                    
+                    const uniqueDates = Object.keys(byDate).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
+                    const cols = 2; 
+                    const rows: string[][] = [];
+                    for (let i = 0; i < uniqueDates.length; i += cols) {
+                        rows.push(uniqueDates.slice(i, i + cols));
+                    }
 
-                   <div className="space-y-6">
-                     {(() => {
-                       const byDate: Record<string, LessonPlan[]> = {};
-                       lessons.forEach(l => {
-                         if (!byDate[l.date]) byDate[l.date] = [];
-                         byDate[l.date].push(l);
-                       });
-                       const uniqueDates = Object.keys(byDate).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
-                       const cols = 2;
-                       const rows: string[][] = [];
-                       for (let i = 0; i < uniqueDates.length; i += cols) {
-                         rows.push(uniqueDates.slice(i, i + cols));
-                       }
-                       return rows.map((datesRow, ri) => (
-                        <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {datesRow.map((dStr) => {
-                            const list = (byDate[dStr] || []).sort((a, b) => {
-                              const pa = typeof a.period === 'number' ? a.period : 0;
-                              const pb = typeof b.period === 'number' ? b.period : 0;
-                              return pa - pb;
-                             });
-                              const dd = parseLocalDate(dStr);
-                              const monthNum = dd.getMonth()+1;
-                              const dayNum = dd.getDate();
-                              const weekday = dd.toLocaleDateString('en-US',{weekday:'short'});
-                              const parseUD = (s?: string) => {
-                                const m = s?.match(/Unit\s+(\d+)\s+Day\s+(\d+)/i);
-                                const u = m ? parseInt(m[1]) : undefined;
-                                const d = m ? parseInt(m[2]) : undefined;
-                                return { u, d };
-                              };
-                              const isTrophyContent = (s?: string) => {
-                                if (!s) return false;
-                                return /^[A-Za-z0-9]+-\d+\s+Day\s+\d+$/i.test(s.trim());
-                              };
-                              const formatUD = (u?: number, d?: number, fallback?: string) => {
-                                if (typeof u === 'number' && typeof d === 'number') return `Unit ${u} Day ${d}`;
-                                return fallback || '';
-                              };
-                              const onDropCard = (srcId: string, tgtId: string) => {
-                                if (!srcId || !tgtId || srcId === tgtId) return;
-                                const src = generatedPlan.find(l => l.id === srcId);
-                                const tgt = generatedPlan.find(l => l.id === tgtId);
-                                if (!src || !tgt || src.date !== tgt.date || src.date !== dStr) return;
-                                const dateList = generatedPlan.filter(l => l.date === dStr).sort((a, b) => {
-                                  const pa = typeof a.period === 'number' ? a.period : 0;
-                                  const pb = typeof b.period === 'number' ? b.period : 0;
-                                  return pa - pb;
-                                });
-                                const ids = dateList.map(l => l.id);
-                                const si = ids.indexOf(srcId);
-                                const ti = ids.indexOf(tgtId);
-                                if (si < 0 || ti < 0) return;
-                                ids.splice(si, 1);
-                                ids.splice(ti, 0, srcId);
-                                setGeneratedPlan(prev => {
-                                  const next = prev.map(l => ({ ...l }));
-                                  const mapIdx: Record<string, number> = {};
-                                  ids.forEach((id, idx) => { mapIdx[id] = idx + 1; });
-                                  for (const l of next) {
-                                    if (l.date === dStr && typeof mapIdx[l.id] === 'number') {
-                                      l.period = mapIdx[l.id];
-                                    }
-                                  }
-                                  return next;
-                                });
-                              };
-                              return (
-                                <div key={dStr} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                                  <div className="px-4 py-3 bg-slate-50 text-slate-700 font-medium flex items-center justify-between border-b border-slate-200">
-                                    <div className="flex items-baseline gap-2">
-                                      <span className="text-2xl font-semibold tracking-tight text-slate-900">{monthNum}/{dayNum}</span>
-                                      <span className="text-xs font-medium uppercase text-slate-500">{weekday}</span>
+                    return (
+                        <div key={key} className={index < array.length - 1 ? "mb-12 print:break-after-page" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
+                            <div className="mb-6 text-center border-b border-gray-200 pb-4">
+                                <h2 className="text-2xl font-bold text-gray-800">{MONTH_NAMES[m]} {y}</h2>
+                                <p className="text-gray-500 text-sm mt-1">{className}</p>
+                            </div>
+
+                            <div className="space-y-6">
+                                {rows.map((rowDates, ri) => (
+                                    <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {rowDates.map(dateStr => {
+                                            const dayLessons = (byDate[dateStr] || []).sort((a, b) => (a.period || 0) - (b.period || 0));
+                                            const dateObj = parseLocalDate(dateStr);
+                                            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                                            
+                                            return (
+                                                <div 
+                                                    key={dateStr}
+                                                    onDragOver={handleDragOver}
+                                                    onDrop={(e) => handleDrop(e, dateStr)}
+                                                    className="bg-white rounded-xl border-2 border-dashed border-gray-200 hover:border-indigo-300 transition-colors flex flex-col overflow-hidden h-full min-h-[150px]"
+                                                >
+                                                    {/* Date Header */}
+                                                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-baseline">
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-xl font-bold text-gray-900">{dateObj.getMonth() + 1}/{dateObj.getDate()}</span>
+                                                            <span className="text-sm font-medium text-gray-500 uppercase">{dayName}</span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-400 font-medium">{dayLessons.length} Tasks</span>
+                                                    </div>
+                                                    
+                                                    {/* Lessons List */}
+                                                    <div className="p-3 space-y-2 flex-1">
+                                                        {dayLessons.map(lesson => {
+                                                            const isNoClass = lesson.book_id === 'no_class';
+                                                            return (
+                                                                <div
+                                                                    key={lesson.id}
+                                                                    draggable={!isNoClass}
+                                                                    onDragStart={(e) => handleDragStart(e, lesson.id)}
+                                                                    onDrop={(e) => handleDrop(e, dateStr, lesson.id)}
+                                                                    className={`
+                                                                        group relative p-3 rounded-lg border shadow-sm transition-all
+                                                                        ${isNoClass 
+                                                                            ? 'bg-red-50 border-red-100 cursor-default' 
+                                                                            : 'bg-white border-gray-200 hover:shadow-md hover:border-indigo-300 cursor-move active:scale-[0.98]'}
+                                                                    `}
+                                                                >
+                                                                    <div className="flex justify-between items-start gap-2">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className={`font-semibold text-sm truncate ${isNoClass ? 'text-red-700' : 'text-gray-900'}`}>
+                                                                                {lesson.book_name}
+                                                                            </p>
+                                                                            <p className={`text-xs mt-0.5 ${isNoClass ? 'text-red-600' : 'text-gray-500'}`}>
+                                                                                {lesson.content}
+                                                                            </p>
+                                                                        </div>
+                                                                        {!isNoClass && (
+                                                                            <GripVertical className="h-4 w-4 text-gray-300 group-hover:text-indigo-400" />
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {dayLessons.length === 0 && (
+                                                            <div className="h-full flex items-center justify-center text-xs text-gray-300 italic py-4">
+                                                                Drop items here
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                  </div>
-                                  <div
-                                    className="p-2 space-y-1"
-                                  >
-                                    {list.map(item => {
-                                      if (item.book_id === 'no_class') {
-                                        return (
-                                          <div key={item.id} className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                                            <span className="text-xs font-semibold text-amber-700">NO CLASS</span>
-                                            <span className="text-sm font-medium text-amber-900">{item.unit_text || 'No Class'}</span>
-                                          </div>
-                                        );
-                                      }
-                                      const { u, d } = parseUD(item.content);
-                                      const hasUD = typeof u === 'number' && typeof d === 'number';
-                                      return (
-                                        <div
-                                          key={item.id}
-                                          className="px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <div className="text-sm font-semibold text-slate-900">{item.book_name}</div>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            {isTrophyContent(item.content) ? (
-                                              <span className="text-xs font-medium text-slate-700">{item.content || ''}</span>
-                                            ) : hasUD ? (
-                                              <>
-                                                <span className="text-xs text-slate-500">Unit</span>
-                                                <input
-                                                  type="number"
-                                                  min={1}
-                                                  value={u}
-                                                  onChange={(e) => {
-                                                    const nu = parseInt(e.target.value) || 1;
-                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(nu, d, item.content) } : l));
-                                                  }}
-                                                  className="w-14 px-2 py-1 border rounded text-xs"
-                                                />
-                                                <span className="text-xs text-slate-500">Day</span>
-                                                <input
-                                                  type="number"
-                                                  min={1}
-                                                  value={d}
-                                                  onChange={(e) => {
-                                                    const nd = parseInt(e.target.value) || 1;
-                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: formatUD(u, nd, item.content) } : l));
-                                                  }}
-                                                  className="w-14 px-2 py-1 border rounded text-xs"
-                                                />
-                                              </>
-                                            ) : (
-                                              <>
-                                                <span className="text-xs text-slate-500">Content</span>
-                                                <input
-                                                  type="text"
-                                                  value={item.content || ''}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setGeneratedPlan(prev => prev.map(l => l.id === item.id ? { ...l, content: val } : l));
-                                                  }}
-                                                  className="w-40 px-2 py-1 border rounded text-xs"
-                                                />
-                                              </>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                ))}
+                            </div>
                         </div>
-                       ));
-                    })()}
-                  </div>
-               </div>
-              );
-            }))}
+                    );
+                })
+            )}
           </div>
           
           {/* Print-only PDF layout */}

@@ -406,11 +406,8 @@ export async function POST(
             year: currentYear,
             month: currentMonth,
             allocations: monthDistribution.filter(d => d.usedThisMonth > 0).map(d => ({
-                id: d.id,
-                class_id,
                 book_id: d.book_id,
-                priority: d.priority,
-                sessions_per_week: 1 // Dummy, distribution is already done via planDates
+                sessions: d.usedThisMonth
             }))
         };
 
