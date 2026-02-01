@@ -433,12 +433,6 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to fetch assigned courses');
       const courses: CourseView[] = await res.json();
       setAssignedCourses(courses); // Store for rendering logic
-      console.log('[DEBUG assigned-courses] Fetched courses:', JSON.stringify(courses, null, 2));
-
-      if (courses.length > 0) {
-        console.log('[DEBUG assigned-courses] First course sessions:', courses[0].sessions_by_month);
-        console.log('[DEBUG assigned-courses] Keys:', Object.keys(courses[0].sessions_by_month));
-      }
       
       const newPlans: MonthPlan[] = [];
       
@@ -625,19 +619,13 @@ export default function Home() {
   };
 
   const getPlansForMonth = (monthId: string): LessonPlan[] => {
-    const allLessons = generateLessons({
-      classId,
-      monthPlans,
-      planDates,
-      selectedDays,
-      books: effectiveBooks,
-      scpType: classes.find(c => c.id === classId)?.scp_type ?? null
-    });
+    // Use the generated plan from state (Server Side Source of Truth)
     const targetPlan = monthPlans.find(p => p.id === monthId);
     if (!targetPlan) return [];
-    return allLessons.filter(l => {
+    
+    return generatedPlan.filter(l => {
       const [y, m] = l.date.split('-').map(Number);
-      return y === targetPlan.year && (m - 1) === targetPlan.month;
+      return y === targetPlan.year && (m - 1) === targetPlan.month && l.book_id !== 'no_class';
     });
   };
 
@@ -712,7 +700,7 @@ export default function Home() {
     exportPdf(element);
   };
 
-  const handleGenerate = (targetMonthId?: string) => {
+  const handleGenerate = async (targetMonthId?: string) => {
     // 1. Validation Checks
     if (selectedDays.length === 0) {
         alert('수업 요일(Schedule Days)이 선택되지 않았습니다. 상단의 요일을 최소 하나 이상 선택해주세요.');
@@ -734,111 +722,132 @@ export default function Home() {
         return;
     }
 
-    const allLessons = generateLessons({
-      classId,
-      monthPlans,
-      planDates,
-      selectedDays,
-      books,
-      scpType: classes.find(c => c.id === classId)?.scp_type ?? null
-    });
+    try {
+        // Prepare API Payload
+        const payload: any = {
+            year,
+            start_month: startMonth,
+            save: false, // Preview only
+            indices: []
+        };
 
-    // Inject 'no_class' items for display in PDF
-    const noClassLessons: LessonPlan[] = [];
-    monthPlans.forEach(plan => {
-        const start = new Date(plan.year, plan.month, 1);
-        const end = new Date(plan.year, plan.month + 1, 0);
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            
-            // Check if it is a scheduled weekday
-            const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const dayName = dayMap[d.getDay()] as Weekday;
-            if (!selectedDays.includes(dayName)) continue;
-            
-            // Check if it is no_class
-            const special = specialDates[dateStr];
-            if (special?.type === 'no_class') {
-                noClassLessons.push({
-                    id: `nc_${dateStr}`,
-                    class_id: classId,
-                    date: dateStr,
-                    display_order: 0,
-                    is_makeup: false,
-                    book_id: 'no_class',
-                    book_name: 'No Class',
-                    content: special.name || 'No Class',
-                    period: 0
-                });
+        if (targetMonthId) {
+            const idx = monthPlans.findIndex(p => p.id === targetMonthId);
+            if (idx !== -1) {
+                payload.indices = [idx + 1];
             }
+        } else {
+            payload.generate_all = true;
         }
-    });
 
-    let allPlans: LessonPlan[] = [...allLessons, ...noClassLessons].sort((a, b) => {
-        const da = parseLocalDate(a.date);
-        const db = parseLocalDate(b.date);
-        if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime();
-        return (a.period || 0) - (b.period || 0);
-    });
+        console.log('[Debug] Calling Generate API:', payload);
 
-    let alertMessage: string | null = null;
-
-    if (targetMonthId) {
-      const targetPlan = monthPlans.find(p => p.id === targetMonthId);
-      const targetPlanIndex = monthPlans.findIndex(p => p.id === targetMonthId);
-
-      if (targetPlan) {
-        // Filter plans for this month
-        const monthlyPlans = allPlans.filter(l => {
-          // Parse YYYY-MM-DD manually to avoid UTC conversion issues
-          const [y, m] = l.date.split('-').map(Number);
-          return (m - 1) === targetPlan.month && y === targetPlan.year;
+        const res = await fetch(`/api/classes/${classId}/month-plan/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-        
-        // If specific month generation yields results, show only that.
-        if (monthlyPlans.length > 0) {
-            allPlans = monthlyPlans;
-            const monthName = MONTH_NAMES[targetPlan.month];
-            const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
-            setPageTitle(fileName);
-        } else {            
-            // Check if sessions were actually assigned for this month.
-            // Update: Use Relative Month Index (idx + 1)
-            const academicMonthIndex = targetPlanIndex + 1;
-            
-            const hasAssignedSessions = assignedCourses.some(c => (c.sessions_by_month?.[academicMonthIndex] || 0) > 0);
 
-            if (!hasAssignedSessions) {
-                 alertMessage = `No sessions scheduled for ${MONTH_NAMES[targetPlan.month]}. This class has books, but no sessions assigned to this month (Month ${academicMonthIndex}).`;
-            } else {
-                 // Sessions exist, but generator produced nothing (e.g. no valid dates)
-                 alertMessage = `Warning: Sessions are assigned for ${MONTH_NAMES[targetPlan.month]}, but no lessons could be generated. Please check holidays or schedule days.`;
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Generation failed');
+        }
+
+        const data = await res.json();
+        const allLessons = data.generated as LessonPlan[];
+
+        // Inject 'no_class' items for display in PDF
+        const noClassLessons: LessonPlan[] = [];
+        monthPlans.forEach(plan => {
+            const start = new Date(plan.year, plan.month, 1);
+            const end = new Date(plan.year, plan.month + 1, 0);
+            
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                
+                // Check if it is a scheduled weekday
+                const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const dayName = dayMap[d.getDay()] as Weekday;
+                if (!selectedDays.includes(dayName)) continue;
+                
+                // Check if it is no_class
+                const special = specialDates[dateStr];
+                if (special?.type === 'no_class') {
+                    noClassLessons.push({
+                        id: `nc_${dateStr}`,
+                        class_id: classId,
+                        date: dateStr,
+                        display_order: 0,
+                        is_makeup: false,
+                        book_id: 'no_class',
+                        book_name: 'No Class',
+                        content: special.name || 'No Class',
+                        period: 0
+                    } as LessonPlan);
+                }
             }
-            
-            allPlans = []; // Show empty
-        }
-      }
-    } else {
-        // Generate All
-        setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
-        
-        if (allPlans.length === 0) {
-             alertMessage = '수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지';
-        }
-    }
+        });
 
-    setGeneratedPlan(allPlans);
-    setIsGenerated(true);
-    requestAnimationFrame(() => {
-      const el = document.getElementById('preview-root');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    });
+        let allPlans: LessonPlan[] = [...allLessons, ...noClassLessons].sort((a, b) => {
+            const da = parseLocalDate(a.date);
+            const db = parseLocalDate(b.date);
+            if (da.getTime() !== db.getTime()) return da.getTime() - db.getTime();
+            return (a.period || 0) - (b.period || 0);
+        });
 
-    if (alertMessage) {
-        alert(alertMessage);
+        let alertMessage: string | null = null;
+
+        if (targetMonthId) {
+            const targetPlan = monthPlans.find(p => p.id === targetMonthId);
+            const targetPlanIndex = monthPlans.findIndex(p => p.id === targetMonthId);
+
+            if (targetPlan) {
+                // Filter plans for this month
+                const monthlyPlans = allPlans.filter(l => {
+                    const [y, m] = l.date.split('-').map(Number);
+                    return (m - 1) === targetPlan.month && y === targetPlan.year;
+                });
+                
+                if (monthlyPlans.length > 0) {
+                    allPlans = monthlyPlans;
+                    const monthName = MONTH_NAMES[targetPlan.month];
+                    const fileName = `LessonPlan_${className}_${monthName}_${targetPlan.year}`;
+                    setPageTitle(fileName);
+                } else {            
+                    const academicMonthIndex = targetPlanIndex + 1;
+                    const hasAssignedSessions = assignedCourses.some(c => (c.sessions_by_month?.[academicMonthIndex] || 0) > 0);
+
+                    if (!hasAssignedSessions) {
+                        alertMessage = `No sessions scheduled for ${MONTH_NAMES[targetPlan.month]}. This class has books, but no sessions assigned to this month (Month ${academicMonthIndex}).`;
+                    } else {
+                        alertMessage = `Warning: Sessions are assigned for ${MONTH_NAMES[targetPlan.month]}, but no lessons could be generated. Please check holidays or schedule days.`;
+                    }
+                    allPlans = []; 
+                }
+            }
+        } else {
+            setPageTitle(`LessonPlan_${className}_All_Months_${year}`);
+            if (allPlans.length === 0) {
+                alertMessage = '수업이 생성되지 않았습니다. 다음을 확인해주세요:\n1. 교재의 "Weekly Sessions"가 0이 아닌지\n2. 선택한 요일이 달력에 존재하는지';
+            }
+        }
+
+        setGeneratedPlan(allPlans);
+        setIsGenerated(true);
+        requestAnimationFrame(() => {
+            const el = document.getElementById('preview-root');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+
+        if (alertMessage) {
+            alert(alertMessage);
+        }
+
+    } catch (e: any) {
+        console.error('Generation Error:', e);
+        alert(`Failed to generate plans: ${e.message}`);
     }
   };
   

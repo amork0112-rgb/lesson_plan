@@ -40,6 +40,7 @@ export async function POST(
   
   try {
     const body = await req.json();
+    console.log('🔥 generate API HIT', { class_id, body });
     const { 
         month_index, 
         indices, // New: support specific list of indices
@@ -116,29 +117,29 @@ export async function POST(
 
     const startYear = inputYear || rawClass.year || 2026;
 
-    // 2. Fetch Global Calendar Data
-    const { data: calendarData } = await supabase.from('academic_calendar').select('*');
+    // 2. Fetch Global Calendar Data (Holidays Only)
+    const { data: calendarData } = await supabase
+        .from('academic_calendar')
+        .select('*')
+        .eq('type', '공휴일');
     
     // Fetch Special Dates (Manual)
     const { data: specialDatesData } = await supabase
         .from('special_dates')
         .select('*')
-        .or(`class_id.is.null,class_id.eq.${class_id}`);
+        .eq('class_id', class_id);
 
     type DbSpecialDate = SpecialDate & { date: string; id: string };
 
     const holidays: Holiday[] = [];
     const specialDates: DbSpecialDate[] = [];
 
-    // Process Academic Calendar -> Holidays (Only '공휴일' or '방학')
+    // Process Academic Calendar -> Holidays
     (calendarData || []).forEach((event: any) => {
         // Filter by class_scope
         if (event.class_scope && event.class_scope !== 'all' && event.class_scope !== class_id) {
             return;
         }
-
-        // Only process '공휴일' or '방학' as Holidays (No Class)
-        if (event.type !== '공휴일' && event.type !== '방학') return;
 
         const start = new Date(event.start_date);
         const end = new Date(event.end_date);
