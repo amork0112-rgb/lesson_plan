@@ -46,7 +46,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
   }
 
   return (
-    <div id="pdf-root" className="print-only pt-10 px-4">
+    <div id="pdf-root" className="print-only pt-16 px-8">
       {groups.map(({ key, items, year, month }, index, array) => {
         const byDate: Record<string, LessonPlan[]> = {};
         items.forEach(l => (byDate[l.date] ||= []).push(l));

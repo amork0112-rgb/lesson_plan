@@ -1216,8 +1216,58 @@ export default function Home() {
 
               
           </div>
+        </div>
 
-          {/* (removed) Monthly Curriculum Grid */}
+          {/* Global Action Bar (Sticky) */}
+          <div className="sticky top-0 z-20 bg-white shadow-md border border-gray-200 rounded-xl py-3 px-6 mb-6 flex flex-wrap justify-between items-center gap-4">
+             {/* Legend */}
+             <div className="text-xs text-gray-500 flex gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded-sm"></span>
+                    <span>Class Day</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-100 border border-red-200 rounded-sm"></span>
+                    <span>No Class</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-green-100 border border-green-200 rounded-sm"></span>
+                    <span>Makeup</span>
+                </div>
+             </div>
+
+             {/* Actions */}
+             <div className="flex items-center gap-3">
+                <button 
+                    onClick={() => handleGenerate()}
+                    disabled={loading || !classId || selectedDays.length === 0}
+                    className={`
+                        px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all
+                        ${loading || !classId || selectedDays.length === 0
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md active:transform active:scale-95'}
+                    `}
+                >
+                    {loading ? 'Generating...' : 'Preview Plan'}
+                </button>
+                <button 
+                    onClick={downloadPDF}
+                    disabled={monthPlans.length === 0}
+                    className={`
+                        px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
+                        ${monthPlans.length === 0
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-gray-800 hover:bg-gray-900 hover:shadow-md active:transform active:scale-95'}
+                    `}
+                >
+                    <Download className="w-4 h-4" />
+                    Download PDF
+                </button>
+             </div>
+          </div>
+
+          {/* Month List Container */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
 
           {/* Monthly Plans List */}
           <div className="p-6 space-y-8 bg-gray-50/50 min-h-[300px]">
