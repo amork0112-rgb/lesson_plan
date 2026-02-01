@@ -56,3 +56,73 @@ export async function GET() {
 
   return NextResponse.json(result);
 }
+
+export async function POST(req: Request) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
+  }
+
+  const supabase = getSupabaseService();
+  
+  try {
+    const body = await req.json();
+    const { 
+      name, 
+      category, 
+      level, 
+      unit_type, 
+      total_days, 
+      days_per_unit,
+      review_units 
+    } = body;
+
+    // Calculate total_units based on user logic
+    // If unit_type is 'day', total_units is simply total_days
+    // Otherwise, it's ceil(total_days / days_per_unit)
+    const dpu = Number(days_per_unit) || 1;
+    const tDays = Number(total_days) || 0;
+    
+    const total_units = (unit_type === 'day')
+      ? tDays
+      : Math.ceil(tDays / dpu);
+
+    console.log('📝 Creating Book:', {
+      name,
+      unit_type,
+      total_days: tDays,
+      days_per_unit: dpu,
+      calculated_total_units: total_units
+    });
+
+    const { data, error } = await supabase
+      .from('books')
+      .insert({
+        name,
+        category,
+        level,
+        unit_type,
+        total_units,      // ⭐ Key requirement
+        days_per_unit: dpu,
+        review_units: Number(review_units) || 0,
+        // We can also store total_sessions if the column exists, 
+        // but the GET route calculates it dynamically.
+        // Let's store it for consistency if the schema allows.
+        total_sessions: tDays 
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Failed to insert book:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  } catch (e) {
+    console.error('❌ Error in POST /api/books:', e);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

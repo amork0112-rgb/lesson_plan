@@ -1,4 +1,5 @@
 export const SCP_PERIOD = 99;
+export const SYSTEM_EVENT_ID = 'e7e7e7e7-e7e7-e7e7-e7e7-e7e7e7e7e7e7';
 
 export function getSlotsPerDay(selectedDays: string[]) {
   return selectedDays.length === 2 ? 3 : 2;

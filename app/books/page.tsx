@@ -88,9 +88,9 @@ export default function BooksPage() {
     }
     
     // Numeric validation
-    const totalUnits = Number(formData.total_units);
-    if (isNaN(totalUnits) || totalUnits <= 0) {
-        alert('Total Units must be a positive number.');
+    const totalSessions = Number(formData.total_sessions);
+    if (isNaN(totalSessions) || totalSessions <= 0) {
+        alert('Total Sessions must be a positive number.');
         return;
     }
 
@@ -105,20 +105,32 @@ export default function BooksPage() {
     try {
         // 2. Prepare Data
         const insert = async () => {
-          if (!supabase) return;
-          const { data } = await supabase.from('books').insert({
-            name: formData.name!.trim(),
-            category: formData.category,
-            level: formData.level?.trim() || '',
-            unit_type: formData.unit_type || 'unit',
-            total_units: totalUnits,
-            days_per_unit: daysPerUnit,
-            review_units: Number(formData.review_units || 0),
-            total_sessions: Number(formData.total_sessions || totalUnits)
-          }).select('*');
-          if (Array.isArray(data)) setBooks([...(books || []), ...(data as Book[])]);
-          const { data: bks } = await supabase.from('books').select('*').order('name', { ascending: true });
-          if (Array.isArray(bks)) setBooks(bks as Book[]);
+          const res = await fetch('/api/books', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: formData.name!.trim(),
+              category: formData.category,
+              level: formData.level?.trim() || '',
+              unit_type: formData.unit_type || 'unit',
+              total_days: totalSessions,
+              days_per_unit: daysPerUnit,
+              review_units: Number(formData.review_units || 0),
+            }),
+          });
+          
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to create book');
+          }
+          
+          const newBook = await res.json();
+          setBooks([...books, newBook]);
+          
+          // Refresh list to be sure
+          const refresh = await fetch('/api/books');
+          const data = await refresh.json();
+          if (Array.isArray(data)) setBooks(data as Book[]);
         };
         insert();
         
@@ -301,12 +313,12 @@ export default function BooksPage() {
 
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Total {formData.unit_type === 'day' ? 'Days' : 'Units'}
+                    Total Sessions (Days)
                   </label>
                   <input
                     type="number"
-                    value={formData.total_units}
-                    onChange={e => setFormData({...formData, total_units: parseInt(e.target.value)})}
+                    value={formData.total_sessions}
+                    onChange={e => setFormData({...formData, total_sessions: parseInt(e.target.value)})}
                     className="w-full border-b border-slate-200 py-2 focus:border-slate-900 focus:outline-none bg-transparent"
                   />
                 </div>

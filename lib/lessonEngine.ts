@@ -1,5 +1,5 @@
 import { LessonPlan, BookAllocation, Book } from '@/types';
-import { getSlotsPerDay, SCP_PERIOD } from './constants';
+import { getSlotsPerDay, SCP_PERIOD, SYSTEM_EVENT_ID } from './constants';
 
 export interface AllocationInput {
   book_id: string;
@@ -103,7 +103,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
             const p = globalProgress[item.book_id];
             const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
             const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
-            const isEvent = book.id === 'system_event' || book.unit_type === 'event';
+            const isEvent = book.id === 'system_event' || book.id === SYSTEM_EVENT_ID || book.unit_type === 'event';
 
             lessons.push({
               id: `${date}_${item.book_id}_${period}_${Math.random().toString(36).substr(2, 5)}`, // Ensure unique ID

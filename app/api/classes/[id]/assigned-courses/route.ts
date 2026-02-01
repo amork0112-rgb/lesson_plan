@@ -1,6 +1,7 @@
 //app/api/classes/[id]/assigned-courses
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
+import { SYSTEM_EVENT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,7 @@ type AllocationRow = {
   class_id: string;
   section: string | null;
   book_id: string;
+  priority?: number;
   total_sessions: number | null;
   books?: { id: string; name: string; category: string; level: string } | { id: string; name: string; category: string; level: string }[];
 };
@@ -23,10 +25,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   
   // 1. Ensure System Event book exists
-  const { data: eventBook } = await supabase.from('books').select('id').eq('id', 'system_event').single();
+  console.log('🔍 Checking for System Event book...');
+  const { data: eventBook, error: bookError } = await supabase.from('books').select('id').eq('id', SYSTEM_EVENT_ID).maybeSingle();
+  
+  if (bookError) {
+    console.error('❌ Error checking event book:', bookError);
+  }
+
   if (!eventBook) {
-    await supabase.from('books').insert({
-        id: 'system_event',
+    console.log('✨ Creating System Event book...');
+    const { error: insertError } = await supabase.from('books').insert({
+        id: SYSTEM_EVENT_ID,
         name: 'Event',
         category: 'System',
         level: 'All',
@@ -36,24 +45,40 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         series: 'System',
         series_level: 'All'
     });
+    if (insertError) {
+      console.error('❌ Failed to insert System Event book:', insertError);
+    } else {
+      console.log('✅ System Event book created');
+    }
   }
 
   // 2. Ensure System Event allocation exists for this class
-  const { data: eventAlloc } = await supabase
+  console.log(`🔍 Checking event allocation for class ${id}...`);
+  const { data: eventAlloc, error: allocError } = await supabase
     .from('class_book_allocations')
     .select('id')
     .eq('class_id', id)
-    .eq('book_id', 'system_event')
-    .single();
+    .eq('book_id', SYSTEM_EVENT_ID)
+    .maybeSingle();
+
+  if (allocError) {
+    console.error('❌ Error checking event allocation:', allocError);
+  }
 
   if (!eventAlloc) {
-    await supabase.from('class_book_allocations').insert({
+    console.log('✨ Creating event allocation...');
+    const { error: insertAllocError } = await supabase.from('class_book_allocations').insert({
         class_id: id,
-        book_id: 'system_event',
+        book_id: SYSTEM_EVENT_ID,
         priority: 0,
         sessions_per_week: 0,
         total_sessions: 0
     });
+    if (insertAllocError) {
+      console.error('❌ Failed to insert event allocation:', insertAllocError);
+    } else {
+      console.log('✅ Event allocation created');
+    }
   }
 
   const { data, error } = await supabase
@@ -64,15 +89,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       class_id,
       section,
       book_id,
+      priority,
       total_sessions,
       books:class_book_allocations_book_id_fkey (id,name,category,level)
     `
     )
     .eq('class_id', id)
+    .order('priority', { ascending: true, nullsFirst: true })
     .order('section', { ascending: true });
+  
   if (error) {
+    console.error('❌ Error fetching allocations:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  
+  console.log(`📦 Found ${data?.length || 0} allocations for class ${id}`);
   const rows: AllocationRow[] = Array.isArray(data) ? (data as unknown as AllocationRow[]) : [];
   const ids = rows.map(r => r.id);
   
