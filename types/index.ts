@@ -81,6 +81,7 @@ export interface BookAllocation {
   priority: number;
   total_sessions_override?: number; // User override for this specific allocation context
   manual_used?: number; // User override for used sessions in this month
+  monthly_sessions?: number; // Explicit sessions assigned for this specific month
   month?: number; // Added for global context
   year?: number; // Added for global context
 }

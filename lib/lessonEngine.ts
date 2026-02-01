@@ -119,31 +119,4 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
 
   return lessons;
 }
-        if (p.day < dpu) {
-          p.day++;
-        } else {
-          p.unit++;
-          p.day = 1;
-        }
-      }
 
-      if (scpType) {
-        const cap = scpType.charAt(0).toUpperCase() + scpType.slice(1);
-        lessons.push({
-          id: `${date}_scp_${scpDay}`,
-          class_id: classId,
-          date,
-          period: SCP_PERIOD,
-          display_order: displayOrder++,
-          is_makeup: false,
-          book_id: `scp_${scpType}`,
-          book_name: `SCP ${cap}`,
-          content: `SCP ${cap} Day ${scpDay++}`,
-          day_no: scpDay - 1
-        });
-      }
-    });
-  });
-
-  return lessons;
-}

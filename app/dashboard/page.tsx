@@ -494,6 +494,7 @@ export default function Home() {
                  book_id: course.book.id,
                  sessions_per_week: 2, // Legacy field, effectively ignored
                  priority: courseIdx + 1,
+                 monthly_sessions: sessionsThisMonth,
                  total_sessions_override: isFirstMonth 
                     ? initialTotal
                     : undefined
@@ -1125,11 +1126,31 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       {(() => {
-                        const sessionsPerMonth = selectedDays.length === 2 ? 8 : (selectedDays.length === 3 ? 12 : selectedDays.length * 4);
+                        // Calculate Assigned Sessions
+                        const assignedSessions = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                        
+                        // Calculate Plan Capacity (based on fixed logic for now)
+                        const daysCount = planDates[plan.id]?.length || 0;
+                        const capacity = daysCount * 2; // Assuming 2 periods per day
+                        
+                        const isMatch = assignedSessions === capacity;
+                        const isOver = assignedSessions > capacity;
+                        
                         return (
-                          <span className="text-xs font-medium px-2 py-1 bg-gray-200 text-gray-600 rounded-full">
-                            {sessionsPerMonth} Sessions
-                          </span>
+                          <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                                isMatch 
+                                    ? 'bg-green-100 text-green-700 border-green-200' 
+                                    : (isOver ? 'bg-red-100 text-red-700 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200')
+                              }`}>
+                                {assignedSessions} / {capacity} Sessions
+                              </span>
+                              {!isMatch && (
+                                  <span className="text-[10px] text-gray-500 font-medium">
+                                      {isOver ? `${assignedSessions - capacity} Over` : `${capacity - assignedSessions} Left`}
+                                  </span>
+                              )}
+                          </div>
                         );
                       })()}
 
@@ -1553,7 +1574,49 @@ export default function Home() {
                         <div key={key} className={index < array.length - 1 ? "mb-12 print:break-after-page" : ""} style={index < array.length - 1 ? { pageBreakAfter: 'always' } : {}}>
                             <div className="mb-6 text-center border-b border-gray-200 pb-4">
                                 <h2 className="text-2xl font-bold text-gray-800">{MONTH_NAMES[m]} {y}</h2>
-                                <p className="text-gray-500 text-sm mt-1">{className}</p>
+                                <p className="text-gray-500 text-sm mt-1 mb-2">{className}</p>
+                                
+                                {/* Session Capacity Indicator */}
+                                {(() => {
+                                    const plan = monthPlans.find(p => p.year === y && p.month === m);
+                                    if (!plan) return null;
+                                    
+                                    // Calculate Assigned from Allocations
+                                    const assigned = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                                    
+                                    // Calculate Capacity from Valid Calendar Dates
+                                    // We use the computed planDates which contains all valid dates (excluding holidays)
+                                    const dates = planDates[plan.id] || [];
+                                    const capacity = dates.length * 2; // Assuming 2 periods per day
+                                    
+                                    const isMatch = assigned === capacity;
+                                    const isOver = assigned > capacity;
+                                    const isUnder = assigned < capacity;
+                                    
+                                    let badgeColor = 'bg-green-100 text-green-700 border-green-200';
+                                    if (isOver) badgeColor = 'bg-red-100 text-red-700 border-red-200';
+                                    if (isUnder) badgeColor = 'bg-yellow-100 text-yellow-700 border-yellow-200';
+                                    
+                                    return (
+                                        <div className="flex justify-center items-center gap-2 mt-2">
+                                            <span className={`text-xs font-bold px-3 py-1 rounded-full border ${badgeColor} flex items-center gap-1.5`}>
+                                                <span>Assigned: {assigned}</span>
+                                                <span className="text-gray-400">/</span>
+                                                <span>Capacity: {capacity}</span>
+                                            </span>
+                                            {isUnder && (
+                                                <span className="text-xs text-gray-500">
+                                                    ({capacity - assigned} slots empty)
+                                                </span>
+                                            )}
+                                            {isOver && (
+                                                <span className="text-xs text-red-500 font-medium">
+                                                    ({assigned - capacity} sessions will be cut)
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             <div className="space-y-6">

@@ -292,6 +292,20 @@ export async function POST(
 
         const capacity = validDates.length; // This is the total sessions available for this month
 
+        // Fetch explicit session allocations for this month from DB (Source of Truth)
+        const { data: dbSessions } = await supabase
+            .from('course_sessions')
+            .select('class_book_allocation_id, sessions')
+            .eq('month_index', mIdx)
+            .in('class_book_allocation_id', allocations.map(a => a.id));
+            
+        const explicitSessions: Record<string, number> = {};
+        if (dbSessions) {
+            dbSessions.forEach((s: any) => {
+                explicitSessions[s.class_book_allocation_id] = s.sessions;
+            });
+        }
+
         // B. Distribute Sessions
         // If generate_all, capacity is dynamic. If single month, user might have passed 'total_sessions' override?
         // But for consistency, let's use calculated capacity unless overridden.
@@ -303,16 +317,27 @@ export async function POST(
             sessionsToFill = Math.min(capacity, total_sessions);
         }
 
-        // Filter active allocations (those with remaining > 0)
+        // Filter active allocations (those with remaining > 0 OR explicitly assigned)
+        // If explicit sessions exist, we include them even if remaining <= 0 (user override)
         const activeItems = runningAllocations
-            .filter(a => a.remaining > 0)
+            .filter(a => a.remaining > 0 || (explicitSessions[a.id] || 0) > 0)
             .sort((a, b) => a.priority - b.priority);
 
         // Distribute logic
         // Reset 'used' for this month's calculation
         const monthDistribution = activeItems.map(a => ({ ...a, usedThisMonth: 0 }));
         
-        if (monthDistribution.length > 0) {
+        // Check if we have explicit sessions
+        const hasExplicit = Object.keys(explicitSessions).length > 0;
+        
+        if (hasExplicit) {
+             monthDistribution.forEach(a => {
+                const assigned = explicitSessions[a.id] || 0;
+                a.usedThisMonth = assigned;
+                // Update remaining just for tracking, though it might go negative if over-assigned
+                a.remaining -= assigned; 
+            });
+        } else if (monthDistribution.length > 0) {
             const totalWeight = monthDistribution.reduce((sum, a) => sum + Math.max(1, a.sessions_per_week || 1), 0);
             
             // 1. Proportional Distribution
