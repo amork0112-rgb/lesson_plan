@@ -22,6 +22,40 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const supabase = getSupabaseService();
   const { id } = await params;
   
+  // 1. Ensure System Event book exists
+  const { data: eventBook } = await supabase.from('books').select('id').eq('id', 'system_event').single();
+  if (!eventBook) {
+    await supabase.from('books').insert({
+        id: 'system_event',
+        name: 'Event',
+        category: 'System',
+        level: 'All',
+        total_units: 999,
+        days_per_unit: 1,
+        unit_type: 'event',
+        series: 'System',
+        series_level: 'All'
+    });
+  }
+
+  // 2. Ensure System Event allocation exists for this class
+  const { data: eventAlloc } = await supabase
+    .from('class_book_allocations')
+    .select('id')
+    .eq('class_id', id)
+    .eq('book_id', 'system_event')
+    .single();
+
+  if (!eventAlloc) {
+    await supabase.from('class_book_allocations').insert({
+        class_id: id,
+        book_id: 'system_event',
+        priority: 0,
+        sessions_per_week: 0,
+        total_sessions: 0
+    });
+  }
+
   const { data, error } = await supabase
     .from('class_book_allocations')
     .select(
