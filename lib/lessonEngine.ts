@@ -55,14 +55,27 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
     if (!Array.isArray(dates) || dates.length === 0) return;
 
     // 1. Create the "Deck" of lessons to be distributed
+    // We use a Round-Robin (Interleaved) approach to maximize daily variety
+    // Instead of [A, A, A, B, B, B], we generate [A, B, A, B, A, B]
     const deck: { book_id: string }[] = [];
     
-    // We respect the order of allocations (Priority)
-    plan.allocations.forEach(alloc => {
-        for (let i = 0; i < alloc.sessions; i++) {
-            deck.push({ book_id: alloc.book_id });
+    // Create a mutable copy of allocations to track remaining sessions
+    const tempAllocations = plan.allocations.map(a => ({ 
+        book_id: a.book_id, 
+        remaining: a.sessions 
+    }));
+
+    let hasMore = true;
+    while (hasMore) {
+        hasMore = false;
+        for (const alloc of tempAllocations) {
+            if (alloc.remaining > 0) {
+                deck.push({ book_id: alloc.book_id });
+                alloc.remaining--;
+                hasMore = true;
+            }
         }
-    });
+    }
 
     // 2. Initialize progress for any new books
     plan.allocations.forEach(a => {
@@ -90,6 +103,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
             const p = globalProgress[item.book_id];
             const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
             const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
+            const isEvent = book.id === 'system_event' || book.unit_type === 'event';
 
             lessons.push({
               id: `${date}_${item.book_id}_${period}_${Math.random().toString(36).substr(2, 5)}`, // Ensure unique ID
@@ -100,18 +114,20 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
               is_makeup: false,
               book_id: item.book_id,
               book_name: book.name,
-              content: isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`,
+              content: isEvent ? 'Event' : (isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`),
               unit_no: p.unit,
               day_no: p.day
             });
 
             // Advance Progress
-            const dpu = getDaysPerUnit(book);
-            if (globalProgress[item.book_id].day < dpu) {
-                globalProgress[item.book_id].day++;
-            } else {
-                globalProgress[item.book_id].unit++;
-                globalProgress[item.book_id].day = 1;
+            if (!isEvent) {
+                const dpu = getDaysPerUnit(book);
+                if (globalProgress[item.book_id].day < dpu) {
+                    globalProgress[item.book_id].day++;
+                } else {
+                    globalProgress[item.book_id].unit++;
+                    globalProgress[item.book_id].day = 1;
+                }
             }
         }
     });

@@ -282,6 +282,18 @@ export default function ClassesPage() {
                               className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                             />
                           </div>
+                          <button
+                            onClick={() => handleAddCourse({
+                                id: 'system_event',
+                                name: 'Event',
+                                category: 'System',
+                                level: 'All'
+                            } as any)}
+                            className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200 transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add Event
+                          </button>
                         </div>
                         
                         {/* List - Limit height to approx 2 items (~80-90px) */}

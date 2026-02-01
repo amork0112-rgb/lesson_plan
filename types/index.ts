@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'teacher';
 export type Weekday = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
-export type UnitType = 'unit' | 'day' | 'lesson';
+export type UnitType = 'unit' | 'day' | 'lesson' | 'event';
 export type SpecialDateType = 'no_class' | 'makeup' | 'school_event';
 
 export interface SpecialDate {

@@ -59,6 +59,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!book_id || typeof priority !== 'number' || typeof sessions_per_week !== 'number') {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
+
+  // Auto-create system_event book if needed
+  if (book_id === 'system_event') {
+    const { data: existing } = await supabase.from('books').select('id').eq('id', 'system_event').single();
+    if (!existing) {
+        await supabase.from('books').insert({
+             id: 'system_event',
+             name: 'Event',
+             category: 'Event',
+             level: 'All',
+             total_units: 999,
+             days_per_unit: 1,
+             unit_type: 'event',
+             series: 'System',
+             series_level: 'All'
+        });
+    }
+  }
+
   const { data, error } = await supabase
     .from('class_book_allocations')
     .insert({
