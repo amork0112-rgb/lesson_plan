@@ -6,6 +6,7 @@ export type SpecialDateType = 'no_class' | 'makeup' | 'school_event';
 export interface SpecialDate {
   type: SpecialDateType;
   name: string;
+  sessions?: number;
 }
 
 export interface User {

@@ -878,8 +878,19 @@ export default function Home() {
                 const dayName = dayMap[d.getDay()] as Weekday;
                 if (!selectedDays.includes(dayName)) continue;
                 
-                // Check if it is no_class
+                // Check if it is no_class (Special Date OR Global Holiday)
                 const special = specialDates[dateStr];
+                
+                // Check for Global Holiday
+                const holiday = holidays.find(h => {
+                    if (h.date !== dateStr) return false;
+                    if (h.affected_classes && h.affected_classes.length > 0) {
+                         if (!classId) return false; 
+                         return h.affected_classes.includes(classId);
+                    }
+                    return true;
+                });
+
                 if (special?.type === 'no_class') {
                     noClassLessons.push({
                         id: `nc_${dateStr}`,
@@ -902,6 +913,19 @@ export default function Home() {
                         book_id: 'school_event',
                         book_name: 'School Event',
                         content: special.name || 'Event',
+                        period: 0
+                    } as LessonPlan);
+                } else if (holiday) {
+                     // Add Holiday as a "No Class" block
+                     noClassLessons.push({
+                        id: `hol_${dateStr}`,
+                        class_id: classId,
+                        date: dateStr,
+                        display_order: 0,
+                        is_makeup: false,
+                        book_id: 'no_class', // Treat as no_class for styling (red)
+                        book_name: 'Holiday',
+                        content: holiday.name || 'Holiday',
                         period: 0
                     } as LessonPlan);
                 }
@@ -1417,8 +1441,8 @@ export default function Home() {
 
                                             if (special?.type === 'no_class') {
                                                 statusClass = 'bg-red-100 border-red-200 text-red-700 font-bold';
-                                                title = 'NO CLASS';
-                                                label = 'No Class';
+                                                title = special.name || 'NO CLASS';
+                                                label = special.name || 'No Class';
                                             } else if (special?.type === 'makeup') {
                                                 statusClass = 'bg-green-100 border-green-200 text-green-700 font-bold';
                                                 title = 'MAKEUP';

@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       holidays.push({
         id: `${event.id}_${dateStr}`,
         date: dateStr,
-        name: event.name,
+        name: event.name || event.title,
         type: 'national', // or 'custom', used for styling
         year: parseInt(dateStr.split('-')[0]),
         affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : []),
@@ -59,14 +59,14 @@ export async function GET(req: Request) {
       special_dates.push({
         date: dateStr,
         type: 'no_class',
-        name: event.name,
+        name: event.name || event.title,
         sessions: event.sessions
       });
     } else if (type === '행사') {
       special_dates.push({
         date: dateStr,
         type: 'school_event',
-        name: event.name,
+        name: event.name || event.title,
         sessions: event.sessions
       });
     }

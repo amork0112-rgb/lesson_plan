@@ -33,11 +33,12 @@ export async function POST(req: Request) {
         
     // Insert new event
     const { error } = await supabase.from('academic_calendar').insert({
-        title: name || (dbType === '행사' ? 'School Event' : 'Holiday'),
+        name: name || (dbType === '행사' ? 'School Event' : 'Holiday'),
         start_date: date,
         end_date: date,
         type: dbType,
-        class_scope: 'all' // Toggles are usually global in this UI
+        class_scope: 'all', // Toggles are usually global in this UI
+        sessions: body.sessions || 0
     });
     
     if (error) throw error;

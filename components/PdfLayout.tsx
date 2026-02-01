@@ -199,15 +199,11 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
               </div>
 
               {/* Footer */}
-              <div className="mt-auto pt-4 flex flex-col items-center justify-center gap-1 opacity-60">
+              <div className="mt-auto pt-4 flex flex-col items-center justify-center gap-1">
                   <p className="text-[10px] text-gray-400">SCP = Speaking Certification Program 스피킹인증제</p>
                   <div className="flex items-center gap-1">
                       {/* Small Logo for Footer */}
-                       <svg width="14" height="16" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M50 95C50 95 90 75 90 25V10H10V25C10 75 50 95 50 95Z" fill="#310080" stroke="#009030" strokeWidth="8"/>
-                          <path d="M35 30H70C73 30 73 35 70 35H50V45H65C68 45 68 50 65 50H50V75H35V30Z" fill="white"/>
-                       </svg>
-                      <span className="text-[#310080] font-bold text-xs tracking-wide">FRAGE EDU</span>
+                       <img src="/logo.png" alt="FRAGE EDU" className="h-8 object-contain" />
                   </div>
               </div>
 

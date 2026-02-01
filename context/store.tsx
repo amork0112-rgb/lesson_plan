@@ -65,7 +65,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
            (sData || []).forEach((d: any) => {
                 map[d.date] = { 
                     type: d.type as SpecialDateType, 
-                    name: d.name 
+                    name: d.name,
+                    sessions: d.sessions 
                 };
            });
            setSpecialDates(map);

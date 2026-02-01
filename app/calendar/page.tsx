@@ -24,17 +24,38 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-  const handleAddHoliday = () => {
+  const handleAddHoliday = async () => {
     if (!newHoliday.name || !newHoliday.date) return;
-    addHoliday({
-      id: Math.random().toString(),
-      name: newHoliday.name,
-      date: newHoliday.date,
-      type: 'custom',
-      year: parseInt(newHoliday.date.split('-')[0]),
-      affected_classes: newHoliday.affected_classes,
-      sessions: newHoliday.sessions
-    });
+    
+    // Logic Split:
+    // 1. If it's a "School Event" AND has "sessions > 0", it goes to special_dates.
+    // 2. Otherwise (Holiday, Vacation, or 0-session Event), it goes to academic_calendar.
+    
+    if (newHoliday.dbType === '행사' && (newHoliday.sessions || 0) > 0) {
+        // Special Date Logic
+        const dateStr = newHoliday.date;
+        const data = {
+            type: 'school_event',
+            name: newHoliday.name,
+            sessions: newHoliday.sessions
+        };
+        
+        await updateSpecialDate(dateStr, data as any); // Type cast if needed
+        // Note: updateSpecialDate currently replaces any existing special date on that day.
+        // This aligns with "Toggle" behavior.
+    } else {
+        // Academic Calendar Logic (Holiday/Vacation/Full Day Event)
+        addHoliday({
+          id: Math.random().toString(),
+          name: newHoliday.name,
+          date: newHoliday.date,
+          type: 'custom',
+          year: parseInt(newHoliday.date.split('-')[0]),
+          affected_classes: newHoliday.affected_classes,
+          sessions: 0 // Explicitly 0 because academic_calendar events are full-day
+        });
+    }
+    
     setIsAdding(false);
     setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0 });
   };
@@ -204,8 +225,9 @@ export default function CalendarPage() {
             ))}
             
             {daysInMonth.map((date) => {
+              const dateStr = format(date, 'yyyy-MM-dd');
               const dateHolidays = getHolidaysForDate(date);
-              const special = specialDates[format(date, 'yyyy-MM-dd')];
+              const special = specialDates[dateStr];
               const isToday = isSameDay(date, new Date());
               const hasNationalHoliday = dateHolidays.some(h => h.type === 'national');
               const isSunday = date.getDay() === 0;
@@ -243,10 +265,21 @@ export default function CalendarPage() {
                         )}>
                             <div className="flex justify-between items-start">
                                <span className="font-bold truncate">{special.name}</span>
+                               <button 
+                                   onClick={(e) => { e.stopPropagation(); updateSpecialDate(dateStr, null); }}
+                                   className="hidden group-hover:block hover:opacity-75 ml-1"
+                               >
+                                   <Trash2 className="h-3 w-3" />
+                               </button>
                             </div>
                             <div className="text-[10px] leading-tight opacity-75 uppercase">
                                {special.type === 'school_event' ? 'School Event' : (special.type === 'no_class' ? 'No Class' : special.type)}
                             </div>
+                            {(special.sessions !== undefined && special.sessions !== null && special.sessions > 0) && (
+                                <div className="text-[10px] leading-tight opacity-80 mt-0.5 font-medium">
+                                    Sessions: {special.sessions}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -291,6 +324,11 @@ export default function CalendarPage() {
                           {!classNames && (
                               <div className={cn("text-[10px] leading-tight", subTextStyle)}>
                                   All Classes
+                              </div>
+                          )}
+                          {(h.sessions !== undefined && h.sessions !== null && h.sessions !== 0) && (
+                              <div className={cn("text-[10px] leading-tight opacity-80 mt-0.5 font-medium")}>
+                                  Sessions: {h.sessions}
                               </div>
                           )}
                         </div>
