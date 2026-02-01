@@ -78,14 +78,8 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
       <div className="w-full h-screen flex flex-col justify-center items-center print:break-after-page bg-white">
           <div className="text-center transform scale-125">
              {/* Logo */}
-            <div className="flex items-center justify-center gap-4 mb-8">
-               {/* Shield Icon */}
-               <svg width="100" height="110" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M50 95C50 95 90 75 90 25V10H10V25C10 75 50 95 50 95Z" fill="#310080" stroke="#009030" strokeWidth="6"/>
-                  <path d="M35 30H70C73 30 73 35 70 35H50V45H65C68 45 68 50 65 50H50V75H35V30Z" fill="white"/>
-                  <circle cx="68" cy="48" r="3" fill="#009030"/>
-               </svg>
-               <span className="text-7xl font-bold text-[#310080] tracking-tight" style={{ fontFamily: 'Arial, sans-serif' }}>FRAGE EDU</span>
+            <div className="flex items-center justify-center mb-8">
+               <img src="/logo.png" alt="FRAGE EDU" className="h-24 object-contain" />
             </div>
             
             <h1 className="text-5xl font-extrabold text-gray-800 mb-2 tracking-tight">{className}</h1>
@@ -180,12 +174,13 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                                       );
                                   }
 
-                                  const colorClass = getBookStyle(item.book_name || '');
+                                  const displayName = item.books?.name || item.book_name || '';
+                                  const colorClass = getBookStyle(displayName);
                                   
                                   return (
                                     <div key={item.id} className="w-full leading-snug">
                                       <div className={`font-bold text-sm ${colorClass}`}>
-                                        {item.book_name}
+                                        {displayName}
                                       </div>
                                       <div className="text-xs text-gray-600 font-medium pl-1 border-l-2 border-gray-100">
                                         {item.content}

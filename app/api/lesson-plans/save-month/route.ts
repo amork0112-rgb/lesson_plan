@@ -41,34 +41,28 @@ export async function POST(req: Request) {
 
     // 3. Insert new plans
     if (lessons.length > 0) {
-        const payload = lessons.map((l: any) => ({
-            class_id: classId,
-            date: l.date,
-            period: l.period || 1,
-            book_id: l.book_id === 'no_class' ? null : l.book_id, // Handle no_class special case if needed, or keep 'no_class' if DB allows? DB expects UUID usually.
-            // If book_id is 'no_class', we should probably set it to null or a special UUID?
-            // Existing logic in generate route uses 'no_class' string? 
-            // Let's check DB schema. usually book_id is uuid. 
-            // If 'no_class', we might need to skip foreign key constraint or set null.
-            // Let's assume for now we set null if it's not a valid UUID.
-            book_name: l.book_name,
-            content: l.content,
-            display_order: l.display_order,
-            unit_no: l.unit_no,
-            day_no: l.day_no
-        }));
+        const payload = lessons.map((l: any) => {
+            // Handle special non-UUID book IDs by setting them to null
+            let bookId = l.book_id;
+            if (bookId === 'no_class' || bookId === 'school_event' || bookId === 'system_event') {
+                bookId = null;
+            }
 
-        // Clean up payload: if book_id is 'no_class', set to null
-        const cleanedPayload = payload.map((p: any) => {
-             if (p.book_id === 'no_class') {
-                 return { ...p, book_id: null };
-             }
-             return p;
+            return {
+                class_id: classId,
+                date: l.date,
+                period: l.period || 1,
+                book_id: bookId,
+                content: l.content,
+                display_order: l.display_order,
+                unit_no: l.unit_no,
+                day_no: l.day_no
+            };
         });
 
         const { error: insertError } = await supabase
             .from('lesson_plans')
-            .insert(cleanedPayload);
+            .insert(payload);
             
         if (insertError) throw insertError;
     }

@@ -98,9 +98,14 @@ export interface LessonPlan {
   period?: number;
   unit_text?: string; 
   book_name?: string;
+  books?: {
+    name: string;
+    category?: string;
+  };
   content?: string;
   unit_no?: number;
   day_no?: number;
+  has_video_assignment?: boolean;
 }
 
 export interface LessonRow {

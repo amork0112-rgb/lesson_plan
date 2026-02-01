@@ -19,7 +19,7 @@ export async function GET() {
   console.log('🔌 Supabase client created');
   const { data, error } = await supabaseService
     .from('lesson_plans')
-    .select('id,date,class_id,content,book_id,unit_no,day_no,has_video_assignment')
+    .select('id,date,class_id,content,book_id,unit_no,day_no,has_video_assignment, books(name, category)')
     .order('date', { ascending: false });
 
   console.log('📦 Supabase response:', {

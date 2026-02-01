@@ -546,7 +546,6 @@ export async function POST(
                   date: p.date,
                   period: p.period,
                   book_id: p.book_id,
-                  book_name: p.book_name,
                   content: p.content,
                   display_order: p.display_order,
                   unit_no: p.unit_no,

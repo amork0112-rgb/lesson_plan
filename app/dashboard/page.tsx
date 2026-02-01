@@ -1801,7 +1801,7 @@ export default function Home() {
                                                                     <div className="flex justify-between items-start gap-2">
                                                                         <div className="flex-1 min-w-0">
                                                                             <p className={`font-semibold text-sm truncate ${textClass}`}>
-                                                                                {lesson.book_name}
+                                                                                {lesson.books?.name || lesson.book_name}
                                                                             </p>
                                                                             <p className={`text-xs mt-0.5 ${subTextClass}`}>
                                                                                 {lesson.content}
