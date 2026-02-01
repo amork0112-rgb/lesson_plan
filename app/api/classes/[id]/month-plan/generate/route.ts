@@ -276,6 +276,11 @@ export async function POST(
             return false;
         }).map(d => format(d, 'yyyy-MM-dd'));
 
+        console.log('DEBUG classDays:', classDays);
+        console.log('DEBUG specialDates:', specialDates.map(s => s.date));
+        console.log('DEBUG holidays:', holidays.map(h => h.date));
+        console.log('DEBUG validDates:', validDates);
+
         const capacity = validDates.length; // This is the total sessions available for this month
 
         // B. Distribute Sessions
