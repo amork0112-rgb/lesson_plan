@@ -1268,19 +1268,6 @@ export default function Home() {
                    </div>
                    <div className="flex items-center gap-2">
                      <button 
-                        onClick={() => {
-                          handleGenerate(plan.id);
-                        }}
-                        disabled={selectedDays.length === 0}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors shadow-sm ${
-                            selectedDays.length === 0 
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
-                      >
-                        <Play className="h-3 w-3 fill-current" /> Generate
-                      </button>
-                     <button 
                         onClick={() => setExpandedMonthId(expandedMonthId === plan.id ? null : plan.id)}
                         className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${
                             expandedMonthId === plan.id 
@@ -1560,44 +1547,9 @@ export default function Home() {
           </div>
 
           <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
-            <div className="text-sm text-gray-500 flex gap-4">
-                <div className="flex items-center gap-1">
-                    <Play className="h-4 w-4 text-indigo-600" />
-                    <span>Preview Plan: 플랜 미리보기</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <Download className="h-4 w-4 text-gray-600" />
-                    <span>Download PDF: 미리보기 내용 저장</span>
-                </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleGenerate()}
-                disabled={monthPlans.every(p => p.allocations.length === 0)}
-                title={monthPlans.every(p => p.allocations.length === 0) ? "교재를 먼저 추가해주세요" : "설정된 기간의 플랜을 미리보기로 생성"}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
-                  ${monthPlans.every(p => p.allocations.length === 0)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg active:scale-95'}
-                `}
-              >
-                <Play className="h-4 w-4" />
-                Preview Plan
-              </button>
-              <button
-                onClick={() => downloadPDF()}
-                disabled={!isGenerated || generatedPlan.length === 0}
-                title={!isGenerated ? "먼저 플랜을 미리보기로 생성하세요" : "PDF로 저장"}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-medium shadow-sm transition-all text-base
-                  ${(!isGenerated || generatedPlan.length === 0)
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}
-                `}
-              >
-                <Download className="h-4 w-4" />
-                Download PDF
-              </button>
-            </div>
+             <div className="text-sm text-gray-500">
+                Configure your plan above and click Preview Plan to generate.
+             </div>
           </div>
         </div>
       </div>
