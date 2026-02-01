@@ -74,7 +74,8 @@ export async function POST(req: Request) {
         start_date: body.date,
         end_date: body.date,
         type: dbType,
-        class_scope: scope
+        class_scope: scope,
+        sessions: body.sessions
     }));
 
     const { error } = await supabase.from('academic_calendar').insert(finalInserts);

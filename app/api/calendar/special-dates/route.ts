@@ -1,3 +1,4 @@
+//app/api/calendar/special-dates/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
         
     // Insert new event
     const { error } = await supabase.from('academic_calendar').insert({
-        name: name || (dbType === '행사' ? 'School Event' : 'Holiday'),
+        title: name || (dbType === '행사' ? 'School Event' : 'Holiday'),
         start_date: date,
         end_date: date,
         type: dbType,

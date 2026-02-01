@@ -11,7 +11,7 @@ export default function CalendarPage() {
   const { holidays, addHoliday, deleteHoliday, classes, specialDates, updateSpecialDate } = useData();
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Start at Jan 2026
   const [isAdding, setIsAdding] = useState(false);
-  const [newHoliday, setNewHoliday] = useState<Partial<Holiday> & { dbType?: string }>({ name: '', date: '', type: 'custom', affected_classes: [], dbType: '공휴일' });
+  const [newHoliday, setNewHoliday] = useState<Partial<Holiday> & { dbType?: string }>({ name: '', date: '', type: 'custom', affected_classes: [], dbType: '공휴일', sessions: 0 });
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -32,10 +32,11 @@ export default function CalendarPage() {
       date: newHoliday.date,
       type: 'custom',
       year: parseInt(newHoliday.date.split('-')[0]),
-      affected_classes: newHoliday.affected_classes
+      affected_classes: newHoliday.affected_classes,
+      sessions: newHoliday.sessions
     });
     setIsAdding(false);
-    setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [] });
+    setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0 });
   };
 
   const toggleClassSelection = (classId: string) => {
@@ -93,7 +94,7 @@ export default function CalendarPage() {
                onClick={() => setIsAdding(!isAdding)}
                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-full hover:bg-indigo-700 transition-colors shadow-sm"
              >
-               <Plus className="h-4 w-4" /> Add Holiday
+               <Plus className="h-4 w-4" /> Add events
              </button>
           </div>
         </div>
@@ -101,7 +102,7 @@ export default function CalendarPage() {
         {isAdding && (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 animate-in fade-in slide-in-from-top-4">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Add New Holiday</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                <div>
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Name</label>
                   <input 
@@ -131,6 +132,16 @@ export default function CalendarPage() {
                     <option value="방학">Vacation (방학)</option>
                     <option value="행사">School Event (행사)</option>
                   </select>
+               </div>
+               <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Sessions</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    value={newHoliday.sessions || 0}
+                    onChange={e => setNewHoliday({...newHoliday, sessions: parseInt(e.target.value) || 0})}
+                    className="w-full border-b border-slate-200 py-1.5 focus:border-slate-900 focus:outline-none"
+                  />
                </div>
             </div>
             

@@ -125,11 +125,11 @@ export async function POST(
 
     const startYear = inputYear || rawClass.year || 2026;
 
-    // 2. Fetch Global Calendar Data (Holidays Only)
+    // 2. Fetch Global Calendar Data (All Events)
     const { data: calendarData } = await supabase
         .from('academic_calendar')
-        .select('*')
-        .eq('type', '공휴일');
+        .select('*');
+        // .eq('type', '공휴일'); // Removed to include all events
     
     // Fetch Special Dates (Manual)
     const { data: specialDatesData } = await supabase
@@ -159,9 +159,10 @@ export async function POST(
                 id: `${event.id}_${dateStr}`,
                 date: dateStr,
                 name: event.name || event.title,
-                type: 'national',
+                type: event.type === '공휴일' ? 'national' : 'custom',
                 year: d.getFullYear(),
-                affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : [])
+                affected_classes: event.class_scope === 'all' ? [] : (event.class_scope ? [event.class_scope] : []),
+                sessions: event.sessions
             });
         }
     });

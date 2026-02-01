@@ -42,6 +42,7 @@ export interface Holiday {
   type: 'national' | 'custom';
   year: number;
   affected_classes?: string[]; // If undefined/empty, applies to all
+  sessions?: number;
 }
 
 export interface LessonUnit {
