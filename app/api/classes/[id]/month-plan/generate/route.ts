@@ -178,6 +178,8 @@ export async function POST(
       .from('class_book_allocations')
       .select('*, book:books(*)')
       .eq('class_id', class_id)
+      .neq('book_id', 'system_event')
+      .neq('book_id', 'e7e7e7e7-e7e7-e7e7-e7e7-e7e7e7e7e7e7')
       .order('priority', { ascending: true });
 
     if (allocErr) throw new Error(allocErr.message);

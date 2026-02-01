@@ -1,7 +1,6 @@
 //app/api/classes/[id]/assigned-courses
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
-import { SYSTEM_EVENT_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,63 +23,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const supabase = getSupabaseService();
   const { id } = await params;
   
-  // 1. Ensure System Event book exists
-  console.log('🔍 Checking for System Event book...');
-  const { data: eventBook, error: bookError } = await supabase.from('books').select('id').eq('id', SYSTEM_EVENT_ID).maybeSingle();
-  
-  if (bookError) {
-    console.error('❌ Error checking event book:', bookError);
-  }
-
-  if (!eventBook) {
-    console.log('✨ Creating System Event book...');
-    const { error: insertError } = await supabase.from('books').insert({
-        id: SYSTEM_EVENT_ID,
-        name: 'Event',
-        category: 'System',
-        level: 'All',
-        total_units: 999,
-        days_per_unit: 1,
-        unit_type: 'event',
-        series: 'System',
-        series_level: 'All'
-    });
-    if (insertError) {
-      console.error('❌ Failed to insert System Event book:', insertError);
-    } else {
-      console.log('✅ System Event book created');
-    }
-  }
-
-  // 2. Ensure System Event allocation exists for this class
-  console.log(`🔍 Checking event allocation for class ${id}...`);
-  const { data: eventAlloc, error: allocError } = await supabase
-    .from('class_book_allocations')
-    .select('id')
-    .eq('class_id', id)
-    .eq('book_id', SYSTEM_EVENT_ID)
-    .maybeSingle();
-
-  if (allocError) {
-    console.error('❌ Error checking event allocation:', allocError);
-  }
-
-  if (!eventAlloc) {
-    console.log('✨ Creating event allocation...');
-    const { error: insertAllocError } = await supabase.from('class_book_allocations').insert({
-        class_id: id,
-        book_id: SYSTEM_EVENT_ID,
-        priority: 0,
-        sessions_per_week: 0,
-        total_sessions: 0
-    });
-    if (insertAllocError) {
-      console.error('❌ Failed to insert event allocation:', insertAllocError);
-    } else {
-      console.log('✅ Event allocation created');
-    }
-  }
-
   const { data, error } = await supabase
     .from('class_book_allocations')
     .select(
@@ -95,6 +37,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     `
     )
     .eq('class_id', id)
+    .neq('book_id', 'system_event')
+    .neq('book_id', 'e7e7e7e7-e7e7-e7e7-e7e7-e7e7e7e7e7e7')
     .order('priority', { ascending: true, nullsFirst: true })
     .order('section', { ascending: true });
   

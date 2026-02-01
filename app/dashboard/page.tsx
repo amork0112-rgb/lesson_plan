@@ -6,6 +6,7 @@ import { useData } from '@/context/store';
 import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
 import { parseLocalDate } from '@/lib/date';
+import { startOfWeek } from 'date-fns';
 import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save } from 'lucide-react';
@@ -1564,10 +1565,45 @@ export default function Home() {
                     });
                     
                     const uniqueDates = Object.keys(byDate).sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
-                    const cols = 2; 
-                    const rows: string[][] = [];
-                    for (let i = 0; i < uniqueDates.length; i += cols) {
-                        rows.push(uniqueDates.slice(i, i + cols));
+                    
+                    // Logic for fixed Grid (3 days)
+                    const isFixedGrid = selectedDays.length === 3;
+                    const cols = isFixedGrid ? 3 : 2; 
+                    
+                    let rows: (string | null)[][] = [];
+
+                    if (isFixedGrid) {
+                        const dayOrder: Record<string, number> = { 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0 };
+                        // Filter selected days and sort them
+                        const sortedSelectedDays = [...selectedDays].sort((a, b) => (dayOrder[a] || 0) - (dayOrder[b] || 0));
+
+                        // Group dates by Week (Sunday-based)
+                        const byWeek: Record<string, string[]> = {};
+                        uniqueDates.forEach(dStr => {
+                            const d = parseLocalDate(dStr);
+                            const weekStart = startOfWeek(d, { weekStartsOn: 0 }).toISOString();
+                            if (!byWeek[weekStart]) byWeek[weekStart] = [];
+                            byWeek[weekStart].push(dStr);
+                        });
+
+                        const sortedWeeks = Object.keys(byWeek).sort();
+                        sortedWeeks.forEach(weekKey => {
+                            const weekDates = byWeek[weekKey];
+                            const row: (string | null)[] = sortedSelectedDays.map(dayName => {
+                                 // Find the date in weekDates that matches dayName
+                                 return weekDates.find(dStr => {
+                                     const d = parseLocalDate(dStr);
+                                     const dName = d.toLocaleDateString('en-US', { weekday: 'short' }) as Weekday;
+                                     return dName === dayName;
+                                 }) || null;
+                            });
+                            rows.push(row);
+                        });
+                    } else {
+                        // Original simple chunking
+                        for (let i = 0; i < uniqueDates.length; i += cols) {
+                            rows.push(uniqueDates.slice(i, i + cols));
+                        }
                     }
 
                     return (
@@ -1621,8 +1657,11 @@ export default function Home() {
 
                             <div className="space-y-6">
                                 {rows.map((rowDates, ri) => (
-                                    <div key={ri} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {rowDates.map(dateStr => {
+                                    <div key={ri} className={`grid gap-6 ${isFixedGrid ? 'grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+                                        {rowDates.map((dateStr, colIdx) => {
+                                            if (!dateStr) {
+                                                return <div key={`empty-${ri}-${colIdx}`} className="invisible md:visible border-2 border-dashed border-gray-100 rounded-xl min-h-[150px]" />;
+                                            }
                                             const dayLessons = (byDate[dateStr] || []).sort((a, b) => (a.period || 0) - (b.period || 0));
                                             const dateObj = parseLocalDate(dateStr);
                                             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
