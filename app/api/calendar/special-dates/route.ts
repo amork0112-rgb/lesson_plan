@@ -37,7 +37,7 @@ export async function POST(req: Request) {
         start_date: date,
         end_date: date,
         type: dbType,
-        class_scope: 'all', // Toggles are usually global in this UI
+        class_scope: 'all', // Default to all for special dates unless specified
         sessions: body.sessions || 0
     });
     

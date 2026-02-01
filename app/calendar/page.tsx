@@ -35,6 +35,11 @@ export default function CalendarPage() {
     
     const isSpecialDateType = ['행사', '휴강', '보강'].includes(newHoliday.dbType || '');
 
+    // If editing an existing holiday, delete it first to prevent duplicates (e.g. if changing type to Special Date)
+    if (editingId) {
+        await deleteHoliday(editingId);
+    }
+
     if (isSpecialDateType) {
         // Special Date Logic
         const dateStr = newHoliday.date;
@@ -51,11 +56,6 @@ export default function CalendarPage() {
         await updateSpecialDate(dateStr, data as any);
     } else {
         // Academic Calendar Logic (Holiday/Vacation)
-        
-        // If editing an existing holiday, delete it first
-        if (editingId) {
-            deleteHoliday(editingId);
-        }
 
         addHoliday({
           id: editingId || Math.random().toString(),
@@ -292,8 +292,10 @@ export default function CalendarPage() {
                   <div className="mt-2 space-y-1 flex-1 overflow-y-auto max-h-[120px]">
                     {/* Render Special Dates First */}
                     {special && (
-                        <div className={cn(
-                            "group flex flex-col gap-0.5 px-2 py-1.5 rounded border text-xs mb-1",
+                        <div 
+                            onClick={(e) => handleEditSpecial(e, dateStr, special)}
+                            className={cn(
+                            "group flex flex-col gap-0.5 px-2 py-1.5 rounded border text-xs mb-1 cursor-pointer hover:shadow-sm transition-shadow",
                             special.type === 'no_class' ? "bg-red-100 border-red-200 text-red-700" :
                             special.type === 'makeup' ? "bg-green-100 border-green-200 text-green-700" :
                             "bg-blue-100 border-blue-200 text-blue-700"

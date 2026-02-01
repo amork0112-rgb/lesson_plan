@@ -1357,7 +1357,7 @@ export default function Home() {
                     `}
                 >
                     <Share className="w-4 h-4" />
-                    {isSharing ? 'Sharing...' : 'Share Plan'}
+                    {isSharing ? '공유 중...' : '플랜 공유하기'}
                 </button>
              </div>
           </div>
