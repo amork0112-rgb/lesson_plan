@@ -29,6 +29,16 @@ export default function CalendarPage() {
   const handleAddHoliday = async () => {
     if (!newHoliday.name || !newHoliday.date) return;
     
+    const dateStr = newHoliday.date;
+
+    if (newHoliday.dbType === 'none') {
+        await updateSpecialDate(dateStr, null);
+        setIsAdding(false);
+        setEditingId(null);
+        setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0, dbType: '공휴일' });
+        return;
+    }
+    
     // Unified Logic: Everything goes to special_dates
     // Map legacy types to special_dates types
     let type = 'school_event';
@@ -36,7 +46,6 @@ export default function CalendarPage() {
     if (newHoliday.dbType === '보강') type = 'makeup';
     if (newHoliday.dbType === '행사') type = 'school_event';
 
-    const dateStr = newHoliday.date;
     const data = {
         type,
         name: newHoliday.name,
@@ -167,6 +176,7 @@ export default function CalendarPage() {
                     <option value="행사">School Event (행사)</option>
                     <option value="휴강">No Class (휴강)</option>
                     <option value="보강">Makeup Class (보강)</option>
+                    <option value="none">None (Delete)</option>
                   </select>
                </div>
                <div>

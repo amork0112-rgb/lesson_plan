@@ -66,7 +66,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 map[d.date] = { 
                     type: d.type as SpecialDateType, 
                     name: d.name,
-                    sessions: d.sessions 
+                    sessions: d.sessions,
+                    classes: d.classes
                 };
            });
            setSpecialDates(map);

@@ -120,7 +120,12 @@ export default function Home() {
 
         const map: Record<string, SpecialDate> = {};
         (s ?? []).forEach((d: any) => {
-          map[d.date] = { type: d.type, name: d.name };
+          map[d.date] = { 
+            type: d.type, 
+            name: d.name,
+            sessions: d.sessions,
+            classes: d.classes
+          };
         });
         setSpecialDates(map);
       } catch (e) {
@@ -1685,6 +1690,60 @@ export default function Home() {
                           </tr>
                          );
                       })}
+                      {/* School Events Row */}
+                      {(() => {
+                         // Find school events for this month
+                         const year = plan.year;
+                         const month = plan.month; // 0-11
+                         
+                         // Get all dates in this month
+                         // Reuse getDatesForMonth logic or just filter specialDates keys
+                         // But we need to know if they fall on class days if that matters?
+                         // User said "put in the sessions in special_dates database should be calculated"
+                         // So we should sum 'sessions' from special_dates.
+                         
+                         const events = Object.entries(specialDates).filter(([dStr, sd]) => {
+                             if (sd.type !== 'school_event') return false;
+                             const d = parseLocalDate(dStr);
+                             return d.getFullYear() === year && d.getMonth() === month;
+                         });
+                         
+                         // We might want to group by name
+                         const groupedEvents: Record<string, number> = {};
+                         
+                         events.forEach(([dStr, sd]) => {
+                            // Filter by class if applicable
+                            if (sd.classes && sd.classes.length > 0 && classId) {
+                                if (!sd.classes.includes(classId)) return;
+                            }
+
+                            const sessions = sd.sessions || 0; 
+                            
+                            const name = sd.name || 'School Event';
+                            groupedEvents[name] = (groupedEvents[name] || 0) + sessions;
+                        });
+                         
+                         return Object.entries(groupedEvents).map(([name, count]) => (
+                            <tr key={name} className="group bg-blue-50/30">
+                                <td className="px-6 py-3">
+                                    <div className="flex flex-col">
+                                        <div className="text-sm font-medium text-blue-900">
+                                            {name}
+                                        </div>
+                                        <div className="text-xs text-blue-500 flex items-center gap-2 mt-1">
+                                            <span>Event</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3 text-center text-sm text-gray-600">-</td>
+                                <td className="px-4 py-3 text-center text-sm text-gray-600">-</td>
+                                <td className="px-4 py-3 text-center text-sm text-gray-600">-</td>
+                                <td className="px-4 py-3 text-center text-sm font-bold text-blue-900">
+                                    {count}
+                                </td>
+                            </tr>
+                         ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
