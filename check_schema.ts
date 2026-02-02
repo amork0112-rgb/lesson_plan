@@ -1,13 +1,18 @@
+
 import { getSupabaseService } from './lib/supabase-service';
 
 async function main() {
   const supabase = getSupabaseService();
-  const { data, error } = await supabase.from('academic_calendar').select('*').limit(1);
+  // Try to select owner_type from lesson_plans
+  const { data, error } = await supabase
+    .from('lesson_plans')
+    .select('owner_type, owner_id')
+    .limit(1);
+    
   if (error) {
-    console.error(error);
+    console.error('Schema check failed:', error.message);
   } else {
-    console.log(Object.keys(data[0] || {}));
-    console.log(data[0]);
+    console.log('Schema check passed: owner_type and owner_id exist.');
   }
 }
 

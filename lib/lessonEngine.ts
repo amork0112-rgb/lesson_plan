@@ -7,7 +7,8 @@ export interface AllocationInput {
 }
 
 interface GenerateLessonInput {
-  classId: string;
+  ownerId: string;
+  ownerType: 'class' | 'private';
   monthPlans: {
     id: string;
     year: number;
@@ -36,7 +37,7 @@ export function getDaysPerUnit(book?: Book) {
 }
 
 export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
-  const { classId, monthPlans, planDates, selectedDays, books, initialProgress, initialSlotsUsed } = input;
+  const { ownerId, ownerType, monthPlans, planDates, selectedDays, books, initialProgress, initialSlotsUsed } = input;
   if (!Array.isArray(books) || books.length === 0) return [];
   const slotsPerDay = getSlotsPerDay(selectedDays);
   let displayOrder = 1;
@@ -113,7 +114,9 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
 
             lessons.push({
               id: `${date}_${item.book_id}_${period}_${Math.random().toString(36).substr(2, 5)}`, // Ensure unique ID
-              class_id: classId,
+              owner_type: ownerType,
+              owner_id: ownerId,
+              class_id: ownerType === 'class' ? ownerId : undefined,
               date,
               period,
               display_order: displayOrder++,

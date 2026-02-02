@@ -10,6 +10,17 @@ export interface SpecialDate {
   classes?: string[] | null;
 }
 
+export interface PrivateLesson {
+  id: string;
+  student_name: string;
+  instrument?: string;
+  status: 'active' | 'paused' | 'completed';
+  start_date?: string;
+  schedule?: Record<string, string>; // e.g. { Mon: "14:00" }
+  memo?: string;
+  book_id?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -29,6 +40,7 @@ export interface Class {
   dismissal_time?: string; // 하원 시간
   days: Weekday[];
   scp_type?: 'red' | 'orange' | 'yellow' | 'blue' | 'green' | null;
+  campus?: string | null;
 }
 
 export interface ScheduleRule {
@@ -91,7 +103,9 @@ export interface BookAllocation {
 
 export interface LessonPlan {
   id: string;
-  class_id: string;
+  class_id?: string; // Made optional for backward compatibility, but logic should use owner_id
+  owner_type: 'class' | 'private';
+  owner_id: string;
   date: string; // YYYY-MM-DD
   book_id: string;
   unit_id?: string;

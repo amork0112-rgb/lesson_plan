@@ -112,22 +112,47 @@ export default function Home() {
   useEffect(() => {
     async function loadCalendarData() {
       try {
-        const res = await fetch('/api/calendar');
-        if (!res.ok) throw new Error('Failed to fetch calendar data');
-        const { holidays: h, special_dates: s } = await res.json();
+        // Fallback: Fetch directly from Supabase if API fails
+        const supabase = getSupabase();
+        if (!supabase) return; // Silent fail or handle error
+        
+        // 1. Fetch Holidays
+        const { data: holidaysData } = await supabase.from('academic_calendar').select('*').eq('type', '공휴일');
+        const holidaysList = (holidaysData || []).map(h => ({
+            ...h,
+            date: h.start_date,
+            type: 'public_holiday'
+        }));
 
-        setHolidays(h || []);
+        // 2. Fetch Special Dates
+        const { data: specialData } = await supabase.from('special_dates').select('*');
+        
+        // Merge logic
+        const mergedHolidays = [...holidaysList];
+        const mergedSpecial: Record<string, SpecialDate> = {};
+        
+        (specialData || []).forEach(sd => {
+            mergedSpecial[sd.date] = { 
+                type: sd.type, 
+                name: sd.name,
+                sessions: sd.sessions,
+                classes: sd.classes
+            };
 
-        const map: Record<string, SpecialDate> = {};
-        (s ?? []).forEach((d: any) => {
-          map[d.date] = { 
-            type: d.type, 
-            name: d.name,
-            sessions: d.sessions,
-            classes: d.classes
-          };
+            if (sd.type === 'no_class') {
+                mergedHolidays.push({
+                   id: `sd_${sd.date}`,
+                   date: sd.date,
+                   name: sd.name || 'No Class',
+                   type: 'custom',
+                   affected_classes: sd.classes
+                });
+            }
         });
-        setSpecialDates(map);
+        
+        setHolidays(mergedHolidays);
+        setSpecialDates(mergedSpecial);
+
       } catch (e) {
         console.error('Error loading calendar data:', e);
       }
@@ -144,6 +169,20 @@ export default function Home() {
   const [duration, setDuration] = useState(6); // Default 6 months
   const [selectedDays, setSelectedDays] = useState<Weekday[]>([]);
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const [selectedCampus, setSelectedCampus] = useState<string>('All');
+
+  // Compute unique campuses
+  const campuses = useMemo(() => {
+    const all = classes.map(c => c.campus).filter(Boolean) as string[];
+    // Sort alphabetically
+    return ['All', ...Array.from(new Set(all)).sort()];
+  }, [classes]);
+
+  // Filter classes based on campus
+  const visibleClasses = useMemo(() => {
+    if (selectedCampus === 'All') return classes;
+    return classes.filter(c => c.campus === selectedCampus);
+  }, [classes, selectedCampus]);
 
   // DEBUG: Check selectedDays
   useEffect(() => {
@@ -1112,6 +1151,63 @@ export default function Home() {
 
   const [isSharing, setIsSharing] = useState(false);
 
+  const handleSeedHolidays = async () => {
+    if (!confirm('2026년 공휴일 데이터를 DB에 추가하시겠습니까? (이미 존재하면 건너뜁니다)')) return;
+    
+    try {
+        const supabase = getSupabase();
+        if (!supabase) throw new Error('Supabase client not initialized');
+        
+        // 1. Check existing
+        const { count } = await supabase
+            .from('academic_calendar')
+            .select('*', { count: 'exact', head: true })
+            .gte('start_date', '2026-01-01')
+            .lte('start_date', '2026-12-31')
+            .eq('type', '공휴일');
+
+        if (count && count > 0) {
+            alert(`이미 ${count}개의 공휴일 데이터가 존재합니다.`);
+            return;
+        }
+
+        // 2. Seed
+        const holidays = [
+            { name: 'New Year\'s Day', start_date: '2026-01-01', end_date: '2026-01-01', type: '공휴일' },
+            { name: 'Seollal Holiday', start_date: '2026-02-17', end_date: '2026-02-17', type: '공휴일' },
+            { name: 'Seollal', start_date: '2026-02-18', end_date: '2026-02-18', type: '공휴일' },
+            { name: 'Seollal Holiday', start_date: '2026-02-19', end_date: '2026-02-19', type: '공휴일' },
+            { name: 'Independence Movement Day', start_date: '2026-03-01', end_date: '2026-03-01', type: '공휴일' },
+            { name: 'Substitute Holiday', start_date: '2026-03-02', end_date: '2026-03-02', type: '공휴일' },
+            { name: 'Children\'s Day', start_date: '2026-05-05', end_date: '2026-05-05', type: '공휴일' },
+            { name: 'Buddha\'s Birthday', start_date: '2026-05-24', end_date: '2026-05-24', type: '공휴일' },
+            { name: 'Substitute Holiday', start_date: '2026-05-25', end_date: '2026-05-25', type: '공휴일' },
+            { name: 'Memorial Day', start_date: '2026-06-06', end_date: '2026-06-06', type: '공휴일' },
+            { name: 'Liberation Day', start_date: '2026-08-15', end_date: '2026-08-15', type: '공휴일' },
+            { name: 'Chuseok Holiday', start_date: '2026-09-24', end_date: '2026-09-24', type: '공휴일' },
+            { name: 'Chuseok', start_date: '2026-09-25', end_date: '2026-09-25', type: '공휴일' },
+            { name: 'Chuseok Holiday', start_date: '2026-09-26', end_date: '2026-09-26', type: '공휴일' },
+            { name: 'National Foundation Day', start_date: '2026-10-03', end_date: '2026-10-03', type: '공휴일' },
+            { name: 'Hangeul Day', start_date: '2026-10-09', end_date: '2026-10-09', type: '공휴일' },
+            { name: 'Christmas Day', start_date: '2026-12-25', end_date: '2026-12-25', type: '공휴일' },
+        ];
+
+        const { data, error } = await supabase
+            .from('academic_calendar')
+            .insert(holidays)
+            .select();
+
+        if (error) throw error;
+
+        alert(`성공적으로 ${data.length}개의 공휴일을 추가했습니다. 페이지를 새로고침하세요.`);
+        window.location.reload();
+
+    } catch (e: any) {
+        console.error(e);
+        alert(`실패: ${e.message}`);
+    }
+  };
+
   const handleSharePlan = async () => {
     if (monthPlans.length === 0) return;
     setIsSharing(true);
@@ -1180,18 +1276,35 @@ export default function Home() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
           {/* Top Settings Bar */}
           <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap gap-4 items-start">
-              <div className="w-28">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Class Name</label>
-                <select 
-                  value={classId} 
-                  onChange={handleClassSelect}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white"
-                >
-                  <option value="">Select Class</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+              <div className="flex gap-4 items-start">
+                  <div className="w-32">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Campus</label>
+                    <select
+                        value={selectedCampus}
+                        onChange={(e) => {
+                            setSelectedCampus(e.target.value);
+                            setClassName(''); 
+                            setClassId('');
+                        }}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white"
+                    >
+                        {campuses.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="w-36">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Class Name</label>
+                    <select 
+                      value={classId} 
+                      onChange={handleClassSelect}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-white"
+                    >
+                      <option value="">Select Class</option>
+                      {visibleClasses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
               </div>
 
               <div className="flex-1 min-w-[200px]">
@@ -1287,6 +1400,7 @@ export default function Home() {
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border bg-gray-50"
                 >
                   <option value={3}>3 Mo</option>
+                  <option value={4}>4 Mo</option>
                   <option value={6}>6 Mo</option>
                   <option value={12}>1 Yr</option>
                 </select>
@@ -1316,6 +1430,13 @@ export default function Home() {
 
              {/* Actions */}
              <div className="flex items-center gap-3">
+                <button 
+                    onClick={handleSeedHolidays}
+                    className="px-3 py-2 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 shadow-sm transition-all"
+                    title="2026 Holidays"
+                >
+                    📅 Seed Holidays
+                </button>
                 <button 
                     onClick={() => handleGenerate()}
                     disabled={loading || !classId || selectedDays.length === 0}
@@ -1384,8 +1505,10 @@ export default function Home() {
                         // Calculate Event Sessions
                         const eventSessions = Object.entries(specialDates).reduce((sum, [dStr, sd]) => {
                             if (sd.type !== 'school_event') return sum;
-                            const d = parseLocalDate(dStr);
-                            if (d.getFullYear() !== plan.year || d.getMonth() !== plan.month) return sum;
+                            
+                            // Check if this date is part of the current plan
+                            const datesInPlan = planDates[plan.id] || [];
+                            if (!datesInPlan.includes(dStr)) return sum;
                             
                             // Check Class Scope
                             if (sd.classes && sd.classes.length > 0 && classId) {

@@ -1,7 +1,7 @@
 export const SCP_PERIOD = 99;
 
 export function getSlotsPerDay(selectedDays: string[]) {
-  return selectedDays.length === 2 ? 3 : 2;
+  return selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
 }
 
 export function getMonthlyTarget(selectedDays: string[]) {

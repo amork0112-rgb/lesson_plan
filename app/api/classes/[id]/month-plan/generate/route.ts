@@ -142,7 +142,7 @@ export async function POST(
     const { data: publicHolidays } = await supabase
         .from('academic_calendar')
         .select('*')
-        .eq('type', '공휴일');
+        .in('type', ['공휴일', '방학']);
 
     (publicHolidays || []).forEach((ph: any) => {
          holidays.push({
@@ -614,7 +614,8 @@ export async function POST(
 
         // Generate!
         const generated = generateLessons({
-            classId: class_id,
+            ownerId: class_id,
+            ownerType: 'class',
             monthPlans: [monthPlanInput],
             planDates,
             selectedDays: classDays as Weekday[],
@@ -678,6 +679,8 @@ export async function POST(
             const { error: insertError } = await supabase
               .from('lesson_plans')
               .insert(allGeneratedLessons.map(p => ({
+                  owner_type: 'class',
+                  owner_id: p.owner_id || p.class_id,
                   class_id: p.class_id,
                   date: p.date,
                   period: p.period,

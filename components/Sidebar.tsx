@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { name: 'Generator', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Classes', href: '/classes', icon: Users },
+  { name: 'Private Lessons', href: '/dashboard/private-lessons', icon: Users },
   { name: 'Books', href: '/books', icon: BookOpen },
 ];
 
