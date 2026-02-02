@@ -351,7 +351,7 @@ export default function PrivateLessonsPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <h3 className="font-semibold text-lg">New Private Lesson</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">

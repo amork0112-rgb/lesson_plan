@@ -1,3 +1,5 @@
+// API Route: GET /api/private-lessons
+// Description: Fetch all private lessons with associated schedules
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
@@ -7,14 +9,33 @@ export async function GET() {
   const supabase = getSupabaseService();
   const { data, error } = await supabase
     .from('private_lessons')
-    .select('*, private_lesson_schedules(*)')
+    .select('*, private_lesson_schedules(day_of_week, time)')
     .order('created_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // Transform data to match frontend expectation (lesson.schedule as object)
+  const result = data?.map(lesson => {
+    const schedule: Record<string, string> = {};
+    const DAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    if (lesson.private_lesson_schedules) {
+        lesson.private_lesson_schedules.forEach((s: any) => {
+            if (s.day_of_week !== undefined && DAY_MAP[s.day_of_week]) {
+                schedule[DAY_MAP[s.day_of_week]] = s.time;
+            }
+        });
+    }
+
+    return {
+      ...lesson,
+      schedule, // Frontend expects this format for rendering
+    };
+  });
+
+  return NextResponse.json(result);
 }
 
 export async function POST(req: Request) {
@@ -24,7 +45,6 @@ export async function POST(req: Request) {
     
     // Validation
     const { student_id, class_id, campus, schedules, ...lessonData } = body;
-    const campus_id = campus; // Alias for consistency if needed, or just use campus
 
     if (student_id) {
         // Fetch student to validate
@@ -43,55 +63,30 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Student does not belong to the selected class' }, { status: 400 });
         }
         
-        // Note: student table uses 'campus' column
         if (campus && student.campus !== campus) {
              return NextResponse.json({ error: 'Student does not belong to the selected campus' }, { status: 400 });
         }
     }
 
-    // 1. Insert Private Lesson
-    // We exclude 'schedules', 'class_id' (if not in table), 'campus_id' (if needed)
-    // The lessonData should contain: student_name, student_id, book_id, start_date, memo, status, campus (if used)
-    
-    // Ensure we send 'campus' if the table uses it. The body has 'campus' (from frontend).
-    // The frontend sends: campus, class_id, student_id, book_id, start_date, schedules.
-    // Plus: student_name (maybe? check frontend). 
-    // Frontend sends: student_id, book_id, start_date, schedules, campus, class_id.
-    // It does NOT send student_name in the payload in handleCreate, but the table likely needs it?
-    // Let's check if we should fetch student name or if frontend should send it.
-    // Looking at frontend handleCreate:
-    /*
-      const payload = {
-        campus: selectedCampus,
-        class_id: selectedClassId,
-        student_id: formData.student_id,
-        book_id: formData.book_id,
-        start_date: formData.start_date,
-        schedules
-      };
-    */
-    // It seems 'student_name' is missing in payload. I should add it or fetch it.
-    // I will fetch it here since I already fetch the student for validation.
-    
+    // Prepare Student Name
     let studentName = lessonData.student_name;
-    let studentEnglishName = '';
     
     if (!studentName && student_id) {
-        const { data: student } = await supabase.from('students').select('korean_name, english_name').eq('id', student_id).single();
+        const { data: student } = await supabase.from('students').select('korean_name').eq('id', student_id).single();
         if (student) {
             studentName = student.korean_name;
-            studentEnglishName = student.english_name;
         }
     }
 
+    // 1. Insert Private Lesson
     const lessonPayload = {
         student_id,
+        class_id, // Added class_id
         book_id: lessonData.book_id,
         start_date: lessonData.start_date,
         memo: lessonData.memo,
-        campus: campus, // Use extracted campus variable
-        student_name: studentName, // Populate this
-        // We don't store schedule JSON anymore
+        campus: campus,
+        student_name: studentName,
     };
 
     const { data: lesson, error: lessonError } = await supabase
@@ -104,13 +99,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: lessonError.message }, { status: 500 });
     }
 
-    // 2. Insert Schedules
-    if (schedules && Array.isArray(schedules) && schedules.length > 0) {
-        const scheduleRows = schedules.map((s: any) => ({
-            lesson_id: lesson.id,
+    // 2. Insert Schedules (Defensive Parsing)
+    let scheduleArray: { day_of_week: number; time: string }[] = [];
+
+    if (schedules && !Array.isArray(schedules)) {
+        // Handle object format: { Mon: "14:00", Wed: "14:00" }
+        const DAY_MAP: Record<string, number> = {
+            Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+        };
+        scheduleArray = Object.entries(schedules).map(([day, time]) => ({
+            day_of_week: DAY_MAP[day],
+            time: time as string,
+        }));
+    } else if (Array.isArray(schedules)) {
+        // Handle array format
+        scheduleArray = schedules;
+    }
+
+    if (scheduleArray.length > 0) {
+        const scheduleRows = scheduleArray.map(s => ({
+            private_lesson_id: lesson.id, // Correct column name
             day_of_week: s.day_of_week,
-            start_time: s.time,
-            duration_minutes: 40 // Default duration, or pass from frontend
+            time: s.time, // Correct column name
         }));
 
         const { error: scheduleError } = await supabase
@@ -118,7 +128,6 @@ export async function POST(req: Request) {
             .insert(scheduleRows);
 
         if (scheduleError) {
-            // Should we delete the lesson? For now, just report error.
             console.error('Schedule insert error:', scheduleError);
             return NextResponse.json({ error: 'Lesson created but schedule failed: ' + scheduleError.message }, { status: 500 });
         }
