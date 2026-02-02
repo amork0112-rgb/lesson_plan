@@ -20,6 +20,7 @@ interface GenerateLessonInput {
   books: Book[];
   scpType?: string | null;
   initialProgress?: Record<string, { unit: number; day: number }>;
+  initialSlotsUsed?: Record<string, number>;
 }
 
 export function getDaysPerUnit(book?: Book) {
@@ -35,7 +36,7 @@ export function getDaysPerUnit(book?: Book) {
 }
 
 export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
-  const { classId, monthPlans, planDates, selectedDays, books, initialProgress } = input;
+  const { classId, monthPlans, planDates, selectedDays, books, initialProgress, initialSlotsUsed } = input;
   if (!Array.isArray(books) || books.length === 0) return [];
   const slotsPerDay = getSlotsPerDay(selectedDays);
   let displayOrder = 1;
@@ -89,13 +90,14 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
     // We fill sequentially: Date 1 (Slot 1, Slot 2...), Date 2...
     
     let deckIndex = 0;
-    const slotsUsedPerDate: Record<string, number> = {};
+    const slotsUsedPerDate: Record<string, number> = initialSlotsUsed ? { ...initialSlotsUsed } : {};
 
     dates.forEach(date => {
         const currentSlotBase = slotsUsedPerDate[date] || 0;
+        const availableSlots = Math.max(0, slotsPerDay - currentSlotBase);
 
         // For each date, we have `slotsPerDay` slots
-        for (let i = 1; i <= slotsPerDay; i++) {
+        for (let i = 1; i <= availableSlots; i++) {
             if (deckIndex >= deck.length) break; // Run out of allocated sessions
 
             const period = currentSlotBase + i;

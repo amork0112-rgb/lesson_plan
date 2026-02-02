@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 import { generateLessons, getDaysPerUnit } from '@/lib/lessonEngine';
+import { getSlotsPerDay } from '@/lib/constants';
 import { format, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { Class, Holiday, Weekday, SpecialDate } from '@/types';
 
@@ -286,16 +287,55 @@ export async function POST(
         
         // A. Calculate Capacity (Valid Dates)
         let validDates: string[] = [];
+        const slotsPerDay = getSlotsPerDay(classDays); // Get configured slots per day
+        const fixedLessons: any[] = [];
+        const initialSlotsUsed: Record<string, number> = {};
 
         if (inputPlanDates && inputPlanDates[mIdx]) {
             // Use dates provided by frontend (Exact Sync)
             const rawDates = inputPlanDates[mIdx];
             validDates = rawDates.filter((d: string) => {
-                // We still need to filter out 'school_event' so we don't assign books to them
-                // 'no_class' should already be filtered by frontend, but safe to check
                 const sd = (inputSpecialDates && inputSpecialDates[d]) || specialDates.find(s => s.date === d);
                 
-                if (sd?.type === 'school_event') return false; 
+                if (sd?.type === 'school_event') {
+                    const sessions = sd.sessions || 0;
+                    if (sessions >= slotsPerDay) {
+                         // Full day event: Inject fixed lessons, skip date for generator
+                         for(let i=1; i<=slotsPerDay; i++) {
+                             fixedLessons.push({
+                                 id: `fixed_${d}_${i}`,
+                                 date: d,
+                                 period: i,
+                                 display_order: 0,
+                                 book_id: 'school_event',
+                                 book_name: sd.name || 'School Event',
+                                 content: 'Event',
+                                 is_makeup: false,
+                                 unit_no: 0,
+                                 day_no: 0
+                             });
+                         }
+                         return false; 
+                    } else if (sessions > 0) {
+                         // Partial day event: Inject fixed lessons, set offset
+                         for(let i=1; i<=sessions; i++) {
+                             fixedLessons.push({
+                                 id: `fixed_${d}_${i}`,
+                                 date: d,
+                                 period: i,
+                                 display_order: 0,
+                                 book_id: 'school_event',
+                                 book_name: sd.name || 'School Event',
+                                 content: 'Event',
+                                 is_makeup: false,
+                                 unit_no: 0,
+                                 day_no: 0
+                             });
+                         }
+                         initialSlotsUsed[d] = sessions;
+                         return true;
+                    }
+                }
                 return true;
             });
             console.log(`[DEBUG] Using provided plan_dates for Month ${mIdx}: ${validDates.length} valid dates`);
@@ -315,7 +355,44 @@ export async function POST(
                         const count = sd.sessions || 1;
                         return Array(count).fill(dStr);
                     }
-                    if (sd.type === 'school_event') return []; 
+                    if (sd.type === 'school_event') {
+                        const sessions = sd.sessions || 0;
+                        if (sessions >= slotsPerDay) {
+                             for(let i=1; i<=slotsPerDay; i++) {
+                                 fixedLessons.push({
+                                     id: `fixed_${dStr}_${i}`,
+                                     date: dStr,
+                                     period: i,
+                                     display_order: 0,
+                                     book_id: 'school_event',
+                                     book_name: sd.name || 'School Event',
+                                     content: 'Event',
+                                     is_makeup: false,
+                                     unit_no: 0,
+                                     day_no: 0
+                                 });
+                             }
+                             return [];
+                        } else if (sessions > 0) {
+                             for(let i=1; i<=sessions; i++) {
+                                 fixedLessons.push({
+                                     id: `fixed_${dStr}_${i}`,
+                                     date: dStr,
+                                     period: i,
+                                     display_order: 0,
+                                     book_id: 'school_event',
+                                     book_name: sd.name || 'School Event',
+                                     content: 'Event',
+                                     is_makeup: false,
+                                     unit_no: 0,
+                                     day_no: 0
+                                 });
+                             }
+                             initialSlotsUsed[dStr] = sessions;
+                             return [dStr];
+                        }
+                        return []; 
+                    }
                 }
 
                 // 1. Holiday/Vacation -> Exclude
@@ -332,8 +409,48 @@ export async function POST(
                     const count = sd.sessions || 1;
                     return Array(count).fill(dStr);
                 }
+
+                // 4. special_date.school_event
+                if (sd?.type === 'school_event') {
+                    const sessions = sd.sessions || 0;
+                    if (sessions >= slotsPerDay) {
+                         for(let i=1; i<=slotsPerDay; i++) {
+                             fixedLessons.push({
+                                 id: `fixed_${dStr}_${i}`,
+                                 date: dStr,
+                                 period: i,
+                                 display_order: 0,
+                                 book_id: 'school_event',
+                                 book_name: sd.name || 'School Event',
+                                 content: 'Event',
+                                 is_makeup: false,
+                                 unit_no: 0,
+                                 day_no: 0
+                             });
+                         }
+                         return [];
+                    } else if (sessions > 0) {
+                         for(let i=1; i<=sessions; i++) {
+                             fixedLessons.push({
+                                 id: `fixed_${dStr}_${i}`,
+                                 date: dStr,
+                                 period: i,
+                                 display_order: 0,
+                                 book_id: 'school_event',
+                                 book_name: sd.name || 'School Event',
+                                 content: 'Event',
+                                 is_makeup: false,
+                                 unit_no: 0,
+                                 day_no: 0
+                             });
+                         }
+                         initialSlotsUsed[dStr] = sessions;
+                         return [dStr];
+                    }
+                    return [];
+                }
                 
-                // 4. Standard Schedule
+                // 5. Standard Schedule
                 const dayName = format(d, 'EEE') as Weekday;
                 if (classDays.includes(dayName)) {
                     return [dStr];
@@ -342,7 +459,7 @@ export async function POST(
             });
         }
 
-        const capacity = validDates.length; // This is the total sessions available for this month
+        const capacity = validDates.length; 
 
         // Fetch explicit session allocations for this month from DB (Source of Truth)
         const { data: dbSessions } = await supabase
@@ -359,34 +476,44 @@ export async function POST(
         }
 
         // B. Distribute Sessions
-        // If generate_all, capacity is dynamic. If single month, user might have passed 'total_sessions' override?
-        // But for consistency, let's use calculated capacity unless overridden.
-        // Actually, the user's "total_sessions" in single generation often matches capacity, but maybe they want less?
-        // Let's use calculated capacity as default, or min(capacity, override).
+        let sessionsToFill = capacity * slotsPerDay; 
         
-        let sessionsToFill = capacity;
+        // Adjust for partial events: Subtract slots already taken by initialSlotsUsed
+        // validDates contains the date string. If that date is in initialSlotsUsed, it means some slots are taken.
+        // Wait, capacity is based on validDates.length.
+        // If a date is in validDates, it means it has at least 1 slot available for LESSONS.
+        // But the TOTAL slots for that day is slotsPerDay.
+        // We already pushed fixedLessons. 
+        // We need to count how many slots are AVAILABLE for lessons.
+        // If a date is in validDates, and it has initialSlotsUsed[d] = N, then available slots = slotsPerDay - N.
+        
+        let availableSlotsForLessons = 0;
+        validDates.forEach(d => {
+            const used = initialSlotsUsed[d] || 0;
+            availableSlotsForLessons += (slotsPerDay - used);
+        });
+        
+        // If we have total_sessions override, we should respect it, but cap at available.
+        sessionsToFill = availableSlotsForLessons;
+
         if (!generate_all && total_sessions) {
-            sessionsToFill = Math.min(capacity, total_sessions);
+            sessionsToFill = Math.min(sessionsToFill, total_sessions);
         }
 
-        // Filter active allocations (those with remaining > 0 OR explicitly assigned)
-        // If explicit sessions exist, we include them even if remaining <= 0 (user override)
+        // Filter active allocations
         const activeItems = runningAllocations
             .filter(a => a.remaining > 0 || (explicitSessions[a.id] || 0) > 0)
             .sort((a, b) => a.priority - b.priority);
 
         // Distribute logic
-        // Reset 'used' for this month's calculation
         const monthDistribution = activeItems.map(a => ({ ...a, usedThisMonth: 0 }));
         
-        // Check if we have explicit sessions
         const hasExplicit = Object.keys(explicitSessions).length > 0;
         
         if (hasExplicit) {
              monthDistribution.forEach(a => {
                 const assigned = explicitSessions[a.id] || 0;
                 a.usedThisMonth = assigned;
-                // Update remaining just for tracking, though it might go negative if over-assigned
                 a.remaining -= assigned; 
             });
         } else if (monthDistribution.length > 0) {
@@ -398,7 +525,7 @@ export async function POST(
                 const target = Math.floor(sessionsToFill * share);
                 const actual = Math.min(target, a.remaining);
                 a.usedThisMonth = actual;
-                a.remaining -= actual; // Deduct from running total
+                a.remaining -= actual; 
             });
 
             // 2. Distribute Leftover
@@ -432,14 +559,11 @@ export async function POST(
         });
 
         // C. Generate Content
-        // We need to know which books are active this month
-        // Ensure we only include valid book objects to prevent lookup failures in generateLessons
         const activeBooks = monthDistribution
             .filter(d => d.usedThisMonth > 0 && d.book)
             .map(d => d.book);
         
-        // If this is the first iteration and we didn't have previous progress, fetch history
-        // Skip DB fetch if initial_progress was provided (Assume frontend has latest state)
+        // Fetch history if needed
         if (!initial_progress && mIdx === indicesToProcess[0] && validDates.length > 0) {
              const firstDate = validDates[0];
              const { data: previousPlans } = await supabase
@@ -455,15 +579,10 @@ export async function POST(
                      if (unitMatch && p.book_id) {
                          const u = parseInt(unitMatch[1]);
                          const d = parseInt(unitMatch[2]);
-                         // Update progress if this is later than what we have
-                         // Actually, we just want the state AFTER the last plan.
-                         // Simple approach: Apply all history sequentially
                          if (currentProgress[p.book_id]) {
-                             // Advance logic
                              const book = runningAllocations.find(a => a.book_id === p.book_id)?.book;
                              if (book) {
                                 currentProgress[p.book_id] = { unit: u, day: d };
-                                // Move to NEXT slot
                                 const dpu = getDaysPerUnit(book);
                                 if (currentProgress[p.book_id].day < dpu) {
                                     currentProgress[p.book_id].day++;
@@ -490,7 +609,7 @@ export async function POST(
         };
 
         const planDates = {
-            [`plan-${currentYear}-${currentMonth}`]: validDates.slice(0, sessionsToFill)
+            [`plan-${currentYear}-${currentMonth}`]: validDates
         };
 
         // Generate!
@@ -500,9 +619,12 @@ export async function POST(
             planDates,
             selectedDays: classDays as Weekday[],
             books: activeBooks,
-            initialProgress: JSON.parse(JSON.stringify(currentProgress)) // Deep copy
+            initialProgress: JSON.parse(JSON.stringify(currentProgress)),
+            initialSlotsUsed: initialSlotsUsed
         });
 
+        // Merge fixed lessons (events) first
+        allGeneratedLessons.push(...fixedLessons);
         allGeneratedLessons.push(...generated);
 
         // Update Progress for next iteration
@@ -511,7 +633,6 @@ export async function POST(
             if (unitMatch && l.book_id) {
                  const u = parseInt(unitMatch[1]);
                  const d = parseInt(unitMatch[2]);
-                 // We need to set the START of the NEXT lesson
                  const book = activeBooks.find(b => b.id === l.book_id);
                  if (book) {
                     currentProgress[l.book_id] = { unit: u, day: d };

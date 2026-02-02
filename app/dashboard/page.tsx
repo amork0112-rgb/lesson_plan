@@ -1388,15 +1388,33 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       {(() => {
-                        // Calculate Assigned Sessions
-                        const assignedSessions = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                        // Calculate Assigned Sessions (Books)
+                        const assignedBookSessions = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                        
+                        // Calculate Event Sessions
+                        const eventSessions = Object.entries(specialDates).reduce((sum, [dStr, sd]) => {
+                            if (sd.type !== 'school_event') return sum;
+                            const d = parseLocalDate(dStr);
+                            if (d.getFullYear() !== plan.year || d.getMonth() !== plan.month) return sum;
+                            
+                            // Check Class Scope
+                            if (sd.classes && sd.classes.length > 0 && classId) {
+                                if (!sd.classes.includes(classId)) return sum;
+                            }
+                            
+                            return sum + (sd.sessions || 0);
+                        }, 0);
+                        
+                        const totalAssigned = assignedBookSessions + eventSessions;
                         
                         // Calculate Plan Capacity (based on fixed logic for now)
                         const daysCount = planDates[plan.id]?.length || 0;
-                        const capacity = daysCount * 2; // Assuming 2 periods per day
+                        // Dynamic slots per day based on selectedDays
+                        const slotsPerDay = selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
+                        const capacity = daysCount * slotsPerDay;
                         
-                        const isMatch = assignedSessions === capacity;
-                        const isOver = assignedSessions > capacity;
+                        const isMatch = totalAssigned === capacity;
+                        const isOver = totalAssigned > capacity;
                         
                         return (
                           <div className="flex items-center gap-2">
@@ -1405,11 +1423,11 @@ export default function Home() {
                                     ? 'bg-green-100 text-green-700 border-green-200' 
                                     : (isOver ? 'bg-red-100 text-red-700 border-red-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200')
                               }`}>
-                                {assignedSessions} / {capacity} Sessions
+                                {totalAssigned} / {capacity} Sessions
                               </span>
                               {!isMatch && (
                                   <span className="text-[10px] text-gray-500 font-medium">
-                                      {isOver ? `${assignedSessions - capacity} Over` : `${capacity - assignedSessions} Left`}
+                                      {isOver ? `${totalAssigned - capacity} Over` : `${capacity - totalAssigned} Left`}
                                   </span>
                               )}
                           </div>
@@ -1857,8 +1875,24 @@ export default function Home() {
                                     const plan = monthPlans.find(p => p.year === y && p.month === m);
                                     if (!plan) return null;
                                     
-                                    // Calculate Assigned from Allocations
-                                    const assigned = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                                    // Calculate Assigned from Allocations (Books)
+                                    const assignedBooks = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                                    
+                                    // Calculate Event Sessions
+                                    const eventSessions = Object.entries(specialDates).reduce((sum, [dStr, sd]) => {
+                                        if (sd.type !== 'school_event') return sum;
+                                        const d = parseLocalDate(dStr);
+                                        if (d.getFullYear() !== y || d.getMonth() !== m) return sum;
+                                        
+                                        // Check Class Scope
+                                        if (sd.classes && sd.classes.length > 0 && classId) {
+                                            if (!sd.classes.includes(classId)) return sum;
+                                        }
+                                        
+                                        return sum + (sd.sessions || 0);
+                                    }, 0);
+                                    
+                                    const assigned = assignedBooks + eventSessions;
                                     
                                     // Calculate Capacity from Valid Calendar Dates
                                     // We use the computed planDates which contains all valid dates (excluding holidays)
