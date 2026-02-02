@@ -16,7 +16,6 @@ export default function PrivateLessonsPage() {
   // Form State
   const [formData, setFormData] = useState({
     student_name: '',
-    instrument: '',
     start_date: format(new Date(), 'yyyy-MM-dd'),
     book_id: '',
     schedule: {} as Record<string, string>, // { "Mon": "14:00" }
@@ -87,7 +86,6 @@ export default function PrivateLessonsPage() {
         // Reset form
         setFormData({
             student_name: '',
-            instrument: '',
             start_date: format(new Date(), 'yyyy-MM-dd'),
             book_id: '',
             schedule: {},
@@ -167,7 +165,7 @@ export default function PrivateLessonsPage() {
                       <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                         {lesson.student_name}
                       </h3>
-                      <p className="text-xs text-slate-500">{lesson.instrument || 'Private Lesson'}</p>
+                      <p className="text-xs text-slate-500">Private Lesson</p>
                     </div>
                   </div>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -217,17 +215,6 @@ export default function PrivateLessonsPage() {
                   value={formData.student_name}
                   onChange={e => setFormData({...formData, student_name: e.target.value})}
                   placeholder="e.g. Minjun Kim"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Instrument / Subject</label>
-                <input 
-                  type="text" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.instrument}
-                  onChange={e => setFormData({...formData, instrument: e.target.value})}
-                  placeholder="e.g. Piano, English"
                 />
               </div>
 

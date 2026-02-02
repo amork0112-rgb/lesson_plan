@@ -141,7 +141,6 @@ export default function PrivateLessonDetailPage() {
           <h1 className="text-2xl font-bold text-slate-900">{lesson.student_name}</h1>
           <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
             <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">Private Lesson</span>
-            <span>{lesson.instrument}</span>
             <span className="flex items-center gap-1">
               <BookOpen size={14} />
               {book?.name || 'No Book'}

@@ -13,7 +13,6 @@ export interface SpecialDate {
 export interface PrivateLesson {
   id: string;
   student_name: string;
-  instrument?: string;
   status: 'active' | 'paused' | 'completed';
   start_date?: string;
   schedule?: Record<string, string>; // e.g. { Mon: "14:00" }
