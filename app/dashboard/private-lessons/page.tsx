@@ -58,6 +58,7 @@ export default function PrivateLessonsPage() {
   const [foundStudents, setFoundStudents] = useState<Student[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -88,14 +89,18 @@ export default function PrivateLessonsPage() {
   }, [selectedCampus]);
 
   const fetchClasses = async (campus: string) => {
+    setFetchError(null);
     try {
         const res = await fetch(`/api/classes?campus=${campus}`);
         if (res.ok) {
             const data = await res.json();
             setClasses(data);
+        } else {
+            setFetchError('Failed to load classes');
         }
     } catch(e) {
         console.error(e);
+        setFetchError('Network error loading classes');
     }
   };
 
@@ -371,6 +376,7 @@ export default function PrivateLessonsPage() {
               {/* 2. Class Selection */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Class</label>
+                {fetchError && <p className="text-xs text-red-500 mb-1">{fetchError}</p>}
                 <select 
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={selectedClassId}
