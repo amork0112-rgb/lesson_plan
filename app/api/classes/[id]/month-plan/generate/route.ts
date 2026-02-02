@@ -137,6 +137,22 @@ export async function POST(
     const holidays: Holiday[] = [];
     const specialDates: DbSpecialDate[] = [];
 
+    // Fetch Public Holidays from academic_calendar
+    const { data: publicHolidays } = await supabase
+        .from('academic_calendar')
+        .select('*')
+        .eq('type', '공휴일');
+
+    (publicHolidays || []).forEach((ph: any) => {
+         holidays.push({
+            id: ph.id?.toString() || `ph_${ph.start_date}`,
+            date: ph.start_date,
+            name: ph.name,
+            type: 'national',
+            year: parseInt(ph.start_date.split('-')[0])
+        });
+    });
+
     // Process Special Dates Table
     (specialDatesData || []).forEach((sd: any) => {
         // Filter by class scope:

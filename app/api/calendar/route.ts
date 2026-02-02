@@ -22,8 +22,28 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Fetch from academic_calendar table (only '공휴일')
+  let holidaysQuery = supabase.from('academic_calendar').select('*').eq('type', '공휴일');
+  
+  // Note: academic_calendar uses start_date/end_date. 
+  // If we want to filter by range, we should check overlap.
+  // For simplicity, checking if start_date is within range.
+  if (start && end) {
+    holidaysQuery = holidaysQuery.gte('start_date', start).lte('start_date', end);
+  }
+  const { data: dbHolidays } = await holidaysQuery;
+
   const holidays: any[] = [];
   const special_dates: any[] = [];
+
+  // Add DB Holidays first
+  (dbHolidays || []).forEach((h: any) => {
+      holidays.push({
+          ...h,
+          date: h.start_date, // Map start_date to date for frontend compatibility
+          type: 'public_holiday' // Distinguish from custom 'no_class'
+      });
+  });
 
   (events || []).forEach((event: any) => {
     const { date, type, name, sessions, classes } = event;
