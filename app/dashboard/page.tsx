@@ -1266,9 +1266,6 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                {classId && selectedDays.length === 0 && (
-                  <p className="text-xs text-red-500 mt-1 font-medium">⚠️ Select days</p>
-                )}
               </div>
 
               <div className="w-24">

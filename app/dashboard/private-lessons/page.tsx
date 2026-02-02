@@ -5,7 +5,32 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, User, Calendar, BookOpen, Clock, Check } from 'lucide-react';
 import { format } from 'date-fns';
-import { PrivateLesson, Book, Class } from '@/types';
+interface PrivateLesson {
+  id: string;
+  student_name: string;
+  student_id?: string;
+  status: string;
+  start_date: string;
+  book_id?: string;
+  memo?: string;
+  schedule?: Record<string, string>; // Legacy support
+  private_lesson_schedules?: {
+      day_of_week: number;
+      start_time: string;
+      duration_minutes: number;
+  }[];
+}
+
+interface Book {
+  id: string;
+  name: string;
+}
+
+interface Class {
+  id: string;
+  name: string;
+  campus: string;
+}
 
 interface Student {
   id: string;
@@ -155,24 +180,31 @@ export default function PrivateLessonsPage() {
     }
   };
 
+  const DAY_MAP: Record<string, number> = {
+    'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0
+  };
+
   const handleCreate = async () => {
-    if (!formData.student_name || !formData.book_id) {
-      alert('Student Name and Book are required');
+    if (!formData.student_id || !formData.book_id) {
+      alert('Student and Book are required');
       return;
     }
 
-    // Construct schedule from selectedDays
-    const schedule: Record<string, string> = {};
-    selectedDays.forEach(day => {
-      schedule[day] = commonTime;
-    });
+    // Construct schedule array
+    const schedules = selectedDays.map(day => ({
+        day_of_week: DAY_MAP[day],
+        time: commonTime
+    }));
 
     try {
       const payload = {
-        ...formData,
-        schedule,
-        campus_id: selectedCampus,
-        class_id: selectedClassId
+        campus: selectedCampus, // Use campus name (text)
+        class_id: selectedClassId,
+        student_id: formData.student_id,
+        book_id: formData.book_id,
+        start_date: formData.start_date,
+        memo: formData.memo,
+        schedules
       };
 
       const res = await fetch('/api/private-lessons', {
@@ -196,6 +228,7 @@ export default function PrivateLessonsPage() {
         setSelectedDays([]);
         setStudentSearch('');
         setSelectedStudent(null);
+        setSelectedClassId('');
       } else {
         const err = await res.json();
         alert('Error: ' + err.error);
@@ -227,7 +260,7 @@ export default function PrivateLessonsPage() {
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus size={20} />
-          <span>New Student</span>
+          <span>New Private Lesson</span>
         </button>
       </div>
 
@@ -249,10 +282,20 @@ export default function PrivateLessonsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {lessons.map(lesson => {
             // Find book name
-            const book = books.find(b => b.id === (lesson as any).book_id); // Type casting if needed
-            const scheduleStr = lesson.schedule 
-                ? Object.keys(lesson.schedule).join(', ') + ' @ ' + Object.values(lesson.schedule)[0]
-                : 'No Schedule';
+            const book = books.find(b => b.id === (lesson as any).book_id);
+            
+            let scheduleStr = 'No Schedule';
+            if (lesson.private_lesson_schedules && lesson.private_lesson_schedules.length > 0) {
+                // Group by time if needed, or just list days
+                // Simple version: Mon, Wed @ 14:00 (assuming same time)
+                const days = lesson.private_lesson_schedules
+                    .map(s => Object.keys(DAY_MAP).find(key => DAY_MAP[key] === s.day_of_week))
+                    .filter(Boolean);
+                const time = lesson.private_lesson_schedules[0].start_time.substring(0, 5);
+                scheduleStr = `${days.join(', ')} @ ${time}`;
+            } else if (lesson.schedule && Object.keys(lesson.schedule).length > 0) {
+                 scheduleStr = Object.keys(lesson.schedule).join(', ') + ' @ ' + Object.values(lesson.schedule)[0];
+            }
 
             return (
               <div 
@@ -311,15 +354,88 @@ export default function PrivateLessonsPage() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              {/* 1. Campus Selection */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Student Name</label>
-                <input 
-                  type="text" 
+                <label className="block text-sm font-medium text-slate-700 mb-1">Campus</label>
+                <select 
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.student_name}
-                  onChange={e => setFormData({...formData, student_name: e.target.value})}
-                  placeholder="e.g. Minjun Kim"
-                />
+                  value={selectedCampus}
+                  onChange={e => setSelectedCampus(e.target.value)}
+                >
+                  {campuses.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Class Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Class</label>
+                <select 
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={selectedClassId}
+                  onChange={e => {
+                    setSelectedClassId(e.target.value);
+                    setStudentSearch('');
+                    setSelectedStudent(null);
+                    setFormData(prev => ({ ...prev, student_id: '', student_name: '' }));
+                  }}
+                  disabled={!selectedCampus}
+                >
+                  <option value="">Select a class...</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Student Search */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Student</label>
+                <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                  <Search size={18} className="text-slate-400 ml-3" />
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 focus:outline-none"
+                    value={studentSearch}
+                    onChange={e => setStudentSearch(e.target.value)}
+                    placeholder={selectedClassId ? "Search student..." : "Select class first"}
+                    disabled={!selectedClassId}
+                  />
+                  {isSearching && <div className="pr-3 text-xs text-slate-400">Searching...</div>}
+                </div>
+
+                {/* Autocomplete Dropdown */}
+                {foundStudents.length > 0 && !selectedStudent && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-10">
+                    {foundStudents.map(student => (
+                      <button
+                        key={student.id}
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            student_name: `${student.korean_name} (${student.english_name})`,
+                            student_id: student.id
+                          }));
+                          setStudentSearch(`${student.korean_name} (${student.english_name})`);
+                          setSelectedStudent(student);
+                          setFoundStudents([]);
+                        }}
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
+                      >
+                        <span>{student.korean_name} ({student.english_name})</span>
+                        <span className="text-xs text-slate-400">{student.campus}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {selectedStudent && (
+                  <div className="mt-2 text-sm text-green-600 flex items-center gap-1 bg-green-50 p-2 rounded">
+                    <Check size={14} />
+                    Selected: {selectedStudent.korean_name}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -372,6 +488,17 @@ export default function PrivateLessonsPage() {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Memo (Optional)</label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  value={formData.memo}
+                  onChange={e => setFormData({...formData, memo: e.target.value})}
+                  placeholder="Notes about student or schedule..."
+                />
+              </div>
+
             </div>
             <div className="px-6 py-4 bg-slate-50 flex justify-end gap-2">
               <button 
@@ -384,7 +511,7 @@ export default function PrivateLessonsPage() {
                 onClick={handleCreate}
                 className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg"
               >
-                Create Student
+                Create Private Lesson
               </button>
             </div>
           </div>

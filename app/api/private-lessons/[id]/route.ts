@@ -14,7 +14,7 @@ export async function GET(
     
     const { data, error } = await supabase
       .from('private_lessons')
-      .select('*')
+      .select('*, private_lesson_schedules(*)')
       .eq('id', id)
       .single();
 

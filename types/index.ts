@@ -19,6 +19,11 @@ export interface PrivateLesson {
   status: 'active' | 'paused' | 'completed';
   start_date?: string;
   schedule?: Record<string, string>; // e.g. { Mon: "14:00" }
+  private_lesson_schedules?: {
+    day_of_week: number;
+    start_time: string;
+    duration_minutes: number;
+  }[];
   memo?: string;
   book_id?: string;
 }

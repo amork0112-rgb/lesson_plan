@@ -33,7 +33,7 @@ export async function POST(
     // 1. Fetch Private Lesson
     const { data: privateLesson, error: plError } = await supabase
       .from('private_lessons')
-      .select('*')
+      .select('*, private_lesson_schedules(*)')
       .eq('id', id)
       .single();
 
@@ -88,8 +88,16 @@ export async function POST(
     startDate = startOfDay(startDate);
 
     // 4. Calculate Target Dates (The "Chunk")
-    const schedule = privateLesson.schedule || {}; // e.g. { "Mon": "14:00" }
-    const scheduledDays = Object.keys(schedule); // ["Mon"]
+    let scheduledDays: string[] = [];
+    
+    if (privateLesson.private_lesson_schedules && privateLesson.private_lesson_schedules.length > 0) {
+        // Map integer days to strings (Mon, Tue, etc.)
+        scheduledDays = privateLesson.private_lesson_schedules.map((s: any) => INT_TO_WEEKDAY[s.day_of_week]);
+    } else {
+        // Fallback to legacy JSON
+        const schedule = privateLesson.schedule || {}; 
+        scheduledDays = Object.keys(schedule); 
+    }
     
     if (scheduledDays.length === 0) {
       return NextResponse.json({ error: 'No schedule defined for private lesson' }, { status: 400 });

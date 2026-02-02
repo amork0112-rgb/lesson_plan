@@ -1,3 +1,4 @@
+//app/dashboard/private-lessons/[id]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -26,6 +27,10 @@ export default function PrivateLessonDetailPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'plan'>('plan');
+
+  const DAY_MAP: Record<string, number> = {
+    'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0
+  };
 
   useEffect(() => {
     fetchData();
@@ -196,7 +201,21 @@ export default function PrivateLessonDetailPage() {
             <div>
                 <label className="text-xs text-slate-400 uppercase font-bold">Schedule</label>
                 <div className="mt-1 font-mono text-sm bg-slate-50 p-2 rounded inline-block">
-                    {JSON.stringify(lesson.schedule, null, 2)}
+                    {lesson.private_lesson_schedules && lesson.private_lesson_schedules.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                            {lesson.private_lesson_schedules.map((s, idx) => {
+                                const dayName = Object.keys(DAY_MAP).find(key => DAY_MAP[key] === s.day_of_week) || 'Unknown';
+                                const time = s.start_time.substring(0, 5);
+                                return (
+                                    <div key={idx}>
+                                        {dayName} {time} <span className="text-xs text-slate-400">({s.duration_minutes}min)</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        lesson.schedule ? JSON.stringify(lesson.schedule, null, 2) : 'No Schedule'
+                    )}
                 </div>
             </div>
             <div>
