@@ -12,6 +12,9 @@ export interface SpecialDate {
 
 export interface PrivateLesson {
   id: string;
+  student_id?: string;
+  class_id?: string;
+  campus_id?: string;
   student_name: string;
   status: 'active' | 'paused' | 'completed';
   start_date?: string;

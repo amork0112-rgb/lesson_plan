@@ -1,10 +1,19 @@
+//app/dashboard/private-lessons/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, User, Calendar, BookOpen, Clock } from 'lucide-react';
+import { Plus, Search, User, Calendar, BookOpen, Clock, Check } from 'lucide-react';
 import { format } from 'date-fns';
-import { PrivateLesson, Book } from '@/types';
+import { PrivateLesson, Book, Class } from '@/types';
+
+interface Student {
+  id: string;
+  korean_name: string;
+  english_name: string;
+  campus: string;
+  class_id: string;
+}
 
 export default function PrivateLessonsPage() {
   const router = useRouter();
@@ -13,9 +22,22 @@ export default function PrivateLessonsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
 
+  // New Student Flow State
+  const [campuses, setCampuses] = useState<string[]>(['International', 'Domestic']);
+  const [selectedCampus, setSelectedCampus] = useState<string>('International');
+  
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
+
+  const [studentSearch, setStudentSearch] = useState('');
+  const [foundStudents, setFoundStudents] = useState<Student[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
   // Form State
   const [formData, setFormData] = useState({
     student_name: '',
+    student_id: '',
     start_date: format(new Date(), 'yyyy-MM-dd'),
     book_id: '',
     schedule: {} as Record<string, string>, // { "Mon": "14:00" }
@@ -28,7 +50,84 @@ export default function PrivateLessonsPage() {
   useEffect(() => {
     fetchLessons();
     fetchBooks();
+    fetchCampuses();
   }, []);
+
+  useEffect(() => {
+    if (selectedCampus) {
+        fetchClasses(selectedCampus);
+        setSelectedClassId('');
+        setStudentSearch('');
+        setSelectedStudent(null);
+    }
+  }, [selectedCampus]);
+
+  const fetchClasses = async (campus: string) => {
+    try {
+        const res = await fetch(`/api/classes?campus=${campus}`);
+        if (res.ok) {
+            const data = await res.json();
+            setClasses(data);
+        }
+    } catch(e) {
+        console.error(e);
+    }
+  };
+
+  // Search Effect
+  useEffect(() => {
+    if (!studentSearch || studentSearch.length < 1) {
+        setFoundStudents([]);
+        return;
+    }
+    
+    // Don't search if we just selected a student and the name matches
+    if (selectedStudent && (
+        studentSearch === selectedStudent.korean_name || 
+        studentSearch === selectedStudent.english_name ||
+        studentSearch === `${selectedStudent.korean_name} (${selectedStudent.english_name})`
+    )) {
+        return;
+    }
+
+    const timer = setTimeout(async () => {
+        setIsSearching(true);
+        try {
+            // Include class_id in search
+            const query = new URLSearchParams({
+                campus: selectedCampus,
+                search: studentSearch
+            });
+            if (selectedClassId) {
+                query.append('class_id', selectedClassId);
+            }
+
+            const res = await fetch(`/api/students?${query.toString()}`);
+            if (res.ok) {
+                const data = await res.json();
+                setFoundStudents(data);
+            }
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setIsSearching(false);
+        }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [studentSearch, selectedCampus, selectedClassId]);
+
+  const fetchCampuses = async () => {
+      try {
+          const res = await fetch('/api/classes');
+          if (res.ok) {
+              const data = await res.json();
+              const unique = Array.from(new Set(data.map((c: any) => c.campus).filter(Boolean))) as string[];
+              if (unique.length > 0) setCampuses(unique.sort());
+          }
+      } catch (e) {
+          console.error(e);
+      }
+  };
 
   const fetchLessons = async () => {
     try {
@@ -71,7 +170,9 @@ export default function PrivateLessonsPage() {
     try {
       const payload = {
         ...formData,
-        schedule
+        schedule,
+        campus_id: selectedCampus,
+        class_id: selectedClassId
       };
 
       const res = await fetch('/api/private-lessons', {
@@ -86,12 +187,15 @@ export default function PrivateLessonsPage() {
         // Reset form
         setFormData({
             student_name: '',
+            student_id: '',
             start_date: format(new Date(), 'yyyy-MM-dd'),
             book_id: '',
             schedule: {},
             memo: ''
         });
         setSelectedDays([]);
+        setStudentSearch('');
+        setSelectedStudent(null);
       } else {
         const err = await res.json();
         alert('Error: ' + err.error);

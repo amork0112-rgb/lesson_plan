@@ -75,18 +75,21 @@ type ClassJoinRow = {
   class_book_allocations: AllocationJoin[];
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  console.log('🔑 Supabase URL:', supabaseUrl ? 'OK' : 'MISSING');
-  console.log('🔑 Service Key:', serviceKey ? 'OK' : 'MISSING');
+  // console.log('🔑 Supabase URL:', supabaseUrl ? 'OK' : 'MISSING');
+  // console.log('🔑 Service Key:', serviceKey ? 'OK' : 'MISSING');
   if (!supabaseUrl || !serviceKey) {
     console.error('❌ Supabase env missing');
     return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const campus = searchParams.get('campus');
+
   const supabaseService = getSupabaseService();
-  const { data, error } = await supabaseService
+  let query = supabaseService
     .from('v_classes_with_schedules')
     .select(
       `
@@ -100,7 +103,7 @@ export async function GET() {
         id,
         priority,
         sessions_per_week,
-        books:class_book_allocations_book_id_fkey (
+        books (
           id,
           name,
           total_units,
@@ -108,8 +111,15 @@ export async function GET() {
         )
       )
     `
-    )
-    .order('class_name', { ascending: true });
+    );
+
+  if (campus && campus !== 'All') {
+    query = query.eq('campus', campus);
+  }
+
+  query = query.order('class_name', { ascending: true });
+
+  const { data, error } = await query;
 
   console.log('📦 Supabase response:', {
     dataLength: Array.isArray(data) ? data.length : data ? 1 : 0,

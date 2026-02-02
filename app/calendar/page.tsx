@@ -51,28 +51,25 @@ export default function CalendarPage() {
 
       // A. Expand Academic Calendar (Holidays & Vacations)
       // holidays comes from API which currently returns { ...h, date, original_type, type: 'public_holiday' }
-      holidays.forEach(h => {
-          // If start_date/end_date are present, use them. Otherwise fallback to h.date
-          // The API returns raw rows spread into `h`, so start_date/end_date should be there.
-          const raw = h as any;
-          const sDate = raw.start_date ? new Date(raw.start_date) : new Date(h.date);
-          const eDate = raw.end_date ? new Date(raw.end_date) : new Date(h.date);
-          
-          const dates = eachDayOfInterval({ start: sDate, end: eDate });
-          
-          dates.forEach(d => {
-              events.push({
-                  id: h.id,
-                  date: format(d, 'yyyy-MM-dd'),
-                  name: h.name,
-                  source: 'academic',
-                  kind: (raw.original_type === '방학') ? 'vacation' : 'holiday',
-                  class_scope: raw.class_scope,
-                  affected_classes: h.affected_classes, // might be undefined if API doesn't map it
-                  original: h
-              });
-          });
+    // Academic Calendar mapping FIX
+    holidays.forEach(h => {
+      const raw = h as any;
+
+      const sDate = new Date(raw.start_date);
+      const eDate = new Date(raw.end_date);
+
+      eachDayOfInterval({ start: sDate, end: eDate }).forEach(d => {
+        events.push({
+          id: h.id,
+          date: format(d, 'yyyy-MM-dd'),
+          name: raw.title,              // ✅ 핵심 수정
+          source: 'academic',
+          kind: raw.type === '방학' ? 'vacation' : 'holiday',
+          class_scope: raw.class_name ?? 'all',
+          original: h
+        });
       });
+    });
 
       // B. Map Special Dates
       Object.entries(specialDates).forEach(([dateStr, special]) => {
