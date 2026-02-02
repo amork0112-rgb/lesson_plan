@@ -49,6 +49,7 @@ export async function GET(req: Request) {
       holidays.push({
           ...h,
           date: h.start_date, // Map start_date to date for frontend compatibility
+          original_type: h.type, // Preserve original type ('공휴일', '방학')
           type: 'public_holiday' // Distinguish from custom 'no_class'
       });
   });

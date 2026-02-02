@@ -894,8 +894,6 @@ export default function Home() {
             payload.generate_all = true;
         }
 
-        console.log('[Debug] Calling Generate API:', payload);
-
         const res = await fetch(`/api/classes/${classId}/month-plan/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1151,63 +1149,6 @@ export default function Home() {
 
   const [isSharing, setIsSharing] = useState(false);
 
-  const handleSeedHolidays = async () => {
-    if (!confirm('2026년 공휴일 데이터를 DB에 추가하시겠습니까? (이미 존재하면 건너뜁니다)')) return;
-    
-    try {
-        const supabase = getSupabase();
-        if (!supabase) throw new Error('Supabase client not initialized');
-        
-        // 1. Check existing
-        const { count } = await supabase
-            .from('academic_calendar')
-            .select('*', { count: 'exact', head: true })
-            .gte('start_date', '2026-01-01')
-            .lte('start_date', '2026-12-31')
-            .eq('type', '공휴일');
-
-        if (count && count > 0) {
-            alert(`이미 ${count}개의 공휴일 데이터가 존재합니다.`);
-            return;
-        }
-
-        // 2. Seed
-        const holidays = [
-            { name: 'New Year\'s Day', start_date: '2026-01-01', end_date: '2026-01-01', type: '공휴일' },
-            { name: 'Seollal Holiday', start_date: '2026-02-17', end_date: '2026-02-17', type: '공휴일' },
-            { name: 'Seollal', start_date: '2026-02-18', end_date: '2026-02-18', type: '공휴일' },
-            { name: 'Seollal Holiday', start_date: '2026-02-19', end_date: '2026-02-19', type: '공휴일' },
-            { name: 'Independence Movement Day', start_date: '2026-03-01', end_date: '2026-03-01', type: '공휴일' },
-            { name: 'Substitute Holiday', start_date: '2026-03-02', end_date: '2026-03-02', type: '공휴일' },
-            { name: 'Children\'s Day', start_date: '2026-05-05', end_date: '2026-05-05', type: '공휴일' },
-            { name: 'Buddha\'s Birthday', start_date: '2026-05-24', end_date: '2026-05-24', type: '공휴일' },
-            { name: 'Substitute Holiday', start_date: '2026-05-25', end_date: '2026-05-25', type: '공휴일' },
-            { name: 'Memorial Day', start_date: '2026-06-06', end_date: '2026-06-06', type: '공휴일' },
-            { name: 'Liberation Day', start_date: '2026-08-15', end_date: '2026-08-15', type: '공휴일' },
-            { name: 'Chuseok Holiday', start_date: '2026-09-24', end_date: '2026-09-24', type: '공휴일' },
-            { name: 'Chuseok', start_date: '2026-09-25', end_date: '2026-09-25', type: '공휴일' },
-            { name: 'Chuseok Holiday', start_date: '2026-09-26', end_date: '2026-09-26', type: '공휴일' },
-            { name: 'National Foundation Day', start_date: '2026-10-03', end_date: '2026-10-03', type: '공휴일' },
-            { name: 'Hangeul Day', start_date: '2026-10-09', end_date: '2026-10-09', type: '공휴일' },
-            { name: 'Christmas Day', start_date: '2026-12-25', end_date: '2026-12-25', type: '공휴일' },
-        ];
-
-        const { data, error } = await supabase
-            .from('academic_calendar')
-            .insert(holidays)
-            .select();
-
-        if (error) throw error;
-
-        alert(`성공적으로 ${data.length}개의 공휴일을 추가했습니다. 페이지를 새로고침하세요.`);
-        window.location.reload();
-
-    } catch (e: any) {
-        console.error(e);
-        alert(`실패: ${e.message}`);
-    }
-  };
-
   const handleSharePlan = async () => {
     if (monthPlans.length === 0) return;
     setIsSharing(true);
@@ -1430,13 +1371,6 @@ export default function Home() {
 
              {/* Actions */}
              <div className="flex items-center gap-3">
-                <button 
-                    onClick={handleSeedHolidays}
-                    className="px-3 py-2 rounded-lg text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border border-gray-300 shadow-sm transition-all"
-                    title="2026 Holidays"
-                >
-                    📅 Seed Holidays
-                </button>
                 <button 
                     onClick={() => handleGenerate()}
                     disabled={loading || !classId || selectedDays.length === 0}
