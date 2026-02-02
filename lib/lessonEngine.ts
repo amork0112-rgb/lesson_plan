@@ -89,18 +89,22 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
     // We fill sequentially: Date 1 (Slot 1, Slot 2...), Date 2...
     
     let deckIndex = 0;
+    const slotsUsedPerDate: Record<string, number> = {};
 
     dates.forEach(date => {
+        const currentSlotBase = slotsUsedPerDate[date] || 0;
+
         // For each date, we have `slotsPerDay` slots
-        for (let period = 1; period <= slotsPerDay; period++) {
+        for (let i = 1; i <= slotsPerDay; i++) {
             if (deckIndex >= deck.length) break; // Run out of allocated sessions
 
+            const period = currentSlotBase + i;
             const item = deck[deckIndex++];
             const book = books.find(b => b.id === item.book_id);
             
             if (!book) continue; // Should not happen if data is consistent
 
-            const p = globalProgress[item.book_id];
+            const prog = globalProgress[item.book_id];
             const isTrophy = (book.series === 'Trophy 9') || /trop\w+\s*9/i.test(book.name) || book.progression_type === 'volume-day';
             const levelTag = isTrophy ? (book.series_level || (book.name.match(/trop\w+\s*9\s*([0-9A-Za-z]+)/i)?.[1] || (book.level || 'T9'))) : undefined;
             const isEvent = book.unit_type === 'event';
@@ -114,9 +118,9 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
               is_makeup: false,
               book_id: item.book_id,
               book_name: book.name,
-              content: isEvent ? 'Event' : (isTrophy ? `${levelTag}-${p.unit} Day ${p.day}` : `Unit ${p.unit} Day ${p.day}`),
-              unit_no: p.unit,
-              day_no: p.day
+              content: isEvent ? 'Event' : (isTrophy ? `${levelTag}-${prog.unit} Day ${prog.day}` : `Unit ${prog.unit} Day ${prog.day}`),
+              unit_no: prog.unit,
+              day_no: prog.day
             });
 
             // Advance Progress
@@ -130,6 +134,7 @@ export function generateLessons(input: GenerateLessonInput): LessonPlan[] {
                 }
             }
         }
+        slotsUsedPerDate[date] = currentSlotBase + slotsPerDay;
     });
   });
 

@@ -7,6 +7,7 @@ export interface SpecialDate {
   type: SpecialDateType;
   name: string;
   sessions?: number;
+  classes?: string[] | null;
 }
 
 export interface User {

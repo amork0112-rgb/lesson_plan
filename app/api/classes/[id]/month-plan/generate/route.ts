@@ -126,7 +126,6 @@ export async function POST(
     const startYear = inputYear || rawClass.year || 2026;
 
     // 2. Fetch Global Calendar Data (All Events)
-    // Deprecated: academic_calendar
     
     // Fetch Special Dates (Manual)
     const { data: specialDatesData } = await supabase
@@ -140,11 +139,20 @@ export async function POST(
 
     // Process Special Dates Table
     (specialDatesData || []).forEach((sd: any) => {
+        // Filter by class scope:
+        // If sd.classes is null or empty, it applies to ALL classes.
+        // If sd.classes is NOT empty, it ONLY applies if class_id is in sd.classes.
+        const isGlobal = !sd.classes || sd.classes.length === 0;
+        const isApplicable = isGlobal || sd.classes.includes(class_id);
+
+        if (!isApplicable) return;
+
         specialDates.push({
             id: sd.date, // Use date as ID since it's unique
             date: sd.date,
             type: sd.type,
-            name: sd.name
+            name: sd.name,
+            sessions: sd.sessions
         });
 
         // Also treat 'no_class' as a holiday to block generation
@@ -155,7 +163,7 @@ export async function POST(
                 name: sd.name || 'No Class',
                 type: 'custom',
                 year: parseInt(sd.date.split('-')[0]),
-                affected_classes: [], // Global
+                affected_classes: isGlobal ? [] : [class_id], 
                 sessions: sd.sessions
             });
         }
@@ -280,36 +288,42 @@ export async function POST(
              const end = endOfMonth(start);
              const allDays = eachDayOfInterval({ start, end });
 
-             validDates = allDays.filter(d => {
+             validDates = allDays.flatMap(d => {
                 const dStr = format(d, 'yyyy-MM-dd');
                 
                 // 0. Frontend Overrides (Priority)
                 if (inputSpecialDates && inputSpecialDates[dStr]) {
                     const sd = inputSpecialDates[dStr];
-                    if (sd.type === 'no_class') return false;
-                    if (sd.type === 'makeup') return true;
-                    if (sd.type === 'school_event') return false; 
+                    if (sd.type === 'no_class') return [];
+                    if (sd.type === 'makeup') {
+                        const count = sd.sessions || 1;
+                        return Array(count).fill(dStr);
+                    }
+                    if (sd.type === 'school_event') return []; 
                 }
 
                 // 1. Holiday/Vacation -> Exclude
                 const isHoliday = holidays.some(h => h.date === dStr);
-                if (isHoliday) return false;
+                if (isHoliday) return [];
 
                 const sd = specialDates.find(s => s.date === dStr);
                 
                 // 2. special_date.no_class -> Exclude
-                if (sd?.type === 'no_class') return false;
+                if (sd?.type === 'no_class') return [];
                 
                 // 3. special_date.makeup -> Include (Force Add)
-                if (sd?.type === 'makeup') return true;
+                if (sd?.type === 'makeup') {
+                    const count = sd.sessions || 1;
+                    return Array(count).fill(dStr);
+                }
                 
                 // 4. Standard Schedule
                 const dayName = format(d, 'EEE') as Weekday;
                 if (classDays.includes(dayName)) {
-                    return true;
+                    return [dStr];
                 }
-                return false;
-            }).map(d => format(d, 'yyyy-MM-dd'));
+                return [];
+            });
         }
 
         const capacity = validDates.length; // This is the total sessions available for this month

@@ -26,14 +26,15 @@ export async function GET(req: Request) {
   const special_dates: any[] = [];
 
   (events || []).forEach((event: any) => {
-    const { date, type, name, sessions } = event;
+    const { date, type, name, sessions, classes } = event;
 
     // Push to special_dates array for UI
     special_dates.push({
       date,
       type,
       name,
-      sessions
+      sessions,
+      classes
     });
 
     // If it's a 'no_class' event, also treat it as a holiday to block class generation
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
         name: name || 'No Class',
         type: 'custom',
         year: parseInt(date.split('-')[0]),
-        affected_classes: [], // Applies to all by default for simple toggle
+        affected_classes: classes || [], // Applies to specific classes if set, else all
         sessions: sessions
       });
     }

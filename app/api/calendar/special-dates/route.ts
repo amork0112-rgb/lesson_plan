@@ -6,7 +6,13 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { date, type, name, sessions = 0 } = body;
+    const { 
+      date, 
+      type, 
+      name, 
+      sessions = 0,
+      classes = null // 👈 핵심: null for all classes, or array of class IDs
+    } = body;
 
     if (!date || !type) {
       throw new Error('Missing date or type');
@@ -23,7 +29,8 @@ export async function POST(req: Request) {
           date,
           type,
           name: name || null,
-          sessions
+          sessions,
+          classes // TEXT[] or null
         },
         { onConflict: 'date' }
       );

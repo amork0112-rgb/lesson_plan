@@ -40,7 +40,10 @@ export default function CalendarPage() {
     const data = {
         type,
         name: newHoliday.name,
-        sessions: newHoliday.sessions || 0
+        sessions: newHoliday.sessions || 0,
+        classes: (newHoliday.affected_classes && newHoliday.affected_classes.length > 0) 
+                  ? newHoliday.affected_classes 
+                  : null
     };
     
     await updateSpecialDate(dateStr, data as any);
