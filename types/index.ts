@@ -21,7 +21,7 @@ export interface PrivateLesson {
   schedule?: Record<string, string>; // e.g. { Mon: "14:00" }
   private_lesson_schedules?: {
     day_of_week: number;
-    start_time: string;
+    time: string;
     duration_minutes: number;
   }[];
   memo?: string;

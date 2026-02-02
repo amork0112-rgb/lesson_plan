@@ -92,7 +92,9 @@ export async function POST(
     
     if (privateLesson.private_lesson_schedules && privateLesson.private_lesson_schedules.length > 0) {
         // Map integer days to strings (Mon, Tue, etc.)
-        scheduledDays = privateLesson.private_lesson_schedules.map((s: any) => INT_TO_WEEKDAY[s.day_of_week]);
+        scheduledDays = privateLesson.private_lesson_schedules
+            .map((s: any) => INT_TO_WEEKDAY[s.day_of_week])
+            .filter(Boolean);
     } else {
         // Fallback to legacy JSON
         const schedule = privateLesson.schedule || {}; 
@@ -167,7 +169,7 @@ export async function POST(
         const payload = generated.map(l => ({
             owner_type: 'private',
             owner_id: id,
-            class_id: null, // Explicitly null
+            class_id: privateLesson.class_id || null,
             date: l.date,
             period: l.period || 1,
             book_id: l.book_id,

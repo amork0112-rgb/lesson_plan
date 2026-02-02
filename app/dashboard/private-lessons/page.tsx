@@ -16,7 +16,7 @@ interface PrivateLesson {
   schedule?: Record<string, string>; // Legacy support
   private_lesson_schedules?: {
       day_of_week: number;
-      start_time: string;
+      time: string;
       duration_minutes: number;
   }[];
 }
@@ -27,8 +27,8 @@ interface Book {
 }
 
 interface Class {
-  id: string;
-  name: string;
+  class_id: string;
+  class_name: string;
   campus: string;
 }
 
@@ -296,7 +296,7 @@ export default function PrivateLessonsPage() {
                 const days = lesson.private_lesson_schedules
                     .map(s => Object.keys(DAY_MAP).find(key => DAY_MAP[key] === s.day_of_week))
                     .filter(Boolean);
-                const time = lesson.private_lesson_schedules[0].start_time.substring(0, 5);
+                const time = lesson.private_lesson_schedules[0].time.substring(0, 5);
                 scheduleStr = `${days.join(', ')} @ ${time}`;
             } else if (lesson.schedule && Object.keys(lesson.schedule).length > 0) {
                  scheduleStr = Object.keys(lesson.schedule).join(', ') + ' @ ' + Object.values(lesson.schedule)[0];
@@ -351,162 +351,165 @@ export default function PrivateLessonsPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
               <h3 className="font-semibold text-lg">New Private Lesson</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">
                 ✕
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              {/* 1. Campus Selection */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Campus</label>
-                <select 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedCampus}
-                  onChange={e => setSelectedCampus(e.target.value)}
-                >
-                  {campuses.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 2. Class Selection */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Class</label>
-                {fetchError && <p className="text-xs text-red-500 mb-1">{fetchError}</p>}
-                <select 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedClassId}
-                  onChange={e => {
-                    setSelectedClassId(e.target.value);
-                    setStudentSearch('');
-                    setSelectedStudent(null);
-                    setFormData(prev => ({ ...prev, student_id: '', student_name: '' }));
-                  }}
-                  disabled={!selectedCampus}
-                >
-                  <option value="">Select a class...</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 3. Student Search */}
-              <div className="relative">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Student</label>
-                <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                  <Search size={18} className="text-slate-400 ml-3" />
-                  <input 
-                    type="text" 
-                    className="w-full px-3 py-2 focus:outline-none"
-                    value={studentSearch}
-                    onChange={e => setStudentSearch(e.target.value)}
-                    placeholder={selectedClassId ? "Search student..." : "Select class first"}
-                    disabled={!selectedClassId}
-                  />
-                  {isSearching && <div className="pr-3 text-xs text-slate-400">Searching...</div>}
+            
+            <div className="p-4 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 1. Campus Selection */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Campus</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={selectedCampus}
+                    onChange={e => setSelectedCampus(e.target.value)}
+                  >
+                    {campuses.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Autocomplete Dropdown */}
-                {foundStudents.length > 0 && !selectedStudent && (
-                  <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-10">
-                    {foundStudents.map(student => (
-                      <button
-                        key={student.id}
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            student_name: `${student.korean_name} (${student.english_name})`,
-                            student_id: student.id
-                          }));
-                          setStudentSearch(`${student.korean_name} (${student.english_name})`);
-                          setSelectedStudent(student);
-                          setFoundStudents([]);
-                        }}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
-                      >
-                        <span>{student.korean_name} ({student.english_name})</span>
-                        <span className="text-xs text-slate-400">{student.campus}</span>
-                      </button>
+                {/* 2. Class Selection */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Class</label>
+                  {fetchError && <p className="text-xs text-red-500 mb-1">{fetchError}</p>}
+                  <select 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={selectedClassId}
+                    onChange={e => {
+                      setSelectedClassId(e.target.value);
+                      setStudentSearch('');
+                      setSelectedStudent(null);
+                      setFormData(prev => ({ ...prev, student_id: '', student_name: '' }));
+                    }}
+                    disabled={!selectedCampus}
+                  >
+                    <option value="">Select a class...</option>
+                    {classes.map(c => (
+                      <option key={c.class_id} value={c.class_id}>{c.class_name}</option>
                     ))}
-                  </div>
-                )}
-                
-                {selectedStudent && (
-                  <div className="mt-2 text-sm text-green-600 flex items-center gap-1 bg-green-50 p-2 rounded">
-                    <Check size={14} />
-                    Selected: {selectedStudent.korean_name}
-                  </div>
-                )}
-              </div>
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Book</label>
-                <select 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.book_id}
-                  onChange={e => setFormData({...formData, book_id: e.target.value})}
-                >
-                  <option value="">Select a book...</option>
-                  {books.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* 3. Student Search */}
+                <div className="md:col-span-2 relative">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Student</label>
+                  <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                    <Search size={16} className="text-slate-400 ml-3" />
+                    <input 
+                      type="text" 
+                      className="w-full px-3 py-2 focus:outline-none text-sm"
+                      value={studentSearch}
+                      onChange={e => setStudentSearch(e.target.value)}
+                      placeholder={selectedClassId ? "Search student..." : "Select class first"}
+                      disabled={!selectedClassId}
+                    />
+                    {isSearching && <div className="pr-3 text-xs text-slate-400">Searching...</div>}
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Schedule</label>
-                <div className="flex gap-2 mb-2">
-                    {WEEKDAYS.map(day => (
+                  {/* Autocomplete Dropdown */}
+                  {foundStudents.length > 0 && !selectedStudent && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-10">
+                      {foundStudents.map(student => (
                         <button
-                            key={day}
-                            onClick={() => toggleDay(day)}
-                            className={`px-2 py-1 text-xs rounded border ${
-                                selectedDays.includes(day) 
-                                ? 'bg-blue-600 text-white border-blue-600' 
-                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                            }`}
+                          key={student.id}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              student_name: `${student.korean_name} (${student.english_name})`,
+                              student_id: student.id
+                            }));
+                            setStudentSearch(`${student.korean_name} (${student.english_name})`);
+                            setSelectedStudent(student);
+                            setFoundStudents([]);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
                         >
-                            {day}
+                          <span>{student.korean_name} ({student.english_name})</span>
+                          <span className="text-xs text-slate-400">{student.campus}</span>
                         </button>
-                    ))}
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <input 
-                  type="time" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={commonTime}
-                  onChange={e => setCommonTime(e.target.value)}
-                />
-                <p className="text-xs text-slate-400 mt-1">Time applies to all selected days</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-                <input 
-                  type="date" 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={formData.start_date}
-                  onChange={e => setFormData({...formData, start_date: e.target.value})}
-                />
-              </div>
+                {/* Book & Start Date Row */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Book</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={formData.book_id}
+                    onChange={e => setFormData({...formData, book_id: e.target.value})}
+                  >
+                    <option value="">Select a book...</option>
+                    {books.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Memo (Optional)</label>
-                <textarea 
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={2}
-                  value={formData.memo}
-                  onChange={e => setFormData({...formData, memo: e.target.value})}
-                  placeholder="Notes about student or schedule..."
-                />
-              </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Start Date</label>
+                  <input 
+                    type="date" 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={formData.start_date}
+                    onChange={e => setFormData({...formData, start_date: e.target.value})}
+                  />
+                </div>
 
+                {/* Schedule */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Schedule</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex gap-1">
+                        {WEEKDAYS.map(day => (
+                            <button
+                                key={day}
+                                onClick={() => toggleDay(day)}
+                                className={`w-8 h-8 flex items-center justify-center text-xs rounded border transition-colors ${
+                                    selectedDays.includes(day) 
+                                    ? 'bg-blue-600 text-white border-blue-600' 
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                {day.charAt(0)}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 ml-2">
+                      <span className="text-sm text-slate-500">@</span>
+                      <input 
+                        type="time" 
+                        className="px-2 py-1 border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={commonTime}
+                        onChange={e => setCommonTime(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Memo */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Memo (Optional)</label>
+                  <textarea 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    rows={1}
+                    value={formData.memo}
+                    onChange={e => setFormData({...formData, memo: e.target.value})}
+                    placeholder="Notes..."
+                  />
+                </div>
+              </div>
             </div>
-            <div className="px-6 py-4 bg-slate-50 flex justify-end gap-2">
+
+            <div className="px-6 py-4 bg-slate-50 flex justify-end gap-2 flex-shrink-0 border-t border-slate-100">
               <button 
                 onClick={() => setShowCreateModal(false)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"

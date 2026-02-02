@@ -205,7 +205,7 @@ export default function PrivateLessonDetailPage() {
                         <div className="flex flex-col gap-1">
                             {lesson.private_lesson_schedules.map((s, idx) => {
                                 const dayName = Object.keys(DAY_MAP).find(key => DAY_MAP[key] === s.day_of_week) || 'Unknown';
-                                const time = s.start_time.substring(0, 5);
+                                const time = s.time.substring(0, 5);
                                 return (
                                     <div key={idx}>
                                         {dayName} {time} <span className="text-xs text-slate-400">({s.duration_minutes}min)</span>
