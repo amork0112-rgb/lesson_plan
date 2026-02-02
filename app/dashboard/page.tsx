@@ -618,8 +618,8 @@ export default function Home() {
      } else if (current.type === 'no_class') {
         nextData = { type: 'makeup', name: 'Makeup' };
      } else if (current.type === 'makeup') {
-        nextData = { type: 'school_event', name: 'PBL' };
-     } else if (current.type === 'school_event') {
+       nextData = { type: 'school_event', name: 'PBL', sessions: 1 };
+    } else if (current.type === 'school_event') {
         const eventOrder = ['PBL', '정기평가', 'PBL (Tech)', '100Days', 'Vocaton', 'PBL (Econ)'];
         const currentIndex = eventOrder.indexOf(current.name);
         
@@ -911,17 +911,7 @@ export default function Home() {
                         period: 0
                     } as LessonPlan);
                 } else if (special?.type === 'school_event') {
-                    noClassLessons.push({
-                        id: `se_${dateStr}`,
-                        class_id: classId,
-                        date: dateStr,
-                        display_order: 0,
-                        is_makeup: false,
-                        book_id: 'school_event',
-                        book_name: 'School Event',
-                        content: special.name || 'Event',
-                        period: 0
-                    } as LessonPlan);
+                    // Do nothing - handled by API
                 } else if (holiday) {
                      // Add Holiday as a "No Class" block
                      noClassLessons.push({

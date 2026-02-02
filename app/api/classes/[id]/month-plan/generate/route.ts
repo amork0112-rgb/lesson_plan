@@ -309,8 +309,8 @@ export async function POST(
                                  display_order: 0,
                                  book_id: 'school_event',
                                  book_name: sd.name || 'School Event',
-                                 content: 'Event',
-                                 is_makeup: false,
+                                content: sd.name || 'Event',
+                                is_makeup: false,
                                  unit_no: 0,
                                  day_no: 0
                              });
@@ -326,8 +326,8 @@ export async function POST(
                                  display_order: 0,
                                  book_id: 'school_event',
                                  book_name: sd.name || 'School Event',
-                                 content: 'Event',
-                                 is_makeup: false,
+                                content: sd.name || 'Event',
+                                is_makeup: false,
                                  unit_no: 0,
                                  day_no: 0
                              });
@@ -412,7 +412,7 @@ export async function POST(
 
                 // 4. special_date.school_event
                 if (sd?.type === 'school_event') {
-                    const sessions = sd.sessions || 0;
+                    const sessions = parseInt(String(sd.sessions || 0), 10);
                     if (sessions >= slotsPerDay) {
                          for(let i=1; i<=slotsPerDay; i++) {
                              fixedLessons.push({
