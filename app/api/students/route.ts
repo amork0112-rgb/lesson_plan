@@ -39,6 +39,13 @@ export async function GET(req: Request) {
 
     return NextResponse.json(data);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error('Students API Exception:', e);
+    // Check for fetch failure details
+    if (e.cause) console.error('Cause:', e.cause);
+    
+    return NextResponse.json({ 
+        error: e.message, 
+        cause: e.cause ? String(e.cause) : undefined 
+    }, { status: 500 });
   }
 }
