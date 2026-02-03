@@ -190,9 +190,17 @@ export default function PrivateLessonsPage() {
   };
 
   const handleCreate = async () => {
-    if (!formData.student_id || !formData.book_id) {
-      alert('Student and Book are required');
-      return;
+    if (!formData.student_id) {
+        if (studentSearch) {
+             alert('Please select a student from the list. (학생을 목록에서 선택해주세요)');
+        } else {
+             alert('Student is required');
+        }
+        return;
+    }
+    if (!formData.book_id) {
+        alert('Book is required');
+        return;
     }
 
     // Construct schedule array
@@ -410,31 +418,38 @@ export default function PrivateLessonsPage() {
                       placeholder={selectedClassId ? "Search student..." : "Select class first"}
                       disabled={!selectedClassId}
                     />
-                    {isSearching && <div className="pr-3 text-xs text-slate-400">Searching...</div>}
                   </div>
 
                   {/* Autocomplete Dropdown */}
-                  {foundStudents.length > 0 && !selectedStudent && (
+                  {!selectedStudent && studentSearch.length > 0 && (
                     <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto z-10">
-                      {foundStudents.map(student => (
-                        <button
-                          key={student.id}
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              student_name: `${student.korean_name} (${student.english_name})`,
-                              student_id: student.id
-                            }));
-                            setStudentSearch(`${student.korean_name} (${student.english_name})`);
-                            setSelectedStudent(student);
-                            setFoundStudents([]);
-                          }}
-                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
-                        >
-                          <span>{student.korean_name} ({student.english_name})</span>
-                          <span className="text-xs text-slate-400">{student.campus}</span>
-                        </button>
-                      ))}
+                      {isSearching ? (
+                        <div className="px-4 py-3 text-sm text-slate-500 text-center">Searching...</div>
+                      ) : foundStudents.length > 0 ? (
+                        foundStudents.map(student => (
+                          <button
+                            key={student.id}
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                student_name: `${student.korean_name} (${student.english_name})`,
+                                student_id: student.id
+                              }));
+                              setStudentSearch(`${student.korean_name} (${student.english_name})`);
+                              setSelectedStudent(student);
+                              setFoundStudents([]);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
+                          >
+                            <span>{student.korean_name} ({student.english_name})</span>
+                            <span className="text-xs text-slate-400">{student.campus}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                          No student found in {classes.find(c => c.class_id === selectedClassId)?.class_name || 'this class'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

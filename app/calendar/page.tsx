@@ -34,6 +34,7 @@ export default function CalendarPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSource, setEditingSource] = useState<'academic' | 'special' | null>(null);
+  const [originalDate, setOriginalDate] = useState<string | null>(null);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -62,7 +63,7 @@ export default function CalendarPage() {
         events.push({
           id: h.id,
           date: format(d, 'yyyy-MM-dd'),
-          name: raw.title,              // ✅ 핵심 수정
+          name: raw.title,             
           source: 'academic',
           kind: raw.type === '방학' ? 'vacation' : 'holiday',
           class_scope: raw.class_name ?? 'all',
@@ -103,37 +104,14 @@ export default function CalendarPage() {
     
     const dateStr = newHoliday.date;
 
-    if (newHoliday.dbType === 'none') {
-        // If editing an existing one, we need to know what to delete.
-        // If editingId is set and editingSource is 'academic', delete holiday.
-        if (editingId && editingSource === 'academic') {
-            await deleteHoliday(editingId);
-        } else {
-            // Assume special date delete
-            await updateSpecialDate(dateStr, null);
-        }
-        
-        resetForm();
-        return;
-    }
-    
     // Check type to decide where to save
     const isAcademic = ['공휴일', '방학'].includes(newHoliday.dbType || '');
-    const isSpecial = ['휴강', '보강', '행사'].includes(newHoliday.dbType || '');
 
     if (isAcademic) {
-        // Saving to Academic Calendar
-        // Note: Our addHoliday currently only supports single date in UI (start_date=end_date).
-        // This is fine for now as per previous implementation.
-        // If we want range support, we need end_date input.
-        
-        // If we were editing a special date and switched to academic, delete the special date?
-        // Or if we were editing academic and switched to special?
-        // This is complex. Let's simplify: 
-        // If editingId exists and source was different, delete old one.
-        
+        // If we were editing a special date and switched to academic, delete the special date
         if (editingId && editingSource === 'special') {
-             await updateSpecialDate(dateStr, null);
+             const target = originalDate || dateStr;
+             await updateSpecialDate(target, null);
         }
         
         // Prepare payload for addHoliday (store -> API)
@@ -145,36 +123,16 @@ export default function CalendarPage() {
             sessions: newHoliday.sessions
         };
         
-        // If editing an academic calendar entry, we should probably delete and recreate 
-        // because we don't have an 'updateHoliday' in store yet.
-        // The user requirement didn't strictly specify full CRUD for academic calendar, 
-        // but let's assume delete+create for edit.
+        // If editing an academic calendar entry, delete first
         if (editingId && editingSource === 'academic') {
             await deleteHoliday(editingId);
         }
         
-        // We need an addHoliday that accepts the raw type
-        // The store `addHoliday` sends `type` as is. 
-        // The API maps 'national'/'custom' etc. but also accepts raw '공휴일'/'방학' via `dbType` logic?
-        // Wait, store `addHoliday` takes `Holiday` object.
-        // API takes payload and maps `type`.
-        // Let's just send what we have.
-        
-        // Note: Store addHoliday expects `Holiday` interface which has restricted `type`.
-        // We cast it.
         await (window as any).fetch('/api/calendar/holidays', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }).then(() => {
-            // Refresh logic? Store `addHoliday` does optimistic update but only for restricted types.
-            // Better to trigger a refresh.
-            // Since we don't have a global refresh exposed easily except `fetchData`, 
-            // maybe just reload page or use router.refresh()?
-            // Or `addHoliday` in store handles it?
-            // Store `addHoliday` adds to local state.
-            // But local state `holidays` expects `Holiday` type.
-            // Let's just reload for safety or rely on Store.
             window.location.reload(); 
         });
 
@@ -196,6 +154,11 @@ export default function CalendarPage() {
         if (editingId && editingSource === 'academic') {
             await deleteHoliday(editingId);
         }
+
+        // If date changed for special date, delete old one
+        if (editingSource === 'special' && originalDate && originalDate !== dateStr) {
+            await updateSpecialDate(originalDate, null);
+        }
         
         await updateSpecialDate(dateStr, data as any);
     }
@@ -203,10 +166,24 @@ export default function CalendarPage() {
     resetForm();
   };
 
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+
+    if (editingSource === 'academic' && editingId) {
+        await deleteHoliday(editingId);
+    } else {
+        // Special Date (delete by date)
+        const targetDate = originalDate || newHoliday.date;
+        if (targetDate) await updateSpecialDate(targetDate, null);
+    }
+    resetForm();
+  };
+
   const resetForm = () => {
       setIsAdding(false);
       setEditingId(null);
       setEditingSource(null);
+      setOriginalDate(null);
       setNewHoliday({ name: '', date: '', type: 'custom', affected_classes: [], sessions: 0, dbType: '공휴일' });
   };
 
@@ -270,6 +247,7 @@ export default function CalendarPage() {
       
       setEditingId(event.id);
       setEditingSource(event.source);
+      setOriginalDate(event.date);
       setIsAdding(true);
   };
 
@@ -332,7 +310,6 @@ export default function CalendarPage() {
                         <option value="휴강">No Class (휴강)</option>
                         <option value="보강">Makeup Class (보강)</option>
                     </optgroup>
-                    <option value="none">None (Delete)</option>
                   </select>
                </div>
                <div>
@@ -367,9 +344,21 @@ export default function CalendarPage() {
                 </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-2">
-               <button onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
-               <button onClick={handleAddHoliday} className="bg-indigo-600 text-white px-4 py-2 rounded text-sm">Save</button>
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
+               {editingId ? (
+                   <button 
+                     onClick={handleDelete}
+                     className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded flex items-center gap-2 transition-colors"
+                   >
+                     <Trash2 className="h-4 w-4" /> Delete
+                   </button>
+               ) : (
+                   <div></div>
+               )}
+               <div className="flex gap-2">
+                   <button onClick={resetForm} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                   <button onClick={handleAddHoliday} className="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700 transition-colors">Save</button>
+               </div>
             </div>
           </div>
         )}
