@@ -1,3 +1,5 @@
+// DELETE /api/calendar/holidays/[id]
+// User requirement: "방학/공휴일 관리"
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 

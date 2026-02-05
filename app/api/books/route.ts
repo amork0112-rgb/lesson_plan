@@ -7,8 +7,6 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  console.log('🔑 Supabase URL:', supabaseUrl ? 'OK' : 'MISSING');
-  console.log('🔑 Service Key:', serviceKey ? 'OK' : 'MISSING');
   if (!supabaseUrl || !serviceKey) {
     console.error('❌ Supabase env missing');
     return NextResponse.json({ error: 'Supabase env missing' }, { status: 500 });

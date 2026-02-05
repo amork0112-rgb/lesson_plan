@@ -1,3 +1,4 @@
+// app/api/books/[id]/lessons/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
