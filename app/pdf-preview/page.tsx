@@ -87,7 +87,7 @@ export default async function PdfPreviewPage({ searchParams }: { searchParams: P
   const timeRange = `${classData.start_time}~${classData.end_time}`;
 
   return (
-    <div className="pdf-safe">
+    <div id="pdf-root" className="pdf-safe">
       <PdfLayout 
         lessons={lessons}
         className={classData.name}

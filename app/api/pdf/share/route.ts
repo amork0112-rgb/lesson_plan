@@ -1,8 +1,10 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow 60s for PDF generation
 
 export async function POST(req: NextRequest) {
@@ -13,37 +15,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
-    // Determine executable path
-    let executablePath: string;
-    
-    // In development or local environment, use local Chrome
-    if (process.env.NODE_ENV === 'development' || !process.env.AWS_REGION) {
-        // Fallback for local development (macOS/Windows/Linux)
-        // If Chrome is not at this path, you may need to adjust it or install Chrome
-        const platform = process.platform;
-        if (platform === 'darwin') {
-            executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-        } else if (platform === 'win32') {
-            executablePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-        } else {
-            executablePath = '/usr/bin/google-chrome';
-        }
-    } else {
-        // In production (Vercel/AWS), use @sparticuz/chromium
-        // Optional: Load fonts if needed
-        // await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
-        
-        chromium.setGraphicsMode = false;
-        executablePath = await chromium.executablePath();
-    }
-
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: executablePath,
+      executablePath: await chromium.executablePath(),
       headless: chromium.headless,
       ignoreHTTPSErrors: true,
-    } as any);
+    });
 
     const page = await browser.newPage();
     
@@ -57,7 +35,8 @@ export async function POST(req: NextRequest) {
 
     console.log('Generating PDF from:', url);
 
-    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForSelector('#pdf-root', { timeout: 10000 });
     
     // Wait for fonts to be ready
     await page.evaluateHandle('document.fonts.ready');
@@ -100,26 +79,26 @@ export async function POST(req: NextRequest) {
       .getPublicUrl(filePath);
 
     // Create Notice
-    const noticeData = {
-        title: `📘 ${className} ${year}년 ${parseInt(month) + 1}월 수업계획안`,
-        content: `PDF 다운로드 링크\n${publicUrl}`,
-        class_ids: [classId],
+    const { error: noticeError } = await supabase.from('notices').insert({
+        title: `${year}년 ${month + 1}월 ${className} 수업계획안`,
+        content: `${year}년 ${month + 1}월 ${className} 수업계획안이 등록되었습니다.\n첨부파일을 확인해주세요.`,
+        class_id: classId,
         type: 'lesson_plan',
-    };
-
-    const { error: noticeError } = await supabase.from('notices').insert(noticeData);
+        file_url: publicUrl,
+        is_active: true
+    });
 
     if (noticeError) {
-        console.error('Notice Creation Error:', noticeError);
-        // We return success for PDF but warn about notice? 
-        // Or fail? The prompt implies "Must create notice".
-        // But if PDF is uploaded, maybe just log it.
+        console.error('Notice creation failed:', noticeError);
+        // We don't fail the request here, just log it, as the PDF is already uploaded
     }
 
-    return NextResponse.json({ url: publicUrl, notice: !noticeError });
-
+    return NextResponse.json({ success: true, url: publicUrl });
   } catch (error: any) {
     console.error('PDF Generation Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Failed to generate PDF' }, 
+      { status: 500 }
+    );
   }
 }
