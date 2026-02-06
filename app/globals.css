@@ -57,21 +57,28 @@
 
 /* PDF / Canvas Capture Safe Mode */
 /* PDF SAFE MODE — lab() 완전 차단 */ 
-.pdf-safe, 
+.pdf-safe {
+  color: #000 !important;
+  background: #fff !important;
+  background-color: #fff !important;
+}
+
 .pdf-safe * { 
-  color: #000 !important; 
-  background: #fff !important; 
-  background-color: #fff !important; 
-  border-color: #ccc !important; 
+  /* Reset dangerous properties */
   box-shadow: none !important; 
   text-shadow: none !important; 
   outline: none !important; 
   filter: none !important;
+  backdrop-filter: none !important;
+  
+  /* Ensure border colors are safe if not specified inline */
+  border-color: #e5e7eb; 
 } 
 
 /* Tailwind ring 제거 */ 
 .pdf-safe [class*="ring"] { 
   box-shadow: none !important; 
+  ring: 0 !important;
 } 
 
 /* Tailwind shadow 제거 */ 

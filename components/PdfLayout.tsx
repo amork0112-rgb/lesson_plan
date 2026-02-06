@@ -205,7 +205,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
 
               {/* Footer */}
               <div className="mt-auto pt-4 flex flex-col items-center justify-center gap-1">
-                  <p className="text-[10px] text-gray-400">SCP = Speaking Certification Program 스피킹인증제</p>
+                  <p className="text-[10px]" style={{ color: '#9ca3af' }}>SCP = Speaking Certification Program 스피킹인증제</p>
                   <div className="flex items-center gap-1">
                       {/* Small Logo for Footer */}
                        <img src="/logo.png" alt="FRAGE EDU" className="h-8 object-contain" />
