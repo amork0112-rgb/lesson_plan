@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         }
 
         // Assertions
-        if (class_id && student.class_id !== class_id) {
+        if (class_id && student.main_class !== class_id) {
             return NextResponse.json({ error: 'Student does not belong to the selected class' }, { status: 400 });
         }
         
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     // 1. Insert Private Lesson
     const lessonPayload = {
         student_id,
-        class_id, // Added class_id
+        // class_id, // Removed as column likely does not exist in private_lessons
         book_id: lessonData.book_id,
         start_date: lessonData.start_date,
         memo: lessonData.memo,
