@@ -30,14 +30,18 @@ export async function POST(req: NextRequest) {
         }
     } else {
         // In production (Vercel/AWS), use @sparticuz/chromium
+        // Optional: Load fonts if needed
+        // await chromium.font('https://raw.githack.com/googlei18n/noto-emoji/master/fonts/NotoColorEmoji.ttf');
+        
+        chromium.setGraphicsMode = false;
         executablePath = await chromium.executablePath();
     }
 
     const browser = await puppeteer.launch({
-      args: (chromium as any).args,
-      defaultViewport: (chromium as any).defaultViewport,
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
       executablePath: executablePath,
-      headless: (chromium as any).headless,
+      headless: chromium.headless,
       ignoreHTTPSErrors: true,
     } as any);
 
