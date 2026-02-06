@@ -14,11 +14,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine executable path
-    let executablePath = await chromium.executablePath();
-    if (!executablePath) {
-        // Fallback for local development (macOS)
+    let executablePath: string;
+    
+    // In development or local environment, use local Chrome
+    if (process.env.NODE_ENV === 'development' || !process.env.AWS_REGION) {
+        // Fallback for local development (macOS/Windows/Linux)
         // If Chrome is not at this path, you may need to adjust it or install Chrome
-        executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'; 
+        const platform = process.platform;
+        if (platform === 'darwin') {
+            executablePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+        } else if (platform === 'win32') {
+            executablePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+        } else {
+            executablePath = '/usr/bin/google-chrome';
+        }
+    } else {
+        // In production (Vercel/AWS), use @sparticuz/chromium
+        executablePath = await chromium.executablePath();
     }
 
     const browser = await puppeteer.launch({
