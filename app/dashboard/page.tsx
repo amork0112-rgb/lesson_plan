@@ -912,23 +912,29 @@ ${data.publicUrl}
     
     setIsSharing(true);
     try {
-        const pdfBlob = await generatePlanPDF();
-        
-        // 1. Download
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
-        const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
-        const y = mPlan ? mPlan.year : year;
-        const cName = classes.find(c => c.id === classId)?.name || 'Class';
-        
-        a.download = `${cName}_${y}_${m}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Dynamically import html2pdf to ensure it only runs on client side
+        const html2pdf = (await import('html2pdf.js')).default;
+
+        const element = document.getElementById('pdf-content');
+        if (!element) {
+            throw new Error('PDF content not found');
+        }
+
+        const opt = {
+            margin: 0,
+            filename: `LessonPlan_${className}_${year}.pdf`,
+            image: { type: 'jpeg' as const, quality: 0.98 },
+            html2canvas: { 
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                letterRendering: true,
+                allowTaint: true
+            },
+            jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+        };
+
+        await html2pdf().set(opt).from(element).save();
         
     } catch (e: any) {
         console.error(e);
