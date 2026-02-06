@@ -1,53 +1,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Allow 60s for PDF generation
 
 export async function POST(req: NextRequest) {
   try {
-    const { classId, year, month } = await req.json();
+    const formData = await req.formData();
+    const file = formData.get('file') as Blob;
+    const classId = formData.get('classId') as string;
+    const year = formData.get('year') as string;
+    const month = formData.get('month') as string;
 
-    if (!classId || year === undefined || month === undefined) {
+    if (!file || !classId || !year || !month) {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
-    });
-
-    const page = await browser.newPage();
-    
-    // Construct URL
-    const proto = req.headers.get('x-forwarded-proto') || 'http';
-    const host = req.headers.get('host');
-    const origin = `${proto}://${host}`;
-    
-    // Pass params to preview page
-    const url = `${origin}/pdf-preview?classId=${classId}&year=${year}&month=${month}`;
-
-    console.log('Generating PDF from:', url);
-
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForSelector('#pdf-root', { timeout: 10000 });
-    
-    // Wait for fonts to be ready
-    await page.evaluateHandle('document.fonts.ready');
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
-    });
-
-    await browser.close();
+    // Convert Blob to Buffer
+    const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to Supabase
     const supabase = createClient(
@@ -60,11 +30,13 @@ export async function POST(req: NextRequest) {
     const className = classData?.name || 'Unknown Class';
 
     // File Path: lesson-plans/{classId}/{year}-{month}.pdf
-    const filePath = `lesson-plans/${classId}/${year}-${month}.pdf`;
+    // Note: We use the server timestamp to avoid caching issues if re-uploaded
+    const timestamp = Date.now();
+    const filePath = `lesson-plans/${classId}/${year}-${month}_${timestamp}.pdf`;
 
     const { error: uploadError } = await supabase.storage
       .from('lesson-plans')
-      .upload(filePath, pdfBuffer, {
+      .upload(filePath, buffer, {
         contentType: 'application/pdf',
         upsert: true
       });
@@ -80,8 +52,8 @@ export async function POST(req: NextRequest) {
 
     // Create Notice
     const { error: noticeError } = await supabase.from('notices').insert({
-        title: `${year}년 ${month + 1}월 ${className} 수업계획안`,
-        content: `${year}년 ${month + 1}월 ${className} 수업계획안이 등록되었습니다.\n첨부파일을 확인해주세요.`,
+        title: `${year}년 ${parseInt(month) + 1}월 ${className} 수업계획안`,
+        content: `${year}년 ${parseInt(month) + 1}월 ${className} 수업계획안이 등록되었습니다.\n첨부파일을 확인해주세요.`,
         class_id: classId,
         type: 'lesson_plan',
         file_url: publicUrl,
@@ -90,14 +62,13 @@ export async function POST(req: NextRequest) {
 
     if (noticeError) {
         console.error('Notice creation failed:', noticeError);
-        // We don't fail the request here, just log it, as the PDF is already uploaded
     }
 
     return NextResponse.json({ success: true, url: publicUrl });
   } catch (error: any) {
-    console.error('PDF Generation Error:', error);
+    console.error('Share Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate PDF' }, 
+      { error: error.message || 'Failed to share PDF' }, 
       { status: 500 }
     );
   }

@@ -843,14 +843,56 @@ export default function Home() {
 
     setIsSharing(true);
     try {
+        // 1. Load html2pdf dynamically
+        const html2pdf = (await import('html2pdf.js')).default;
+
+        // 2. Get the PDF content element
+        const element = document.getElementById('pdf-content');
+        if (!element) throw new Error('PDF content not found');
+
+        // 3. Clone and setup for capture
+        // We clone to avoid messing with the actual DOM and to make it visible
+        const clone = element.cloneNode(true) as HTMLElement;
+        
+        // Remove 'print-only' class from clone and its children to make it visible
+        clone.classList.remove('print-only');
+        const children = clone.querySelectorAll('.print-only');
+        children.forEach(child => child.classList.remove('print-only'));
+        
+        // Apply specific styles for capture
+        clone.style.display = 'block';
+        clone.style.position = 'absolute';
+        clone.style.top = '-9999px';
+        clone.style.left = '-9999px';
+        clone.style.width = '210mm'; // A4 width
+        clone.style.backgroundColor = 'white';
+        
+        document.body.appendChild(clone);
+
+        // 4. Generate PDF Blob
+        const opt = {
+            margin: 0,
+            filename: `lesson-plan-${classId}-${y}-${m}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 } as const,
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } as const
+        };
+
+        const pdfBlob = await html2pdf().set(opt).from(clone).outputPdf('blob');
+
+        // 5. Cleanup
+        document.body.removeChild(clone);
+
+        // 6. Upload to Server
+        const formData = new FormData();
+        formData.append('file', pdfBlob);
+        formData.append('classId', classId);
+        formData.append('year', y.toString());
+        formData.append('month', m.toString());
+
         const res = await fetch('/api/pdf/share', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                classId,
-                year: y,
-                month: m
-            })
+            body: formData, // Auto-sets Content-Type to multipart/form-data
         });
         
         const data = await res.json();
