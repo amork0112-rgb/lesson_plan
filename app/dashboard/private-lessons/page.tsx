@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, User, Calendar, BookOpen, Clock, Check } from 'lucide-react';
 import { format } from 'date-fns';
+
 interface PrivateLesson {
   id: string;
   student_name: string;

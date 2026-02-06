@@ -1,3 +1,4 @@
+// components/PdfLayout.tsx
 'use client';
 
 import { LessonPlan } from '@/types';
