@@ -878,7 +878,7 @@ export default function Home() {
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } as const
         };
 
-        const pdfBlob = await html2pdf().set(opt).from(clone).outputPdf('blob');
+        const pdfBlob = await html2pdf().set(opt).from(clone).output('blob');
 
         // 5. Cleanup
         document.body.removeChild(clone);
