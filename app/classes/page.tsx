@@ -3,7 +3,6 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2, Share } from 'lucide-react';
-import html2canvas from 'html2canvas';
 import { Weekday } from '@/types';
 
 // Types

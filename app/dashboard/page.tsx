@@ -1161,7 +1161,33 @@ export default function Home() {
         const canvas = await html2canvas(element, {
             scale: 2,
             backgroundColor: '#ffffff',
-            useCORS: true
+            useCORS: true,
+            onclone: (clonedDoc) => {
+                // Normalize colors (lab/oklch -> rgb/hex) for html2canvas support
+                try {
+                    const allElements = clonedDoc.querySelectorAll('*');
+                    const ctx = clonedDoc.createElement('canvas').getContext('2d');
+                    if (!ctx) return;
+
+                    allElements.forEach((el: any) => {
+                        const style = window.getComputedStyle(el);
+                        const props = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor'];
+                        
+                        props.forEach(prop => {
+                            const val = style.getPropertyValue(prop);
+                            if (val && (val.includes('lab(') || val.includes('oklch('))) {
+                                ctx.fillStyle = val;
+                                const rgb = ctx.fillStyle; // Browser converts to hex/rgba
+                                if (rgb && !rgb.includes('lab(') && !rgb.includes('oklch(')) {
+                                    el.style.setProperty(prop, rgb, 'important');
+                                }
+                            }
+                        });
+                    });
+                } catch (e) {
+                    console.warn('Color normalization failed', e);
+                }
+            }
         } as any);
 
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
