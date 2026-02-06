@@ -22,12 +22,12 @@ export async function POST(req: NextRequest) {
     }
 
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
+      args: (chromium as any).args,
+      defaultViewport: (chromium as any).defaultViewport,
       executablePath: executablePath,
-      headless: chromium.headless,
+      headless: (chromium as any).headless,
       ignoreHTTPSErrors: true,
-    });
+    } as any);
 
     const page = await browser.newPage();
     
