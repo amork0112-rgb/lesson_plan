@@ -9,7 +9,7 @@ export async function GET() {
   const supabase = getSupabaseService();
   const { data, error } = await supabase
     .from('private_lessons')
-    .select('*, students(student_name, english_first_name), private_lesson_schedules(day_of_week, time)')
+    .select('*, students(student_name, english_first_name), private_lesson_schedules(day_of_week, time), private_lesson_books(book_id)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -29,10 +29,18 @@ export async function GET() {
         });
     }
 
+    // Map books
+    const books = lesson.private_lesson_books?.map((b: any) => b.book_id) || [];
+    // Include legacy book_id if not present
+    if (lesson.book_id && !books.includes(lesson.book_id)) {
+        books.push(lesson.book_id);
+    }
+
     return {
       ...lesson,
       student_name: lesson.students?.student_name || lesson.student_name || 'Unknown',
       schedule, // Frontend expects this format for rendering
+      book_ids: books,
     };
   });
 
@@ -132,6 +140,23 @@ export async function POST(req: Request) {
             console.error('Schedule insert error:', scheduleError);
             return NextResponse.json({ error: 'Lesson created but schedule failed: ' + scheduleError.message }, { status: 500 });
         }
+    }
+
+    // 3. Insert Books
+    if (lessonData.book_ids && Array.isArray(lessonData.book_ids) && lessonData.book_ids.length > 0) {
+         const bookRows = lessonData.book_ids.map((bid: string) => ({
+             private_lesson_id: lesson.id,
+             book_id: bid
+         }));
+         const { error: bookError } = await supabase.from('private_lesson_books').insert(bookRows);
+         if (bookError) console.error('Book insert error:', bookError);
+    } else if (lessonData.book_id) {
+         // Legacy fallback if user sends single book_id
+         const { error: bookError } = await supabase.from('private_lesson_books').insert({
+             private_lesson_id: lesson.id,
+             book_id: lessonData.book_id
+         });
+         if (bookError) console.error('Book insert error:', bookError);
     }
 
     return NextResponse.json(lesson);

@@ -23,7 +23,8 @@ export default function PrivateLessonDetailPage() {
 
   const [lesson, setLesson] = useState<PrivateLesson | null>(null);
   const [plans, setPlans] = useState<LessonPlan[]>([]);
-  const [book, setBook] = useState<Book | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [selectedBookId, setSelectedBookId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'plan'>('plan');
@@ -54,11 +55,19 @@ export default function PrivateLessonDetailPage() {
       const found = await resLesson.json();
       setLesson(found);
 
-      // 2. Fetch Book
-      if (found.book_id) {
-        const resBook = await fetch(`/api/books/${found.book_id}`);
-        if (resBook.ok) {
-          setBook(await resBook.json());
+      // 2. Fetch Books
+      const bookIds = found.book_ids && found.book_ids.length > 0 
+          ? found.book_ids 
+          : (found.book_id ? [found.book_id] : []);
+
+      if (bookIds.length > 0) {
+        const bookPromises = bookIds.map((bid: string) => 
+            fetch(`/api/books/${bid}`).then(r => r.ok ? r.json() : null)
+        );
+        const fetchedBooks = (await Promise.all(bookPromises)).filter(b => b !== null);
+        setBooks(fetchedBooks as Book[]);
+        if (fetchedBooks.length > 0) {
+            setSelectedBookId((fetchedBooks[0] as Book).id);
         }
       }
 
@@ -97,8 +106,9 @@ export default function PrivateLessonDetailPage() {
 
 
   const handleGenerate = async (limit: number) => {
-    if (!lesson?.book_id) {
-      alert('No book assigned to this student');
+    const targetBookId = selectedBookId || lesson?.book_id;
+    if (!targetBookId) {
+      alert('No book assigned or selected');
       return;
     }
 
@@ -108,7 +118,7 @@ export default function PrivateLessonDetailPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          book_id: lesson.book_id,
+          book_id: targetBookId,
           limit
         })
       });
@@ -148,7 +158,7 @@ export default function PrivateLessonDetailPage() {
             <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">Private Lesson</span>
             <span className="flex items-center gap-1">
               <BookOpen size={14} />
-              {book?.name || 'No Book'}
+              {books.length > 0 ? books.map(b => b.name).join(', ') : 'No Book'}
             </span>
           </div>
         </div>
@@ -237,6 +247,19 @@ export default function PrivateLessonDetailPage() {
                 <div>
                     <h3 className="text-blue-900 font-semibold text-sm">Plan Generator</h3>
                     <p className="text-blue-500 text-xs mt-1">Generate next sessions based on current progress</p>
+                    
+                    {books.length > 1 && (
+                        <div className="mt-2 flex items-center">
+                            <label className="text-xs text-blue-700 mr-2 font-medium">Target Book:</label>
+                            <select 
+                                value={selectedBookId} 
+                                onChange={e => setSelectedBookId(e.target.value)}
+                                className="text-xs border border-blue-200 rounded p-1 bg-white text-blue-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                                {books.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
+                        </div>
+                    )}
                 </div>
                 <div className="flex gap-2">
                     <button
@@ -286,7 +309,7 @@ export default function PrivateLessonDetailPage() {
                                             {plan.date} <span className="text-xs text-slate-400 ml-1">({format(parseISO(plan.date), 'EEE')})</span>
                                         </td>
                                         <td className="px-6 py-3 text-slate-900 font-medium">
-                                            {plan.books?.name || book?.name || '-'}
+                                            {plan.books?.name || books.find(b => b.id === plan.book_id)?.name || '-'}
                                         </td>
                                         <td className="px-6 py-3">
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">

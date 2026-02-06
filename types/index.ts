@@ -26,6 +26,8 @@ export interface PrivateLesson {
   }[];
   memo?: string;
   book_id?: string;
+  book_ids?: string[];
+  books?: Book[];
 }
 
 export interface User {

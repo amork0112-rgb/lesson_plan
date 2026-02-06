@@ -575,10 +575,11 @@ export async function POST(
              
              if (previousPlans) {
                  previousPlans.forEach((p: any) => {
-                     const unitMatch = p.content.match(/(?:Unit\s+|[A-Za-z0-9]+-)(\d+)\s+Day\s+(\d+)/);
-                     if (unitMatch && p.book_id) {
-                         const u = parseInt(unitMatch[1]);
-                         const d = parseInt(unitMatch[2]);
+                     // ❌ content parsing -> ✅ column based
+                     if (p.book_id && p.unit_no && p.day_no) {
+                         const u = p.unit_no;
+                         const d = p.day_no;
+                         
                          if (currentProgress[p.book_id]) {
                              const book = runningAllocations.find(a => a.book_id === p.book_id)?.book;
                              if (book) {
@@ -630,10 +631,11 @@ export async function POST(
 
         // Update Progress for next iteration
         generated.forEach(l => {
-            const unitMatch = l.content ? l.content.match(/(?:Unit\s+|[A-Za-z0-9]+-)(\d+)\s+Day\s+(\d+)/) : null;
-            if (unitMatch && l.book_id) {
-                 const u = parseInt(unitMatch[1]);
-                 const d = parseInt(unitMatch[2]);
+            // ❌ content parsing -> ✅ column based
+            if (l.book_id && l.unit_no && l.day_no) {
+                 const u = l.unit_no;
+                 const d = l.day_no;
+                 
                  const book = activeBooks.find(b => b.id === l.book_id);
                  if (book) {
                     currentProgress[l.book_id] = { unit: u, day: d };

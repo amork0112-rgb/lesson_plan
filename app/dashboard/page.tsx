@@ -11,12 +11,10 @@ import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save, Share } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import html2pdf from 'html2pdf.js';
 import { getSupabase } from '@/lib/supabase';
 
-async function exportPdf(_element: HTMLElement) {
-  void _element;
-  window.print();
-}
+// Removed exportPdf helper as we use html2pdf now
 
 // --- Types ---
 interface MonthPlan {
@@ -170,6 +168,7 @@ export default function Home() {
   const [selectedDays, setSelectedDays] = useState<Weekday[]>([]);
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const [selectedCampus, setSelectedCampus] = useState<string>('All');
+  const [isSharing, setIsSharing] = useState(false);
 
   // Compute unique campuses
   const campuses = useMemo(() => {
@@ -804,10 +803,113 @@ export default function Home() {
 
   // Removed auto-download effect to avoid setState in effect
 
-  const downloadPDF = () => {
+  const generatePlanPDF = async (): Promise<Blob> => {
     const element = document.getElementById('pdf-root');
-    if (!element) return;
-    exportPdf(element);
+    if (!element) throw new Error('PDF Element not found');
+    
+    // Ensure visibility for capture
+    const wasPrintOnly = element.classList.contains('print-only');
+    if (wasPrintOnly) element.classList.remove('print-only');
+    
+    const opt = {
+        margin: 0,
+        filename: 'lesson-plan.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    try {
+        // @ts-ignore
+        const worker = html2pdf().from(element).set(opt).output('blob');
+        return await worker;
+    } finally {
+        if (wasPrintOnly) element.classList.add('print-only');
+    }
+  };
+
+  const autoSharePDF = async (pdfBlob: Blob) => {
+    const selectedClass = classes.find(c => c.id === classId);
+    if (!selectedClass) return;
+
+    const mPlan = monthPlans[0];
+    const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
+    const y = mPlan ? mPlan.year : year;
+    
+    const campus = selectedClass.campus || 'Unknown';
+    const cName = selectedClass.name; 
+    
+    const fileName = `${y}-${m}.pdf`;
+    const filePath = `lesson-plans/${y}/${campus}/${cName}/${fileName}`;
+
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    // Upload
+    const { error } = await supabase.storage
+        .from('lesson-plans')
+        .upload(filePath, pdfBlob, {
+            contentType: 'application/pdf',
+            upsert: true
+        });
+        
+    if (error) {
+        console.error('Upload error:', error);
+        throw error;
+    }
+    
+    const { data } = supabase.storage
+        .from('lesson-plans')
+        .getPublicUrl(filePath);
+        
+    // Insert DB
+    await supabase.from('lesson_plan_shares').insert({
+        class_id: selectedClass.id,
+        campus: campus,
+        class_name: cName,
+        year: y,
+        month: mPlan ? mPlan.month + 1 : null,
+        pdf_url: data.publicUrl
+    });
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!generatedPlan || generatedPlan.length === 0) {
+        alert('Please generate the plan first.');
+        return;
+    }
+    
+    setIsSharing(true);
+    try {
+        const pdfBlob = await generatePlanPDF();
+        
+        // 1. Download
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const mPlan = monthPlans[0];
+        const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
+        const y = mPlan ? mPlan.year : year;
+        const cName = classes.find(c => c.id === classId)?.name || 'Class';
+        
+        a.download = `${cName}_${y}_${m}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // 2. Share
+        await autoSharePDF(pdfBlob);
+        alert('PDF downloaded and saved to cloud successfully!');
+        
+    } catch (e: any) {
+        console.error(e);
+        alert('Error: ' + e.message);
+    } finally {
+        setIsSharing(false);
+    }
   };
 
   const handleGenerate = async (targetMonthId?: string) => {
@@ -1147,8 +1249,6 @@ export default function Home() {
     });
   };
 
-  const [isSharing, setIsSharing] = useState(false);
-
   const handleSharePlan = async () => {
     if (monthPlans.length === 0) return;
     setIsSharing(true);
@@ -1415,7 +1515,7 @@ export default function Home() {
                     {loading ? 'Generating...' : 'Preview Plan'}
                 </button>
                 <button 
-                    onClick={downloadPDF}
+                    onClick={handleDownloadPDF}
                     disabled={monthPlans.length === 0}
                     className={`
                         px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
@@ -1425,7 +1525,7 @@ export default function Home() {
                     `}
                 >
                     <Download className="w-4 h-4" />
-                    Download PDF
+                    {isSharing ? 'Saving...' : 'Download PDF'}
                 </button>
                 <button 
                     onClick={handleSharePlan}
@@ -1895,11 +1995,11 @@ export default function Home() {
               Save All Changes
             </button>
             <button 
-              onClick={() => { downloadPDF(); }}
+              onClick={() => { handleDownloadPDF(); }}
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
               <Download className="h-4 w-4" />
-              Download PDF
+              {isSharing ? 'Saving...' : 'Download PDF'}
             </button>
           </div>
 

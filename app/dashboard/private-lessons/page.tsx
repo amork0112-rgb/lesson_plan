@@ -12,6 +12,7 @@ interface PrivateLesson {
   status: string;
   start_date: string;
   book_id?: string;
+  book_ids?: string[];
   memo?: string;
   schedule?: Record<string, string>; // Legacy support
   private_lesson_schedules?: {
@@ -66,6 +67,7 @@ export default function PrivateLessonsPage() {
     student_id: '',
     start_date: format(new Date(), 'yyyy-MM-dd'),
     book_id: '',
+    book_ids: [] as string[],
     schedule: {} as Record<string, string>, // { "Mon": "14:00" }
     memo: ''
   });
@@ -198,7 +200,7 @@ export default function PrivateLessonsPage() {
         }
         return;
     }
-    if (!formData.book_id) {
+    if (!formData.book_id && formData.book_ids.length === 0) {
         alert('Book is required');
         return;
     }
@@ -214,7 +216,8 @@ export default function PrivateLessonsPage() {
         campus: selectedCampus, // Use campus name (text)
         class_id: selectedClassId,
         student_id: formData.student_id,
-        book_id: formData.book_id,
+        book_id: formData.book_ids[0] || formData.book_id,
+        book_ids: formData.book_ids,
         start_date: formData.start_date,
         memo: formData.memo,
         schedules
@@ -235,6 +238,7 @@ export default function PrivateLessonsPage() {
             student_id: '',
             start_date: format(new Date(), 'yyyy-MM-dd'),
             book_id: '',
+            book_ids: [],
             schedule: {},
             memo: ''
         });
@@ -294,8 +298,17 @@ export default function PrivateLessonsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {lessons.map(lesson => {
-            // Find book name
-            const book = books.find(b => b.id === (lesson as any).book_id);
+            // Find book names
+            const lessonBooks = books.filter(b => 
+                (lesson.book_ids && lesson.book_ids.includes(b.id)) || 
+                (lesson.book_id === b.id)
+            );
+            
+            // Unique books
+            const uniqueBooks = Array.from(new Set(lessonBooks.map(b => b.name)));
+            const bookDisplay = uniqueBooks.length > 0 
+                ? (uniqueBooks.length > 2 ? `${uniqueBooks[0]} +${uniqueBooks.length - 1}` : uniqueBooks.join(', ')) 
+                : 'No Book Assigned';
             
             let scheduleStr = 'No Schedule';
             if (lesson.private_lesson_schedules && lesson.private_lesson_schedules.length > 0) {
@@ -339,7 +352,7 @@ export default function PrivateLessonsPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-slate-600">
                     <BookOpen size={16} className="text-slate-400" />
-                    <span className="truncate">{book?.name || 'No Book Assigned'}</span>
+                    <span className="truncate" title={uniqueBooks.join(', ')}>{bookDisplay}</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-slate-600">
                     <Clock size={16} className="text-slate-400" />
@@ -456,17 +469,30 @@ export default function PrivateLessonsPage() {
 
                 {/* Book & Start Date Row */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Book</label>
-                  <select 
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    value={formData.book_id}
-                    onChange={e => setFormData({...formData, book_id: e.target.value})}
-                  >
-                    <option value="">Select a book...</option>
-                    {books.map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Books</label>
+                  <div className="border border-slate-300 rounded-lg p-2 max-h-40 overflow-y-auto bg-white">
+                    {books.length === 0 ? (
+                        <p className="text-xs text-slate-400">Loading books...</p>
+                    ) : (
+                        books.map(b => (
+                            <label key={b.id} className="flex items-center gap-2 text-sm py-1 cursor-pointer hover:bg-slate-50 px-1 rounded">
+                                <input 
+                                    type="checkbox" 
+                                    checked={formData.book_ids.includes(b.id)}
+                                    onChange={e => {
+                                        const newIds = e.target.checked 
+                                            ? [...formData.book_ids, b.id]
+                                            : formData.book_ids.filter(id => id !== b.id);
+                                        setFormData(prev => ({ ...prev, book_ids: newIds }));
+                                    }}
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="truncate">{b.name}</span>
+                            </label>
+                        ))
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">Selected: {formData.book_ids.length} books</p>
                 </div>
 
                 <div>

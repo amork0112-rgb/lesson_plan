@@ -14,7 +14,7 @@ export async function GET(
     
     const { data, error } = await supabase
       .from('private_lessons')
-      .select('*, private_lesson_schedules(*)')
+      .select('*, private_lesson_schedules(*), private_lesson_books(book_id)')
       .eq('id', id)
       .single();
 
@@ -22,7 +22,18 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    // Map books
+    const books = data.private_lesson_books?.map((b: any) => b.book_id) || [];
+    if (data.book_id && !books.includes(data.book_id)) {
+        books.push(data.book_id);
+    }
+
+    const result = {
+        ...data,
+        book_ids: books
+    };
+
+    return NextResponse.json(result);
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
