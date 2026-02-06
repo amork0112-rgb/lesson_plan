@@ -811,6 +811,9 @@ export default function Home() {
     const wasPrintOnly = element.classList.contains('print-only');
     if (wasPrintOnly) element.classList.remove('print-only');
     
+    // Apply Safe Mode
+    element.classList.add('pdf-safe');
+
     const opt = {
         margin: 0,
         filename: 'lesson-plan.pdf',
@@ -819,23 +822,6 @@ export default function Home() {
             scale: 2, 
             useCORS: true, 
             scrollY: 0,
-            onclone: (clonedDoc: Document) => {
-                const allElements = clonedDoc.querySelectorAll('*');
-                allElements.forEach((el) => {
-                    const style = window.getComputedStyle(el);
-                    
-                    // Force RGB for colors
-                    if (style.color && (style.color.includes('lab(') || style.color.includes('oklch('))) {
-                        (el as HTMLElement).style.color = '#000000';
-                    }
-                    if (style.backgroundColor && (style.backgroundColor.includes('lab(') || style.backgroundColor.includes('oklch('))) {
-                        (el as HTMLElement).style.backgroundColor = '#ffffff';
-                    }
-                    if (style.borderColor && (style.borderColor.includes('lab(') || style.borderColor.includes('oklch('))) {
-                        (el as HTMLElement).style.borderColor = '#e5e7eb'; // gray-200
-                    }
-                });
-            }
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
@@ -848,6 +834,7 @@ export default function Home() {
         const worker = html2pdf().from(element).set(opt).output('blob');
         return await worker;
     } finally {
+        element.classList.remove('pdf-safe');
         if (wasPrintOnly) element.classList.add('print-only');
     }
   };
@@ -856,7 +843,7 @@ export default function Home() {
     const selectedClass = classes.find(c => c.id === classId);
     if (!selectedClass) return;
 
-    const mPlan = monthPlans[0];
+    const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
     const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
     const y = mPlan ? mPlan.year : year;
     
@@ -933,7 +920,7 @@ ${data.publicUrl}
         const a = document.createElement('a');
         a.href = url;
         
-        const mPlan = monthPlans[0];
+        const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
         const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
         const y = mPlan ? mPlan.year : year;
         const cName = classes.find(c => c.id === classId)?.name || 'Class';
@@ -1302,63 +1289,17 @@ ${data.publicUrl}
             throw new Error('Plan container not found');
         }
 
+        // Apply Safe Mode
+        element.classList.add('pdf-safe');
+
         const canvas = await html2canvas(element, {
             scale: 2,
             backgroundColor: '#ffffff',
             useCORS: true,
-            onclone: (clonedDoc: Document) => {
-                // Normalize colors (lab/oklch -> rgb/hex) for html2canvas support
-                try {
-                    const allElements = clonedDoc.querySelectorAll('*');
-                    const ctx = clonedDoc.createElement('canvas').getContext('2d');
-                    if (!ctx) return;
-
-                    const convertToRgb = (value: string) => {
-                        if (!value || (!value.includes('lab(') && !value.includes('oklch('))) return value;
-                        // For simple color strings
-                        ctx.fillStyle = value;
-                        const simpleRgb = ctx.fillStyle;
-                        if (simpleRgb && !simpleRgb.includes('lab(') && !simpleRgb.includes('oklch(')) {
-                            return simpleRgb;
-                        }
-                        return value;
-                    };
-
-                    allElements.forEach((el: any) => {
-                        const style = window.getComputedStyle(el);
-                        // Explicitly check specific border sides as 'borderColor' might be empty shorthand
-                        const props = [
-                            'color', 'backgroundColor', 
-                            'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-                            'outlineColor', 'textDecorationColor',
-                            'fill', 'stroke'
-                        ];
-                        
-                        props.forEach(prop => {
-                            const val = style.getPropertyValue(prop);
-                            if (val && (val.includes('lab(') || val.includes('oklch('))) {
-                                const rgb = convertToRgb(val);
-                                if (rgb !== val) {
-                                    el.style.setProperty(prop, rgb, 'important');
-                                }
-                            }
-                        });
-
-                        // Special handling for box-shadow and text-shadow (complex strings)
-                        ['boxShadow', 'textShadow'].forEach(prop => {
-                             const val = style[prop as any];
-                             if (val && (val.includes('lab(') || val.includes('oklch('))) {
-                                 // Simple heuristic: if it contains lab/oklch, just try to replace the color part
-                                 // Or, safer: remove the shadow to prevent crash
-                                 el.style.setProperty(prop, 'none', 'important');
-                             }
-                        });
-                    });
-                } catch (e) {
-                    console.warn('Color normalization failed', e);
-                }
-            }
         } as any);
+
+        // Remove Safe Mode
+        element.classList.remove('pdf-safe');
 
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error('Failed to create image');
