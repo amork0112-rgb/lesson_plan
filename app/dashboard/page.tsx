@@ -807,40 +807,16 @@ export default function Home() {
   /* 
   // REMOVED: html2pdf implementation causing lab() color errors
   const generatePlanPDF = async (): Promise<Blob> => {
-    // Dynamically import html2pdf to ensure it only runs on client side
-    const html2pdf = (await import('html2pdf.js')).default;
-
-    const element = document.getElementById('pdf-content');
-    if (!element) {
-        throw new Error('PDF content not found');
-    }
-
-    const opt = {
-        margin: 0,
-        filename: `LessonPlan_${className}_${year}.pdf`,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { 
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            letterRendering: true,
-            allowTaint: true
-        },
-        jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
-    };
-
-    const worker = html2pdf().set(opt).from(element).output('blob');
-    return await worker;
+    // ...
   };
   */
 
-  const autoSharePDF = async (pdfBlob: Blob) => {
-    // Temporarily disabled
-    console.log('Auto-share disabled for print-only mode');
-    return;
-    /*
+  const autoSharePDF = async (pdfBlob: Blob | File) => {
     const selectedClass = classes.find(c => c.id === classId);
-    if (!selectedClass) return;
+    if (!selectedClass) {
+        alert('클래스 정보를 찾을 수 없습니다.');
+        return;
+    }
 
     const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
     const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
@@ -849,11 +825,16 @@ export default function Home() {
     const campus = selectedClass.campus || 'Unknown';
     const cName = selectedClass.name; 
     
-    const fileName = `${y}-${m}.pdf`;
-    const filePath = `lesson-plans/${y}/${campus}/${cName}/${fileName}`;
+    // Use original file name if it's a File object, otherwise generate one
+    const fileName = (pdfBlob instanceof File) ? pdfBlob.name : `${y}-${m}.pdf`;
+    // Ensure uniqueness or overwrite strategy
+    const filePath = `lesson-plans/${y}/${campus}/${cName}/${Date.now()}_${fileName}`;
 
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) {
+        alert('데이터베이스 연결 실패');
+        return;
+    }
 
     // Upload
     const { error } = await supabase.storage
@@ -865,6 +846,7 @@ export default function Home() {
         
     if (error) {
         console.error('Upload error:', error);
+        alert('업로드 실패: ' + error.message);
         throw error;
     }
     
@@ -898,11 +880,11 @@ ${data.publicUrl}
                 class_ids: [selectedClass.id],
             }),
         });
+        alert('성공적으로 공유되었습니다!');
     } catch (err) {
         console.error('Failed to create notice:', err);
-        // We don't block the flow if notice fails, just log it
+        alert('파일은 업로드되었으나 알림 생성에 실패했습니다.');
     }
-    */
   };
 
   const handleDownloadPDF = () => {
@@ -923,28 +905,34 @@ ${data.publicUrl}
     }, 1000);
   };
 
+  // Hidden file input ref
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const handleSharePDF = async () => {
-    alert('현재 공유 기능은 점검 중입니다. PDF를 다운로드(인쇄)하여 수동으로 공유해주세요.');
-    /*
     if (!generatedPlan || generatedPlan.length === 0) {
-        alert('Please generate the plan first.');
+        alert('먼저 Preview Plan을 실행해주세요.');
         return;
     }
     
-    if (!confirm('PDF를 학부모에게 공유하시겠습니까?')) return;
+    if (confirm('방금 다운로드(인쇄)한 PDF 파일을 선택하여 공유하시겠습니까?')) {
+        fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     setIsSharing(true);
     try {
-        const pdfBlob = await generatePlanPDF();
-        await autoSharePDF(pdfBlob);
-        alert('PDF가 학부모에게 공유되었습니다.');
+        await autoSharePDF(file);
     } catch (e: any) {
         console.error(e);
-        alert('Error: ' + e.message);
     } finally {
         setIsSharing(false);
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    */
   };
 
   const handleGenerate = async (targetMonthId?: string) => {
@@ -1289,6 +1277,15 @@ ${data.publicUrl}
   // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
     <div className="p-8 max-w-6xl mx-auto">
+      {/* Hidden File Input for Manual Share */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        style={{ display: 'none' }} 
+        accept="application/pdf"
+        onChange={handleFileChange}
+      />
+      
       {/* Header / No Print */}
       <div className="no-print">
         <header className="mb-8">
