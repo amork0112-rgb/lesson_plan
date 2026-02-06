@@ -3,7 +3,6 @@
 
 import { LessonPlan } from '@/types';
 import { parseLocalDate } from '@/lib/date';
-import { Shield } from 'lucide-react';
 
 interface Props {
   lessons: LessonPlan[];

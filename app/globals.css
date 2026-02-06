@@ -72,7 +72,11 @@
   backdrop-filter: none !important;
   
   /* Ensure border colors are safe if not specified inline */
-  border-color: #e5e7eb; 
+  border-color: #e5e7eb !important;
+  text-decoration-color: #000 !important;
+  accent-color: #000 !important;
+  caret-color: #000 !important;
+  column-rule-color: #e5e7eb !important;
 } 
 
 /* Tailwind ring 제거 */ 

@@ -2168,7 +2168,7 @@ ${data.publicUrl}
           </div>
           
           {/* Hidden PDF Render Container */}
-          <div id="pdf-content" style={{ 
+          <div id="pdf-content" className="pdf-safe" style={{ 
               position: 'absolute', 
               left: '-9999px', 
               top: 0, 
