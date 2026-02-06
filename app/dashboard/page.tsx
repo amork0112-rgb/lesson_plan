@@ -1169,19 +1169,45 @@ export default function Home() {
                     const ctx = clonedDoc.createElement('canvas').getContext('2d');
                     if (!ctx) return;
 
+                    const convertToRgb = (value: string) => {
+                        if (!value || (!value.includes('lab(') && !value.includes('oklch('))) return value;
+                        // For simple color strings
+                        ctx.fillStyle = value;
+                        const simpleRgb = ctx.fillStyle;
+                        if (simpleRgb && !simpleRgb.includes('lab(') && !simpleRgb.includes('oklch(')) {
+                            return simpleRgb;
+                        }
+                        return value;
+                    };
+
                     allElements.forEach((el: any) => {
                         const style = window.getComputedStyle(el);
-                        const props = ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'textDecorationColor'];
+                        // Explicitly check specific border sides as 'borderColor' might be empty shorthand
+                        const props = [
+                            'color', 'backgroundColor', 
+                            'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+                            'outlineColor', 'textDecorationColor',
+                            'fill', 'stroke'
+                        ];
                         
                         props.forEach(prop => {
                             const val = style.getPropertyValue(prop);
                             if (val && (val.includes('lab(') || val.includes('oklch('))) {
-                                ctx.fillStyle = val;
-                                const rgb = ctx.fillStyle; // Browser converts to hex/rgba
-                                if (rgb && !rgb.includes('lab(') && !rgb.includes('oklch(')) {
+                                const rgb = convertToRgb(val);
+                                if (rgb !== val) {
                                     el.style.setProperty(prop, rgb, 'important');
                                 }
                             }
+                        });
+
+                        // Special handling for box-shadow and text-shadow (complex strings)
+                        ['boxShadow', 'textShadow'].forEach(prop => {
+                             const val = style[prop as any];
+                             if (val && (val.includes('lab(') || val.includes('oklch('))) {
+                                 // Simple heuristic: if it contains lab/oklch, just try to replace the color part
+                                 // Or, safer: remove the shadow to prevent crash
+                                 el.style.setProperty(prop, 'none', 'important');
+                             }
                         });
                     });
                 } catch (e) {
