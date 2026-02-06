@@ -1162,7 +1162,7 @@ export default function Home() {
             scale: 2,
             backgroundColor: '#ffffff',
             useCORS: true,
-            onclone: (clonedDoc) => {
+            onclone: (clonedDoc: Document) => {
                 // Normalize colors (lab/oklch -> rgb/hex) for html2canvas support
                 try {
                     const allElements = clonedDoc.querySelectorAll('*');
