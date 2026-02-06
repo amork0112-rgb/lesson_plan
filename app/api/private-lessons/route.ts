@@ -9,7 +9,7 @@ export async function GET() {
   const supabase = getSupabaseService();
   const { data, error } = await supabase
     .from('private_lessons')
-    .select('*, private_lesson_schedules(day_of_week, time)')
+    .select('*, students(student_name, english_first_name), private_lesson_schedules(day_of_week, time)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -31,6 +31,7 @@ export async function GET() {
 
     return {
       ...lesson,
+      student_name: lesson.students?.student_name || lesson.student_name || 'Unknown',
       schedule, // Frontend expects this format for rendering
     };
   });
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
         start_date: lessonData.start_date,
         memo: lessonData.memo,
         campus: campus,
-        student_name: studentName,
+        // student_name: studentName, // Removed as column does not exist
     };
 
     const { data: lesson, error: lessonError } = await supabase
