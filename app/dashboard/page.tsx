@@ -9,8 +9,8 @@ import { parseLocalDate } from '@/lib/date';
 import { startOfWeek } from 'date-fns';
 import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
-import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save, Share } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save } from 'lucide-react';
+
 // import html2pdf from 'html2pdf.js'; // Dynamically imported to avoid SSR 'self is not defined' error
 import { getSupabase } from '@/lib/supabase';
 
@@ -1280,66 +1280,7 @@ ${data.publicUrl}
     });
   };
 
-  const handleSharePlan = async () => {
-    if (monthPlans.length === 0) return;
-    setIsSharing(true);
-    try {
-        const element = document.getElementById('plan-container');
-        if (!element) {
-            throw new Error('Plan container not found');
-        }
 
-        // Apply Safe Mode
-        element.classList.add('pdf-safe');
-
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-        } as any);
-
-        // Remove Safe Mode
-        element.classList.remove('pdf-safe');
-
-        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error('Failed to create image');
-
-        const supabase = getSupabase();
-        if (!supabase) throw new Error('Supabase client not available');
-
-        const filename = `plan_${classId}_${Date.now()}.png`;
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('plans')
-            .upload(filename, blob, {
-                contentType: 'image/png',
-                upsert: true
-            });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('plans')
-            .getPublicUrl(filename);
-
-        const { error: dbError } = await supabase
-            .from('shared_plans')
-            .insert({
-                class_id: classId,
-                class_name: className,
-                plan_image_url: publicUrl
-            });
-
-        if (dbError) throw dbError;
-
-        alert('Plan shared successfully!');
-
-    } catch (e: any) {
-        console.error('Share failed', e);
-        alert(`Failed to share plan: ${e.message}`);
-    } finally {
-        setIsSharing(false);
-    }
-  };
 
   // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
@@ -1365,18 +1306,14 @@ ${data.publicUrl}
             <span className="text-gray-400">→</span>
             <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
                 <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">3</span>
-                <span>Save All Changes</span>
+                <span>Save All Changes & Share</span>
             </span>
             <span className="text-gray-400">→</span>
             <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
                 <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">4</span>
                 <span>Download PDF</span>
             </span>
-             <span className="text-gray-400">→</span>
-            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
-                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">5</span>
-                <span>Auto-Shared</span>
-            </span>
+
           </div>
         </header>
 
@@ -1541,19 +1478,7 @@ ${data.publicUrl}
                     <Download className="w-4 h-4" />
                     {isSharing ? 'Saving...' : 'Download PDF'}
                 </button>
-                <button 
-                    onClick={handleSharePlan}
-                    disabled={monthPlans.length === 0 || isSharing}
-                    className={`
-                        px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
-                        ${monthPlans.length === 0 || isSharing
-                            ? 'bg-gray-300 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md active:transform active:scale-95'}
-                    `}
-                >
-                    <Share className="w-4 h-4" />
-                    {isSharing ? '공유 중...' : '플랜 공유하기'}
-                </button>
+
              </div>
           </div>
 

@@ -125,6 +125,7 @@ export async function POST(
     }
 
     const startYear = inputYear || rawClass.year || 2026;
+    const slotsPerDay = getSlotsPerDay(classDays); // Unified slots calculation
 
     // 2. Fetch Global Calendar Data (All Events)
     
@@ -150,7 +151,8 @@ export async function POST(
             date: ph.start_date,
             name: ph.name,
             type: 'national',
-            year: parseInt(ph.start_date.split('-')[0])
+            year: parseInt(ph.start_date.split('-')[0]),
+            affected_classes: ph.affected_classes // Add affected_classes support
         });
     });
 
@@ -206,7 +208,8 @@ export async function POST(
     if (Array.isArray(indices) && indices.length > 0) {
         indicesToProcess = indices;
     } else if (generate_all) {
-        indicesToProcess = [1, 2, 3, 4, 5, 6];
+        const duration = rawClass.duration || 6;
+        indicesToProcess = Array.from({ length: duration }, (_, i) => i + 1);
     } else if (month_index) {
         indicesToProcess = [month_index];
     } else {
@@ -287,7 +290,7 @@ export async function POST(
         
         // A. Calculate Capacity (Valid Dates)
         let validDates: string[] = [];
-        const slotsPerDay = getSlotsPerDay(classDays); // Get configured slots per day
+        // slotsPerDay is now calculated outside
         const fixedLessons: any[] = [];
         const initialSlotsUsed: Record<string, number> = {};
 
@@ -312,7 +315,8 @@ export async function POST(
                                 content: sd.name || 'Event',
                                 is_makeup: false,
                                  unit_no: 0,
-                                 day_no: 0
+                                 day_no: 0,
+                                 class_id
                              });
                          }
                          return false; 
@@ -329,7 +333,8 @@ export async function POST(
                                 content: sd.name || 'Event',
                                 is_makeup: false,
                                  unit_no: 0,
-                                 day_no: 0
+                                 day_no: 0,
+                                 class_id
                              });
                          }
                          initialSlotsUsed[d] = sessions;
@@ -350,53 +355,69 @@ export async function POST(
                 // 0. Frontend Overrides (Priority)
                 if (inputSpecialDates && inputSpecialDates[dStr]) {
                     const sd = inputSpecialDates[dStr];
-                    if (sd.type === 'no_class') return [];
-                    if (sd.type === 'makeup') {
-                        const count = sd.sessions || 1;
-                        return Array(count).fill(dStr);
-                    }
-                    if (sd.type === 'school_event') {
-                        const sessions = sd.sessions || 0;
-                        if (sessions >= slotsPerDay) {
-                             for(let i=1; i<=slotsPerDay; i++) {
-                                 fixedLessons.push({
-                                     id: `fixed_${dStr}_${i}`,
-                                     date: dStr,
-                                     period: i,
-                                     display_order: 0,
-                                     book_id: 'school_event',
-                                     book_name: sd.name || 'School Event',
-                                     content: 'Event',
-                                     is_makeup: false,
-                                     unit_no: 0,
-                                     day_no: 0
-                                 });
-                             }
-                             return [];
-                        } else if (sessions > 0) {
-                             for(let i=1; i<=sessions; i++) {
-                                 fixedLessons.push({
-                                     id: `fixed_${dStr}_${i}`,
-                                     date: dStr,
-                                     period: i,
-                                     display_order: 0,
-                                     book_id: 'school_event',
-                                     book_name: sd.name || 'School Event',
-                                     content: 'Event',
-                                     is_makeup: false,
-                                     unit_no: 0,
-                                     day_no: 0
-                                 });
-                             }
-                             initialSlotsUsed[dStr] = sessions;
-                             return [dStr];
+                    
+                    // Check if override applies to this class
+                    const appliesToClass = !sd.classes || sd.classes.length === 0 || sd.classes.includes(class_id);
+                    
+                    if (appliesToClass) {
+                        if (sd.type === 'no_class') return [];
+                        if (sd.type === 'makeup') {
+                            const count = sd.sessions || 1;
+                            return Array(count).fill(dStr);
                         }
-                        return []; 
+                        if (sd.type === 'school_event') {
+                            const sessions = sd.sessions || 0;
+                            if (sessions >= slotsPerDay) {
+                                for(let i=1; i<=slotsPerDay; i++) {
+                                    fixedLessons.push({
+                                        id: `fixed_${dStr}_${i}`,
+                                        date: dStr,
+                                        period: i,
+                                        display_order: 0,
+                                        book_id: 'school_event',
+                                        book_name: sd.name || 'School Event',
+                                        content: 'Event',
+                                        is_makeup: false,
+                                        unit_no: 0,
+                                        day_no: 0,
+                                        class_id
+                                    });
+                                }
+                                return [];
+                            } else if (sessions > 0) {
+                                for(let i=1; i<=sessions; i++) {
+                                    fixedLessons.push({
+                                        id: `fixed_${dStr}_${i}`,
+                                        date: dStr,
+                                        period: i,
+                                        display_order: 0,
+                                        book_id: 'school_event',
+                                        book_name: sd.name || 'School Event',
+                                        content: 'Event',
+                                        is_makeup: false,
+                                        unit_no: 0,
+                                        day_no: 0,
+                                        class_id
+                                    });
+                                }
+                                initialSlotsUsed[dStr] = sessions;
+                                return [dStr];
+                            }
+                            return []; 
+                        }
                     }
                 }
 
                 // 1. Holiday/Vacation -> Exclude
-                const isHoliday = holidays.some(h => h.date === dStr);
+                const isHoliday = holidays.some(h => {
+                    if (h.date !== dStr) return false;
+                    // Check affected_classes
+                    if (h.affected_classes && h.affected_classes.length > 0) {
+                        return h.affected_classes.includes(class_id);
+                    }
+                    return true;
+                });
+                
                 if (isHoliday) return [];
 
                 const sd = specialDates.find(s => s.date === dStr);
@@ -425,7 +446,8 @@ export async function POST(
                                  content: 'Event',
                                  is_makeup: false,
                                  unit_no: 0,
-                                 day_no: 0
+                                 day_no: 0,
+                                 class_id
                              });
                          }
                          return [];
@@ -441,7 +463,8 @@ export async function POST(
                                  content: 'Event',
                                  is_makeup: false,
                                  unit_no: 0,
-                                 day_no: 0
+                                 day_no: 0,
+                                 class_id
                              });
                          }
                          initialSlotsUsed[dStr] = sessions;
