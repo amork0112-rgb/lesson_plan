@@ -50,20 +50,6 @@ export async function POST(req: NextRequest) {
       .from('lesson-plans')
       .getPublicUrl(filePath);
 
-    // Create Notice
-    const { error: noticeError } = await supabase.from('notices').insert({
-        title: `${year}년 ${parseInt(month) + 1}월 ${className} 수업계획안`,
-        content: `${year}년 ${parseInt(month) + 1}월 ${className} 수업계획안이 등록되었습니다.\n첨부파일을 확인해주세요.`,
-        class_id: classId,
-        type: 'lesson_plan',
-        file_url: publicUrl,
-        is_active: true
-    });
-
-    if (noticeError) {
-        console.error('Notice creation failed:', noticeError);
-    }
-
     return NextResponse.json({ success: true, url: publicUrl });
   } catch (error: any) {
     console.error('Share Error:', error);

@@ -875,7 +875,7 @@ export default function Home() {
             throw new Error(data.error || 'Failed to share PDF');
         }
 
-        alert('PDF가 성공적으로 업로드 및 공유되었습니다!\n공지사항에서 확인 가능합니다.');
+        alert('PDF가 성공적으로 업로드되었습니다!');
     } catch (e: any) {
         console.error(e);
         alert('공유 실패: ' + e.message);
