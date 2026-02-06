@@ -11,7 +11,7 @@ import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
 import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save, Share } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import html2pdf from 'html2pdf.js';
+// import html2pdf from 'html2pdf.js'; // Dynamically imported to avoid SSR 'self is not defined' error
 import { getSupabase } from '@/lib/supabase';
 
 // Removed exportPdf helper as we use html2pdf now
@@ -842,6 +842,8 @@ export default function Home() {
     };
 
     try {
+        // @ts-ignore
+        const html2pdf = (await import('html2pdf.js')).default;
         // @ts-ignore
         const worker = html2pdf().from(element).set(opt).output('blob');
         return await worker;
