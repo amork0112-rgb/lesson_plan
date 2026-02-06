@@ -87,8 +87,13 @@ export async function POST(req: Request) {
         }
     }
 
+    if (!lessonData.teacher_id) {
+        return NextResponse.json({ error: 'Teacher ID is required' }, { status: 400 });
+    }
+
     // 1. Insert Private Lesson
     const lessonPayload = {
+        teacher_id: lessonData.teacher_id,
         student_id,
         // class_id, // Removed as column likely does not exist in private_lessons
         book_id: lessonData.book_id,

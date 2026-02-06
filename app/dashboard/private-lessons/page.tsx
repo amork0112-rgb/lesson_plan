@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, User, Calendar, BookOpen, Clock, Check } from 'lucide-react';
 import { format } from 'date-fns';
+import { useData } from '@/context/store';
 
 interface PrivateLesson {
   id: string;
@@ -44,6 +45,7 @@ interface Student {
 
 export default function PrivateLessonsPage() {
   const router = useRouter();
+  const { user } = useData();
   const [lessons, setLessons] = useState<PrivateLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -213,7 +215,13 @@ export default function PrivateLessonsPage() {
     }));
 
     try {
+      if (!user?.id) {
+          alert('User session not found. Please log in again.');
+          return;
+      }
+
       const payload = {
+        teacher_id: user.id,
         campus: selectedCampus, // Use campus name (text)
         class_id: selectedClassId,
         student_id: formData.student_id,
