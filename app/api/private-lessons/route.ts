@@ -72,9 +72,9 @@ export async function POST(req: Request) {
     let studentName = lessonData.student_name;
     
     if (!studentName && student_id) {
-        const { data: student } = await supabase.from('students').select('korean_name').eq('id', student_id).single();
+        const { data: student } = await supabase.from('students').select('student_name').eq('id', student_id).single();
         if (student) {
-            studentName = student.korean_name;
+            studentName = student.student_name;
         }
     }
 

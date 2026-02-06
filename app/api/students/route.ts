@@ -22,9 +22,9 @@ export async function GET(req: Request) {
     }
 
     if (search) {
-      // Search by korean_name OR english_name
+      // Search by student_name OR english_first_name
       // Syntax: or(column.operator.value, column.operator.value)
-      query = query.or(`korean_name.ilike.%${search}%,english_name.ilike.%${search}%`);
+      query = query.or(`student_name.ilike.%${search}%,english_first_name.ilike.%${search}%`);
     }
 
     // Limit results for autocomplete

@@ -34,8 +34,8 @@ interface Class {
 
 interface Student {
   id: string;
-  korean_name: string;
-  english_name: string;
+  student_name: string;
+  english_first_name: string;
   campus: string;
   class_id: string;
 }
@@ -113,9 +113,9 @@ export default function PrivateLessonsPage() {
     
     // Don't search if we just selected a student and the name matches
     if (selectedStudent && (
-        studentSearch === selectedStudent.korean_name || 
-        studentSearch === selectedStudent.english_name ||
-        studentSearch === `${selectedStudent.korean_name} (${selectedStudent.english_name})`
+        studentSearch === selectedStudent.student_name || 
+        studentSearch === selectedStudent.english_first_name ||
+        studentSearch === `${selectedStudent.student_name} (${selectedStudent.english_first_name})`
     )) {
         return;
     }
@@ -432,16 +432,16 @@ export default function PrivateLessonsPage() {
                             onClick={() => {
                               setFormData(prev => ({
                                 ...prev,
-                                student_name: `${student.korean_name} (${student.english_name})`,
+                                student_name: `${student.student_name} (${student.english_first_name})`,
                                 student_id: student.id
                               }));
-                              setStudentSearch(`${student.korean_name} (${student.english_name})`);
+                              setStudentSearch(`${student.student_name} (${student.english_first_name})`);
                               setSelectedStudent(student);
                               setFoundStudents([]);
                             }}
                             className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm flex justify-between items-center"
                           >
-                            <span>{student.korean_name} ({student.english_name})</span>
+                            <span>{student.student_name} ({student.english_first_name})</span>
                             <span className="text-xs text-slate-400">{student.campus}</span>
                           </button>
                         ))
