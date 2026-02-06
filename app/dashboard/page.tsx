@@ -1,7 +1,7 @@
 //app/dashboard/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect, useRef, ChangeEvent } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '@/context/store';
 import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
@@ -811,82 +811,6 @@ export default function Home() {
   };
   */
 
-  const autoSharePDF = async (pdfBlob: Blob | File) => {
-    const selectedClass = classes.find(c => c.id === classId);
-    if (!selectedClass) {
-        alert('클래스 정보를 찾을 수 없습니다.');
-        return;
-    }
-
-    const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
-    const m = mPlan ? String(mPlan.month + 1).padStart(2, '0') : 'All';
-    const y = mPlan ? mPlan.year : year;
-    
-    const campus = selectedClass.campus || 'Unknown';
-    const cName = selectedClass.name; 
-    
-    // Use original file name if it's a File object, otherwise generate one
-    const fileName = (pdfBlob instanceof File) ? pdfBlob.name : `${y}-${m}.pdf`;
-    // Ensure uniqueness or overwrite strategy
-    const filePath = `lesson-plans/${y}/${campus}/${cName}/${Date.now()}_${fileName}`;
-
-    const supabase = getSupabase();
-    if (!supabase) {
-        alert('데이터베이스 연결 실패');
-        return;
-    }
-
-    // Upload
-    const { error } = await supabase.storage
-        .from('lesson-plans')
-        .upload(filePath, pdfBlob, {
-            contentType: 'application/pdf',
-            upsert: true
-        });
-        
-    if (error) {
-        console.error('Upload error:', error);
-        alert('업로드 실패: ' + error.message);
-        throw error;
-    }
-    
-    const { data } = supabase.storage
-        .from('lesson-plans')
-        .getPublicUrl(filePath);
-        
-    // Insert DB
-    await supabase.from('lesson_plan_shares').insert({
-        class_id: selectedClass.id,
-        campus: campus,
-        class_name: cName,
-        year: y,
-        month: mPlan ? mPlan.month + 1 : null,
-        pdf_url: data.publicUrl
-    });
-
-    // 3. Create Notice (Auto-Post)
-    try {
-        await fetch("/api/teacher/notices", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                title: `📘 ${cName} ${y}년 ${m}월 수업계획안`,
-                content: `
-이번 달 수업 계획안이 업로드되었습니다.
-
-📎 PDF 바로보기
-${data.publicUrl}
-                `.trim(),
-                class_ids: [selectedClass.id],
-            }),
-        });
-        alert('성공적으로 공유되었습니다!');
-    } catch (err) {
-        console.error('Failed to create notice:', err);
-        alert('파일은 업로드되었으나 알림 생성에 실패했습니다.');
-    }
-  };
-
   const handleDownloadPDF = () => {
     if (!isGenerated) {
         alert('먼저 Preview Plan을 실행해주세요.');
@@ -905,33 +829,42 @@ ${data.publicUrl}
     }, 1000);
   };
 
-  // Hidden file input ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleSharePDF = async () => {
     if (!generatedPlan || generatedPlan.length === 0) {
         alert('먼저 Preview Plan을 실행해주세요.');
         return;
     }
-    
-    if (confirm('방금 다운로드(인쇄)한 PDF 파일을 선택하여 공유하시겠습니까?')) {
-        fileInputRef.current?.click();
-    }
-  };
 
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
+    const m = mPlan ? mPlan.month : 0;
+    const y = mPlan ? mPlan.year : year;
+
+    if (!confirm(`${y}년 ${m + 1}월 수업계획안 PDF를 생성하고 학부모에게 공유하시겠습니까?`)) return;
 
     setIsSharing(true);
     try {
-        await autoSharePDF(file);
+        const res = await fetch('/api/pdf/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                classId,
+                year: y,
+                month: m
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to share PDF');
+        }
+
+        alert('PDF가 성공적으로 생성 및 공유되었습니다!\n공지사항에서 확인 가능합니다.');
     } catch (e: any) {
         console.error(e);
+        alert('공유 실패: ' + e.message);
     } finally {
         setIsSharing(false);
-        // Reset input
-        if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -1277,15 +1210,6 @@ ${data.publicUrl}
   // 미리보기 초기화는 연도/시작월 변경 이벤트 핸들러에서 수행
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      {/* Hidden File Input for Manual Share */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        style={{ display: 'none' }} 
-        accept="application/pdf"
-        onChange={handleFileChange}
-      />
-      
       {/* Header / No Print */}
       <div className="no-print">
         <header className="mb-8">
