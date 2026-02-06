@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     }
 
     if (classId) {
-      query = query.eq('class_id', classId);
+      query = query.eq('main_class', classId);
     }
 
     if (search) {

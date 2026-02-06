@@ -37,7 +37,7 @@ interface Student {
   student_name: string;
   english_first_name: string;
   campus: string;
-  class_id: string;
+  main_class: string;
 }
 
 export default function PrivateLessonsPage() {
