@@ -56,13 +56,25 @@
 }
 
 /* PDF / Canvas Capture Safe Mode */
-.pdf-safe *,
-.pdf-safe *::before,
-.pdf-safe *::after {
-  color: #000 !important;
-  background-color: #fff !important;
-  border-color: #e5e7eb !important;
-  box-shadow: none !important;
-  text-shadow: none !important;
+/* PDF SAFE MODE — lab() 완전 차단 */ 
+.pdf-safe, 
+.pdf-safe * { 
+  color: #000 !important; 
+  background: #fff !important; 
+  background-color: #fff !important; 
+  border-color: #ccc !important; 
+  box-shadow: none !important; 
+  text-shadow: none !important; 
+  outline: none !important; 
   filter: none !important;
+} 
+
+/* Tailwind ring 제거 */ 
+.pdf-safe [class*="ring"] { 
+  box-shadow: none !important; 
+} 
+
+/* Tailwind shadow 제거 */ 
+.pdf-safe [class*="shadow"] { 
+  box-shadow: none !important; 
 }

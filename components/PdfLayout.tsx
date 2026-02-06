@@ -22,12 +22,13 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
   // Helper for colors based on book name keywords
   const getBookStyle = (name: string) => {
     const n = name.toLowerCase();
-    if (n.includes('wonder') || n.includes('reading')) return 'text-lime-600';
-    if (n.includes('speak') || n.includes('english')) return 'text-sky-500';
-    if (n.includes('word') || n.includes('voca')) return 'text-pink-400';
-    if (n.includes('scp') || n.includes('writing')) return 'text-orange-400';
-    if (n.includes('grammar')) return 'text-purple-500';
-    return 'text-gray-800';
+    // Use Safe Hex Colors for PDF
+    if (n.includes('wonder') || n.includes('reading')) return { color: '#65a30d' }; // lime-600
+    if (n.includes('speak') || n.includes('english')) return { color: '#0ea5e9' }; // sky-500
+    if (n.includes('word') || n.includes('voca')) return { color: '#f472b6' }; // pink-400
+    if (n.includes('scp') || n.includes('writing')) return { color: '#fb923c' }; // orange-400
+    if (n.includes('grammar')) return { color: '#a855f7' }; // purple-500
+    return { color: '#1f2937' }; // gray-800
   };
 
   let groups: { key: string; items: LessonPlan[]; year: number; month: number }[] = [];
@@ -58,7 +59,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
   }
 
   return (
-    <div id="pdf-root" className="print-only bg-white font-sans">
+    <div id="pdf-root" className="print-only pdf-safe font-sans" style={{ backgroundColor: '#fff', color: '#000' }}>
       <style jsx global>{`
         @media print {
           @page {
@@ -75,15 +76,15 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
       `}</style>
 
       {/* Cover Page */}
-      <div className="w-full h-screen flex flex-col justify-center items-center print:break-after-page bg-white">
+      <div className="w-full h-screen flex flex-col justify-center items-center print:break-after-page" style={{ backgroundColor: '#fff' }}>
           <div className="text-center transform scale-125">
              {/* Logo */}
             <div className="flex items-center justify-center mb-8">
                <img src="/logo.png" alt="FRAGE EDU" className="h-24 object-contain" />
             </div>
             
-            <h1 className="text-5xl font-extrabold text-gray-800 mb-2 tracking-tight">{className}</h1>
-            <h2 className="text-2xl font-medium text-gray-500 uppercase tracking-widest">Lesson Plan</h2>
+            <h1 className="text-5xl font-extrabold mb-2 tracking-tight" style={{ color: '#1f2937' }}>{className}</h1>
+            <h2 className="text-2xl font-medium uppercase tracking-widest" style={{ color: '#6b7280' }}>Lesson Plan</h2>
           </div>
       </div>
 
@@ -115,14 +116,14 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
               <div className="text-center mb-6 px-4">
                 <div className="flex justify-between items-end pb-2">
                     <div className="text-left">
-                        <h1 className="text-3xl font-extrabold text-[#310080] tracking-tight">{className}</h1>
+                        <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#310080' }}>{className}</h1>
                     </div>
                     <div className="text-right flex flex-col items-end">
-                        <h2 className="text-2xl font-bold text-gray-900 leading-none">
-                            {MONTH_NAMES[month]} <span className="text-gray-400 text-lg font-medium">[{monthDatesRange}]</span>
+                        <h2 className="text-2xl font-bold leading-none" style={{ color: '#111827' }}>
+                            {MONTH_NAMES[month]} <span className="text-lg font-medium" style={{ color: '#9ca3af' }}>[{monthDatesRange}]</span>
                         </h2>
                         {holidays && (
-                            <span className="text-red-500 font-bold text-xs mt-1 bg-red-50 px-2 py-0.5 rounded-full">
+                            <span className="font-bold text-xs mt-1 px-2 py-0.5 rounded-full" style={{ color: '#dc2626', backgroundColor: '#fef2f2' }}>
                                 {holidays}
                             </span>
                         )}
@@ -157,9 +158,9 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                           return (
                             <div key={dStr} className="flex flex-col min-h-[120px]">
                               {/* Date Header - Minimal Underline */}
-                              <div className="mb-3 border-b-2 border-gray-200 pb-1 flex justify-between items-baseline">
-                                <span className="text-xl font-bold text-gray-800">{dateText.split(' ')[0]}</span>
-                                <span className="text-sm font-medium text-gray-500 uppercase">{dateText.split(' ')[1]}</span>
+                              <div className="mb-3 pb-1 flex justify-between items-baseline" style={{ borderBottom: '2px solid #e5e7eb' }}>
+                                <span className="text-xl font-bold" style={{ color: '#1f2937' }}>{dateText.split(' ')[0]}</span>
+                                <span className="text-sm font-medium uppercase" style={{ color: '#6b7280' }}>{dateText.split(' ')[1]}</span>
                               </div>
                               
                               {/* Content */}
@@ -168,21 +169,25 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                                   if (item.book_id === 'no_class' || item.book_id === 'school_event') {
                                       const isNoClass = item.book_id === 'no_class';
                                       return (
-                                        <div key={item.id} className={`w-full text-center py-1.5 rounded-md ${isNoClass ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                                        <div key={item.id} className="w-full text-center py-1.5 rounded-md" 
+                                            style={{ 
+                                                backgroundColor: isNoClass ? '#fef2f2' : '#eff6ff', 
+                                                color: isNoClass ? '#dc2626' : '#2563eb' 
+                                            }}>
                                             <div className="font-bold text-xs">{item.content}</div>
                                         </div>
                                       );
                                   }
 
                                   const displayName = item.books?.name || item.book_name || '';
-                                  const colorClass = getBookStyle(displayName);
+                                  const colorStyle = getBookStyle(displayName);
                                   
                                   return (
                                     <div key={item.id} className="w-full leading-snug">
-                                      <div className={`font-bold text-sm ${colorClass}`}>
+                                      <div className="font-bold text-sm" style={colorStyle}>
                                         {displayName}
                                       </div>
-                                      <div className="text-xs text-gray-600 font-medium pl-1 border-l-2 border-gray-100">
+                                      <div className="text-xs font-medium pl-1" style={{ color: '#4b5563', borderLeft: '2px solid #f3f4f6' }}>
                                         {item.content}
                                       </div>
                                     </div>

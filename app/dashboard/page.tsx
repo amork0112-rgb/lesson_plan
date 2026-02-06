@@ -817,14 +817,13 @@ export default function Home() {
     const opt = {
         margin: 0,
         filename: 'lesson-plan.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
+        image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { 
             scale: 2, 
             useCORS: true, 
-            scrollY: 0,
+            backgroundColor: '#ffffff',
         },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
     try {
@@ -930,9 +929,6 @@ ${data.publicUrl}
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
-        // Auto-share removed from download flow as per request
-        // await autoSharePDF(pdfBlob);
         
     } catch (e: any) {
         console.error(e);
