@@ -1,7 +1,7 @@
 //app/dashboard/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, ChangeEvent } from 'react';
 import { useData } from '@/context/store';
 import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
@@ -906,7 +906,7 @@ ${data.publicUrl}
   };
 
   // Hidden file input ref
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSharePDF = async () => {
     if (!generatedPlan || generatedPlan.length === 0) {
@@ -919,7 +919,7 @@ ${data.publicUrl}
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
