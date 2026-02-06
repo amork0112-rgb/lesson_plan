@@ -815,7 +815,28 @@ export default function Home() {
         margin: 0,
         filename: 'lesson-plan.pdf',
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+        html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            scrollY: 0,
+            onclone: (clonedDoc: Document) => {
+                const allElements = clonedDoc.querySelectorAll('*');
+                allElements.forEach((el) => {
+                    const style = window.getComputedStyle(el);
+                    
+                    // Force RGB for colors
+                    if (style.color && (style.color.includes('lab(') || style.color.includes('oklch('))) {
+                        (el as HTMLElement).style.color = '#000000';
+                    }
+                    if (style.backgroundColor && (style.backgroundColor.includes('lab(') || style.backgroundColor.includes('oklch('))) {
+                        (el as HTMLElement).style.backgroundColor = '#ffffff';
+                    }
+                    if (style.borderColor && (style.borderColor.includes('lab(') || style.borderColor.includes('oklch('))) {
+                        (el as HTMLElement).style.borderColor = '#e5e7eb'; // gray-200
+                    }
+                });
+            }
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     };
@@ -872,6 +893,27 @@ export default function Home() {
         month: mPlan ? mPlan.month + 1 : null,
         pdf_url: data.publicUrl
     });
+
+    // 3. Create Notice (Auto-Post)
+    try {
+        await fetch("/api/teacher/notices", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: `📘 ${cName} ${y}년 ${m}월 수업계획안`,
+                content: `
+이번 달 수업 계획안이 업로드되었습니다.
+
+📎 PDF 바로보기
+${data.publicUrl}
+                `.trim(),
+                class_ids: [selectedClass.id],
+            }),
+        });
+    } catch (err) {
+        console.error('Failed to create notice:', err);
+        // We don't block the flow if notice fails, just log it
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -1364,6 +1406,35 @@ export default function Home() {
         <header className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Plan Generator</h1>
           <p className="text-gray-500">Configure monthly curriculum and track remaining sessions.</p>
+          
+          {/* Usage Guide */}
+          <div className="mt-4 flex flex-wrap gap-2 text-sm text-gray-600 bg-blue-50 p-4 rounded-lg border border-blue-100 items-center">
+            <span className="font-semibold text-blue-800 mr-2">Usage Steps:</span>
+            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
+                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">1</span>
+                <span>Preview Plan</span>
+            </span>
+            <span className="text-gray-400">→</span>
+            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
+                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">2</span>
+                <span>Adjust (Drag & Drop)</span>
+            </span>
+            <span className="text-gray-400">→</span>
+            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
+                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">3</span>
+                <span>Save All Changes</span>
+            </span>
+            <span className="text-gray-400">→</span>
+            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
+                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">4</span>
+                <span>Download PDF</span>
+            </span>
+             <span className="text-gray-400">→</span>
+            <span className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm">
+                <span className="w-5 h-5 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full text-xs font-bold">5</span>
+                <span>Auto-Shared</span>
+            </span>
+          </div>
         </header>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
