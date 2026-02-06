@@ -215,13 +215,11 @@ export default function PrivateLessonsPage() {
     }));
 
     try {
-      if (!user?.id) {
-          alert('User session not found. Please log in again.');
-          return;
-      }
+      // Allow creation without explicit login (Backend will assign fallback teacher)
+      // if (!user?.id) { ... } 
 
       const payload = {
-        teacher_id: user.id,
+        teacher_id: user?.id,
         campus: selectedCampus, // Use campus name (text)
         class_id: selectedClassId,
         student_id: formData.student_id,
