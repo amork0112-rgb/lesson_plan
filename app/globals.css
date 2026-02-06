@@ -55,6 +55,27 @@
   }
 }
 
+/* Print Utilities */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* Ensure background colors are printed */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+
 /* PDF / Canvas Capture Safe Mode */
 /* PDF SAFE MODE — lab() 완전 차단 */ 
 .pdf-safe {

@@ -804,6 +804,8 @@ export default function Home() {
 
   // Removed auto-download effect to avoid setState in effect
 
+  /* 
+  // REMOVED: html2pdf implementation causing lab() color errors
   const generatePlanPDF = async (): Promise<Blob> => {
     // Dynamically import html2pdf to ensure it only runs on client side
     const html2pdf = (await import('html2pdf.js')).default;
@@ -830,8 +832,13 @@ export default function Home() {
     const worker = html2pdf().set(opt).from(element).output('blob');
     return await worker;
   };
+  */
 
   const autoSharePDF = async (pdfBlob: Blob) => {
+    // Temporarily disabled
+    console.log('Auto-share disabled for print-only mode');
+    return;
+    /*
     const selectedClass = classes.find(c => c.id === classId);
     if (!selectedClass) return;
 
@@ -895,49 +902,30 @@ ${data.publicUrl}
         console.error('Failed to create notice:', err);
         // We don't block the flow if notice fails, just log it
     }
+    */
   };
 
-  const handleDownloadPDF = async () => {
-    if (!generatedPlan || generatedPlan.length === 0) {
-        alert('Please generate the plan first.');
+  const handleDownloadPDF = () => {
+    if (!isGenerated) {
+        alert('먼저 Preview Plan을 실행해주세요.');
         return;
     }
-    
-    setIsDownloading(true);
-    try {
-        // Dynamically import html2pdf to ensure it only runs on client side
-        const html2pdf = (await import('html2pdf.js')).default;
 
-        const element = document.getElementById('pdf-content');
-        if (!element) {
-            throw new Error('PDF content not found');
-        }
+    // PDF 안전모드 강제
+    document.body.classList.add('pdf-safe');
 
-        const opt = {
-            margin: 0,
-            filename: `LessonPlan_${className}_${year}.pdf`,
-            image: { type: 'jpeg' as const, quality: 0.98 },
-            html2canvas: { 
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                letterRendering: true,
-                allowTaint: true
-            },
-            jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
-        };
+    // 프린트
+    window.print();
 
-        await html2pdf().set(opt).from(element).save();
-        
-    } catch (e: any) {
-        console.error(e);
-        alert('Error: ' + e.message);
-    } finally {
-        setIsDownloading(false);
-    }
+    // 복구
+    setTimeout(() => {
+        document.body.classList.remove('pdf-safe');
+    }, 1000);
   };
 
   const handleSharePDF = async () => {
+    alert('현재 공유 기능은 점검 중입니다. PDF를 다운로드(인쇄)하여 수동으로 공유해주세요.');
+    /*
     if (!generatedPlan || generatedPlan.length === 0) {
         alert('Please generate the plan first.');
         return;
@@ -956,6 +944,7 @@ ${data.publicUrl}
     } finally {
         setIsSharing(false);
     }
+    */
   };
 
   const handleGenerate = async (targetMonthId?: string) => {
@@ -2167,15 +2156,8 @@ ${data.publicUrl}
             )}
           </div>
           
-          {/* Hidden PDF Render Container */}
-          <div id="pdf-content" className="pdf-safe" style={{ 
-              position: 'absolute', 
-              left: '-9999px', 
-              top: 0, 
-              width: '210mm',
-              backgroundColor: '#ffffff',
-              color: '#000000'
-          }}>
+          {/* Hidden PDF Render Container (Visible only in Print) */}
+          <div id="pdf-content" className="print-only pdf-safe">
               <PdfLayout
                 lessons={generatedPlan}
                 className={className}
