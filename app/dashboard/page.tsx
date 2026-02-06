@@ -2168,7 +2168,14 @@ ${data.publicUrl}
           </div>
           
           {/* Hidden PDF Render Container */}
-          <div id="pdf-content" style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm' }}>
+          <div id="pdf-content" style={{ 
+              position: 'absolute', 
+              left: '-9999px', 
+              top: 0, 
+              width: '210mm',
+              backgroundColor: '#ffffff',
+              color: '#000000'
+          }}>
               <PdfLayout
                 lessons={generatedPlan}
                 className={className}
