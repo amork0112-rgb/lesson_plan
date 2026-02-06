@@ -169,6 +169,7 @@ export default function Home() {
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const [selectedCampus, setSelectedCampus] = useState<string>('All');
   const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Compute unique campuses
   const campuses = useMemo(() => {
@@ -804,38 +805,30 @@ export default function Home() {
   // Removed auto-download effect to avoid setState in effect
 
   const generatePlanPDF = async (): Promise<Blob> => {
-    const element = document.getElementById('pdf-root');
-    if (!element) throw new Error('PDF Element not found');
-    
-    // Ensure visibility for capture
-    const wasPrintOnly = element.classList.contains('print-only');
-    if (wasPrintOnly) element.classList.remove('print-only');
-    
-    // Apply Safe Mode
-    element.classList.add('pdf-safe');
+    // Dynamically import html2pdf to ensure it only runs on client side
+    const html2pdf = (await import('html2pdf.js')).default;
+
+    const element = document.getElementById('pdf-content');
+    if (!element) {
+        throw new Error('PDF content not found');
+    }
 
     const opt = {
         margin: 0,
-        filename: 'lesson-plan.pdf',
-        image: { type: 'jpeg', quality: 0.95 },
+        filename: `LessonPlan_${className}_${year}.pdf`,
+        image: { type: 'jpeg' as const, quality: 0.98 },
         html2canvas: { 
-            scale: 2, 
-            useCORS: true, 
-            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            letterRendering: true,
+            allowTaint: true
         },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
     };
 
-    try {
-        // @ts-ignore
-        const html2pdf = (await import('html2pdf.js')).default;
-        // @ts-ignore
-        const worker = html2pdf().from(element).set(opt).output('blob');
-        return await worker;
-    } finally {
-        element.classList.remove('pdf-safe');
-        if (wasPrintOnly) element.classList.add('print-only');
-    }
+    const worker = html2pdf().set(opt).from(element).output('blob');
+    return await worker;
   };
 
   const autoSharePDF = async (pdfBlob: Blob) => {
@@ -910,7 +903,7 @@ ${data.publicUrl}
         return;
     }
     
-    setIsSharing(true);
+    setIsDownloading(true);
     try {
         // Dynamically import html2pdf to ensure it only runs on client side
         const html2pdf = (await import('html2pdf.js')).default;
@@ -940,7 +933,7 @@ ${data.publicUrl}
         console.error(e);
         alert('Error: ' + e.message);
     } finally {
-        setIsSharing(false);
+        setIsDownloading(false);
     }
   };
 
@@ -1489,16 +1482,16 @@ ${data.publicUrl}
                 </button>
                 <button 
                     onClick={handleDownloadPDF}
-                    disabled={!isGenerated}
+                    disabled={!isGenerated || isDownloading}
                     className={`
                         px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
-                        ${!isGenerated
+                        ${!isGenerated || isDownloading
                             ? 'bg-gray-300 cursor-not-allowed'
                             : 'bg-gray-800 hover:bg-gray-900 hover:shadow-md active:transform active:scale-95'}
                     `}
                 >
                     <Download className="w-4 h-4" />
-                    Download PDF
+                    {isDownloading ? 'Downloading...' : 'Download PDF'}
                 </button>
                 <button 
                     onClick={handleSharePDF}
@@ -1974,7 +1967,7 @@ ${data.publicUrl}
               className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 font-medium transition-colors"
             >
               <Download className="h-4 w-4" />
-              {isSharing ? 'Saving...' : 'Download PDF'}
+              {isDownloading ? 'Downloading...' : 'Download PDF'}
             </button>
           </div>
 
