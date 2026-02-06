@@ -6,45 +6,63 @@ import { getSupabaseService } from '@/lib/supabase-service';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const supabase = getSupabaseService();
-  const { data, error } = await supabase
-    .from('private_lessons')
-    .select('*, students(student_name, english_first_name), private_lesson_schedules(day_of_week, time), private_lesson_books(book_id)')
-    .order('created_at', { ascending: false });
+  try {
+    const supabase = getSupabaseService();
+    const { data, error } = await supabase
+        .from('private_lessons')
+        .select('*, students(student_name, english_first_name), private_lesson_schedules(day_of_week, time), private_lesson_books(book_id)')
+        .order('created_at', { ascending: false });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+    if (error) {
+        console.error('Supabase Error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-  // Transform data to match frontend expectation (lesson.schedule as object)
-  const result = data?.map(lesson => {
-    const schedule: Record<string, string> = {};
-    const DAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Transform data to match frontend expectation (lesson.schedule as object)
+    const result = data?.map(lesson => {
+        const schedule: Record<string, string> = {};
+        const DAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    if (lesson.private_lesson_schedules) {
-        lesson.private_lesson_schedules.forEach((s: any) => {
-            if (s.day_of_week !== undefined && DAY_MAP[s.day_of_week]) {
-                schedule[DAY_MAP[s.day_of_week]] = s.time;
+        if (lesson.private_lesson_schedules) {
+            lesson.private_lesson_schedules.forEach((s: any) => {
+                if (s.day_of_week !== undefined && DAY_MAP[s.day_of_week]) {
+                    schedule[DAY_MAP[s.day_of_week]] = s.time;
+                }
+            });
+        }
+
+        // Map books
+        const books = lesson.private_lesson_books?.map((b: any) => b.book_id) || [];
+        // Include legacy book_id if not present
+        if (lesson.book_id && !books.includes(lesson.book_id)) {
+            books.push(lesson.book_id);
+        }
+
+        // Safely handle student name mapping
+        let sName = 'Unknown';
+        if (lesson.students) {
+            if (Array.isArray(lesson.students)) {
+                 if (lesson.students.length > 0) sName = lesson.students[0].student_name;
+            } else {
+                 sName = (lesson.students as any).student_name;
             }
-        });
-    }
+        } else if (lesson.student_name) {
+            sName = lesson.student_name;
+        }
 
-    // Map books
-    const books = lesson.private_lesson_books?.map((b: any) => b.book_id) || [];
-    // Include legacy book_id if not present
-    if (lesson.book_id && !books.includes(lesson.book_id)) {
-        books.push(lesson.book_id);
-    }
+        return {
+        ...lesson,
+        student_name: sName,
+        schedule, // Frontend expects this format for rendering
+        book_ids: books,
+        };
+    });
 
-    return {
-      ...lesson,
-      student_name: lesson.students?.student_name || lesson.student_name || 'Unknown',
-      schedule, // Frontend expects this format for rendering
-      book_ids: books,
-    };
-  });
-
-  return NextResponse.json(result);
+    return NextResponse.json(result);
+  } catch (e: any) {
+    console.error('GET /api/private-lessons error:', e);
+    return NextResponse.json({ error: e.message || 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {

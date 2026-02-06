@@ -1489,10 +1489,10 @@ ${data.publicUrl}
                 </button>
                 <button 
                     onClick={handleDownloadPDF}
-                    disabled={monthPlans.length === 0}
+                    disabled={!isGenerated}
                     className={`
                         px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
-                        ${monthPlans.length === 0
+                        ${!isGenerated
                             ? 'bg-gray-300 cursor-not-allowed'
                             : 'bg-gray-800 hover:bg-gray-900 hover:shadow-md active:transform active:scale-95'}
                     `}
@@ -1502,10 +1502,10 @@ ${data.publicUrl}
                 </button>
                 <button 
                     onClick={handleSharePDF}
-                    disabled={monthPlans.length === 0 || isSharing}
+                    disabled={!isGenerated || isSharing}
                     className={`
                         px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
-                        ${monthPlans.length === 0 || isSharing
+                        ${!isGenerated || isSharing
                             ? 'bg-gray-300 cursor-not-allowed'
                             : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md active:transform active:scale-95'}
                     `}
@@ -1954,6 +1954,7 @@ ${data.publicUrl}
             }
             @media screen {
               .print-only { display: none !important; }
+              #pdf-content .print-only { display: block !important; }
             }
           `}</style>
           <div id="results" className="mt-12 bg-white shadow-lg rounded-xl border border-gray-200 scroll-mt-8 max-h-[85vh] overflow-y-auto">
@@ -2173,15 +2174,17 @@ ${data.publicUrl}
             )}
           </div>
           
-          {/* Print-only PDF layout */}
-          <PdfLayout
-            lessons={generatedPlan}
-            className={className}
-            selectedDays={selectedDays}
-            timeRange={`${startTime}~${endTime}`}
-            monthPlans={monthPlans}
-            planDates={planDates}
-          />
+          {/* Hidden PDF Render Container */}
+          <div id="pdf-content" style={{ position: 'absolute', left: '-9999px', top: 0, width: '210mm' }}>
+              <PdfLayout
+                lessons={generatedPlan}
+                className={className}
+                selectedDays={selectedDays}
+                timeRange={`${startTime}~${endTime}`}
+                monthPlans={monthPlans}
+                planDates={planDates}
+              />
+          </div>
         </div>
         </>
       )}
