@@ -9,7 +9,7 @@ import { parseLocalDate } from '@/lib/date';
 import { startOfWeek } from 'date-fns';
 import PdfLayout from '@/components/PdfLayout';
 import { BookAllocation, LessonPlan, Weekday, Book, SpecialDate } from '@/types';
-import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save } from 'lucide-react';
+import { Play, Download, Trash2, Plus, Calendar as CalendarIcon, Copy, XCircle, ArrowUp, ArrowDown, HelpCircle, GripVertical, Save, Share } from 'lucide-react';
 
 // import html2pdf from 'html2pdf.js'; // Dynamically imported to avoid SSR 'self is not defined' error
 import { getSupabase } from '@/lib/supabase';
@@ -931,10 +931,30 @@ ${data.publicUrl}
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // 2. Share
-        await autoSharePDF(pdfBlob);
-        alert('PDF downloaded and saved to cloud successfully!');
+        // Auto-share removed from download flow as per request
+        // await autoSharePDF(pdfBlob);
         
+    } catch (e: any) {
+        console.error(e);
+        alert('Error: ' + e.message);
+    } finally {
+        setIsSharing(false);
+    }
+  };
+
+  const handleSharePDF = async () => {
+    if (!generatedPlan || generatedPlan.length === 0) {
+        alert('Please generate the plan first.');
+        return;
+    }
+    
+    if (!confirm('PDF를 학부모에게 공유하시겠습니까?')) return;
+
+    setIsSharing(true);
+    try {
+        const pdfBlob = await generatePlanPDF();
+        await autoSharePDF(pdfBlob);
+        alert('PDF가 학부모에게 공유되었습니다.');
     } catch (e: any) {
         console.error(e);
         alert('Error: ' + e.message);
@@ -1476,7 +1496,20 @@ ${data.publicUrl}
                     `}
                 >
                     <Download className="w-4 h-4" />
-                    {isSharing ? 'Saving...' : 'Download PDF'}
+                    Download PDF
+                </button>
+                <button 
+                    onClick={handleSharePDF}
+                    disabled={monthPlans.length === 0 || isSharing}
+                    className={`
+                        px-4 py-2 rounded-lg text-sm font-bold text-white shadow-sm transition-all flex items-center gap-2
+                        ${monthPlans.length === 0 || isSharing
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md active:transform active:scale-95'}
+                    `}
+                >
+                    <Share className="w-4 h-4" />
+                    {isSharing ? '공유 중...' : 'Share PDF'}
                 </button>
 
              </div>
