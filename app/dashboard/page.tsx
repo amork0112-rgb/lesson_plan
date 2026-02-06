@@ -839,7 +839,7 @@ export default function Home() {
     const m = mPlan ? mPlan.month : 0;
     const y = mPlan ? mPlan.year : year;
 
-    if (!confirm(`${y}년 ${m + 1}월 수업계획안 PDF를 생성하고 학부모에게 공유하시겠습니까?`)) return;
+    if (!confirm(`${y}년 ${className}반 수업계획안 PDF를 생성하고 학부모에게 공유하시겠습니까?`)) return;
 
     setIsSharing(true);
     try {
