@@ -1,7 +1,7 @@
 //app/dashboard/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '@/context/store';
 import { calculateBookDistribution } from '@/lib/logic';
 import { generateLessons } from '@/lib/lessonEngine';
@@ -829,70 +829,44 @@ export default function Home() {
     }, 1000);
   };
 
-  const handleSharePDF = async () => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSharePDF = () => {
     if (!generatedPlan || generatedPlan.length === 0) {
         alert('먼저 Preview Plan을 실행해주세요.');
         return;
     }
 
     const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
+    const y = mPlan ? mPlan.year : year;
+
+    if (confirm(`방금 다운로드한 "${y}년 ${className}반 수업계획안" PDF 파일을 선택해 공유하시겠습니까?`)) {
+        fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so same file can be selected again if needed
+    e.target.value = '';
+
+    const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
     const m = mPlan ? mPlan.month : 0;
     const y = mPlan ? mPlan.year : year;
 
-    if (!confirm(`${y}년 ${className}반 수업계획안 PDF를 생성하고 학부모에게 공유하시겠습니까?`)) return;
-
     setIsSharing(true);
     try {
-        // 1. Load html2pdf dynamically
-        const html2pdf = (await import('html2pdf.js')).default;
-
-        // 2. Get the PDF content element
-        const element = document.getElementById('pdf-content');
-        if (!element) throw new Error('PDF content not found');
-
-        // 3. Clone and setup for capture
-        // We clone to avoid messing with the actual DOM and to make it visible
-        const clone = element.cloneNode(true) as HTMLElement;
-        
-        // Remove 'print-only' class from clone and its children to make it visible
-        clone.classList.remove('print-only');
-        const children = clone.querySelectorAll('.print-only');
-        children.forEach(child => child.classList.remove('print-only'));
-        
-        // Apply specific styles for capture
-        clone.style.display = 'block';
-        clone.style.position = 'absolute';
-        clone.style.top = '-9999px';
-        clone.style.left = '-9999px';
-        clone.style.width = '210mm'; // A4 width
-        clone.style.backgroundColor = 'white';
-        
-        document.body.appendChild(clone);
-
-        // 4. Generate PDF Blob
-        const opt = {
-            margin: 0,
-            filename: `lesson-plan-${classId}-${y}-${m}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 } as const,
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } as const
-        };
-
-        const pdfBlob = await html2pdf().set(opt).from(clone).output('blob');
-
-        // 5. Cleanup
-        document.body.removeChild(clone);
-
-        // 6. Upload to Server
         const formData = new FormData();
-        formData.append('file', pdfBlob);
+        formData.append('file', file);
         formData.append('classId', classId);
         formData.append('year', y.toString());
         formData.append('month', m.toString());
 
         const res = await fetch('/api/pdf/share', {
             method: 'POST',
-            body: formData, // Auto-sets Content-Type to multipart/form-data
+            body: formData,
         });
         
         const data = await res.json();
@@ -901,7 +875,7 @@ export default function Home() {
             throw new Error(data.error || 'Failed to share PDF');
         }
 
-        alert('PDF가 성공적으로 생성 및 공유되었습니다!\n공지사항에서 확인 가능합니다.');
+        alert('PDF가 성공적으로 업로드 및 공유되었습니다!\n공지사항에서 확인 가능합니다.');
     } catch (e: any) {
         console.error(e);
         alert('공유 실패: ' + e.message);
@@ -1445,6 +1419,15 @@ export default function Home() {
                     <Download className="w-4 h-4" />
                     {isDownloading ? 'Downloading...' : 'Download PDF'}
                 </button>
+
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                  accept="application/pdf" 
+                  hidden 
+                />
+
                 <button 
                     onClick={handleSharePDF}
                     disabled={!isGenerated || isSharing}
