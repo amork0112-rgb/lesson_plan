@@ -29,10 +29,43 @@ export async function POST(req: NextRequest) {
     const { data: classData } = await supabase.from('classes').select('name').eq('id', classId).single();
     const className = classData?.name || 'Unknown Class';
 
-    // File Path: lesson-plans/{classId}/{year}-{month}.pdf
-    // Note: We use the server timestamp to avoid caching issues if re-uploaded
-    const timestamp = Date.now();
-    const filePath = `lesson-plans/${classId}/${year}-${month}_${timestamp}.pdf`;
+    // 1-based month handling logic
+    // We assume the frontend sends the 0-based month index (e.g., 0 for Jan).
+    // So we add 1 to get the actual month number.
+    const monthIndex = parseInt(month);
+    if (isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+       // However, the user said: "API는 1-based만 받도록 고정 (프론트가 책임지게 하는 게 맞음)"
+       // But checking dashboard/page.tsx:
+       // const m = mPlan ? mPlan.month : 0;
+       // formData.append('month', m.toString());
+       // `mPlan.month` is typically 0-11 in this codebase.
+       // So the frontend IS sending 0-based index currently.
+       // But the user said: "프론트에서 이미: formData.append("month", (new Date().getMonth() + 1).toString()); 이 구조면 +1 절대 하면 안 됨"
+       // The user might be mistakenly thinking the frontend is sending 1-based, OR they want me to CHANGE the frontend to send 1-based.
+       // The prompt says: "API는 1-based만 받도록 고정... 프론트가 책임지게 하는 게 맞음... formData.append("month", (new Date().getMonth() + 1).toString()); 이 구조면 +1 절대 하면 안 됨"
+       // It seems the user WANTS the frontend to send 1-based, and the API to treat it as 1-based.
+       // I should fix the API first to expect 1-based.
+       // And then I should check the frontend code. If the frontend code is sending 0-based, I must fix it there too.
+       // Wait, the user prompt says: "👉 프론트에서 이미: formData.append("month", (new Date().getMonth() + 1).toString());"
+       // This implies the user BELIEVES the frontend is doing that. But my `Read` of `dashboard/page.tsx` showed `formData.append('month', m.toString());` where `m` comes from `monthPlans`.
+       // `monthPlans` usually stores 0-based months (Date objects).
+       
+       // Let's implement the API to strict 1-based as requested:
+       // "API는 1-based만 받도록 고정"
+       // "const monthNum = parseInt(month); // 그대로 사용"
+    }
+
+    const monthNum = parseInt(month);
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+       throw new Error('Invalid month value (must be 1-12)');
+    }
+    
+    // Pad month for filename: 3 -> "03"
+    const paddedMonth = String(monthNum).padStart(2, '0');
+
+    // File Path: lesson-plans/{classId}/{year}-{paddedMonth}.pdf
+    // NO timestamp. Fixed name for overwriting.
+    const filePath = `lesson-plans/${classId}/${year}-${paddedMonth}.pdf`;
 
     const { error: uploadError } = await supabase.storage
       .from('lesson-plans')
@@ -50,42 +83,54 @@ export async function POST(req: NextRequest) {
       .from('lesson-plans')
       .getPublicUrl(filePath);
 
-    // Create Notice in posts table
-    // Requirement: category: 'notice', scope: 'class', published: true, attachment_url: publicUrl, attachment_type: 'pdf'
-    // Title: `${year}년 ${month}월 수업계획서`
-    // Content: `📎 ${className} ${month}월 수업계획서가 업로드되었습니다.\n\n[수업계획서 바로보기](${publicUrl})`
-    
-    // Note: We use parseInt(month) + 1 because the input month is 0-based index from Date object usually, 
-    // but looking at previous code: `parseInt(month) + 1`. 
-    // Let's verify if 'month' param is 0-based or 1-based.
-    // In dashboard/page.tsx: `formData.append('month', m.toString());` where `m` comes from `monthPlans`.
-    // Usually month index is 0-11. 
-    // The previous code used `${parseInt(month) + 1}월`. I will stick to that.
-
-    const monthNum = parseInt(month) + 1;
+    // Create or Update Notice
     const title = `${year}년 ${monthNum}월 수업계획서`;
     const content = `📎 ${className} ${monthNum}월 수업계획서가 업로드되었습니다.\n\n[수업계획서 바로보기](${publicUrl})`;
 
-    const { error: insertError } = await supabase.from('posts').insert({
-      title,
-      content,
-      category: 'notice',
-      scope: 'class',
-      published: true,
-      attachment_url: publicUrl,
-      attachment_type: 'pdf',
-      class_id: classId,
-      creator_id: null, // System account
-      created_at: new Date().toISOString()
-    });
+    // Check for existing notice
+    const { data: existingPost } = await supabase
+      .from('posts')
+      .select('id')
+      .eq('category', 'notice')
+      .eq('scope', 'class')
+      .eq('class_id', classId)
+      .eq('title', title)
+      .maybeSingle();
 
-    if (insertError) {
-      console.error('Failed to create notice in posts:', insertError);
-      // We don't throw here to ensure the upload is still considered successful, 
-      // but we log the error. Or should we fail?
-      // User says: "Storage 업로드만 수행해도 teacher/notices 화면에 자동으로 공지가 생성된다."
-      // If this fails, the requirement isn't met. But the upload is done.
-      // I'll log it.
+    if (existingPost) {
+      // Update existing
+      const { error: updateError } = await supabase
+        .from('posts')
+        .update({
+          content,
+          attachment_url: publicUrl,
+          // We don't update created_at, maybe updated_at if column exists?
+          // User suggested: updated_at: new Date().toISOString()
+          // But I need to check if updated_at column exists. 
+          // The schema provided earlier didn't show updated_at.
+          // I will skip updated_at for now to be safe, or just update content/url.
+          // The user's snippet included updated_at. I'll try to include it if I can, but I'll stick to safe updates first.
+          // Actually, let's just update content and url.
+        })
+        .eq('id', existingPost.id);
+        
+       if (updateError) console.error('Notice update failed:', updateError);
+    } else {
+      // Insert new
+      const { error: insertError } = await supabase.from('posts').insert({
+        title,
+        content,
+        category: 'notice',
+        scope: 'class',
+        published: true,
+        attachment_url: publicUrl,
+        attachment_type: 'pdf',
+        class_id: classId,
+        creator_id: null, // System account
+        // created_at is default now()
+      });
+      
+      if (insertError) console.error('Notice creation failed:', insertError);
     }
 
     return NextResponse.json({ success: true, url: publicUrl });

@@ -853,7 +853,7 @@ export default function Home() {
     e.target.value = '';
 
     const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
-    const m = mPlan ? mPlan.month : 0;
+    const m = mPlan ? mPlan.month + 1 : 1; // 0-based to 1-based
     const y = mPlan ? mPlan.year : year;
 
     setIsSharing(true);
@@ -862,7 +862,8 @@ export default function Home() {
         formData.append('file', file);
         formData.append('classId', classId);
         formData.append('year', y.toString());
-        formData.append('month', m.toString());
+        formData.append('month', m.toString()); // Sends 1-12
+
 
         const res = await fetch('/api/pdf/share', {
             method: 'POST',
