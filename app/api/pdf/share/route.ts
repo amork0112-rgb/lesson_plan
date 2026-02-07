@@ -51,9 +51,10 @@ export async function POST(req: NextRequest) {
       .getPublicUrl(filePath);
 
     // Create or Update Notice
-    // Title: 2026년 3월~8월 수업계획서
-    const title = `${year}년 3월~8월 수업계획서`;
-    const content = `📎 ${className} ${year}년 3월~8월 수업계획서가 업로드되었습니다.\n\n[수업계획서 바로보기](${publicUrl})`;
+    // Title: {year} {className} 수업계획서
+    const title = `${year} ${className} 수업계획서`;
+    const content = `📎 ${year} ${className} 수업계획서가 업로드되었습니다. 학부모님께서는 자녀의 학습 방향을
+확인하시는데 참고 부탁드립니다.)`;
 
     // Check for existing notice
     const { data: existingPost } = await supabase
