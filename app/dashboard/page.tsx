@@ -852,9 +852,8 @@ export default function Home() {
     // Reset input so same file can be selected again if needed
     e.target.value = '';
 
-    const mPlan = monthPlans.find(p => p.id === expandedMonthId) ?? monthPlans[0];
-    const m = mPlan ? mPlan.month + 1 : 1; // 0-based to 1-based
-    const y = mPlan ? mPlan.year : year;
+    // For 6-month integrated PDF, we don't need specific month logic anymore
+    const y = year; // Use selected year
 
     setIsSharing(true);
     try {
@@ -862,7 +861,8 @@ export default function Home() {
         formData.append('file', file);
         formData.append('classId', classId);
         formData.append('year', y.toString());
-        formData.append('month', m.toString()); // Sends 1-12
+        // month param removed
+
 
 
         const res = await fetch('/api/pdf/share', {
