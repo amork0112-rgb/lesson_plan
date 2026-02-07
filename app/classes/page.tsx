@@ -3,7 +3,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Search, ChevronDown, ChevronUp, Plus, Save, Trash2, Share } from 'lucide-react';
-import { Weekday } from '@/types';
+import { Weekday, Post } from '@/types';
+import { getSupabase } from '@/lib/supabase';
+import { NoticeViewer } from '@/components/NoticeViewer';
 
 // Types
 export type ClassView = {
@@ -57,6 +59,11 @@ export default function ClassesPage() {
   // State for the expanded class
   const [courses, setCourses] = useState<CourseView[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  
+  // State for notices
+  const [notices, setNotices] = useState<Post[]>([]);
+  const [loadingNotices, setLoadingNotices] = useState(false);
+
   const [allBooks, setAllBooks] = useState<BookLite[]>([]);
   const [bookSearchTerm, setBookSearchTerm] = useState('');
   const [addingBook, setAddingBook] = useState<{ book_id: string | null; total_sessions: number }>({
@@ -100,6 +107,7 @@ export default function ClassesPage() {
   useEffect(() => {
     if (!expandedClassId) {
       setCourses([]);
+      setNotices([]);
       return;
     }
     
@@ -119,7 +127,34 @@ export default function ClassesPage() {
         setLoadingCourses(false);
       }
     };
+
+    const fetchNotices = async () => {
+      setLoadingNotices(true);
+      try {
+        const supabase = getSupabase();
+        if (!supabase) {
+          console.error('Supabase client not initialized');
+          return;
+        }
+        const { data, error } = await supabase
+          .from('posts')
+          .select('*')
+          .eq('scope', 'class')
+          .eq('class_id', expandedClassId)
+          .eq('category', 'notice')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        setNotices(data as Post[]);
+      } catch (e) {
+        console.error('Failed to fetch notices', e);
+      } finally {
+        setLoadingNotices(false);
+      }
+    };
+
     fetchCourses();
+    fetchNotices();
   }, [expandedClassId]);
 
   const filteredClasses = classes.filter(c =>
@@ -409,6 +444,22 @@ export default function ClassesPage() {
                             </table>
                           </div>
                         )}
+                      </div>
+
+                      {/* Class Notices Section */}
+                      <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Class Notices</h3>
+                        </div>
+                        <div className="p-6 bg-slate-50/30">
+                          {loadingNotices ? (
+                             <div className="text-center text-slate-500 py-4">Loading notices...</div>
+                          ) : notices.length === 0 ? (
+                             <div className="text-center text-slate-400 py-4">No notices found for this class.</div>
+                          ) : (
+                             notices.map(notice => <NoticeViewer key={notice.id} notice={notice} />)
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

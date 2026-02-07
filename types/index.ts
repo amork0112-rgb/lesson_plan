@@ -161,3 +161,16 @@ export interface Course {
   certify?: string;
   [key: string]: any;
 }
+
+export interface Post {
+  id: string;
+  title: string;
+  content: string;
+  category: string; // 'notice', etc.
+  scope: string; // 'class', 'global', etc.
+  class_id?: string;
+  attachment_url?: string;
+  attachment_type?: string; // 'pdf', 'image', etc.
+  created_at?: string;
+  creator_id?: string;
+}
