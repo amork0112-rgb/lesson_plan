@@ -106,7 +106,9 @@ export default function ClassesPage() {
     const fetchCourses = async () => {
       setLoadingCourses(true);
       try {
-        const res = await fetch(`/api/classes/${expandedClassId}/assigned-courses`);
+        const res = await fetch(`/api/classes/${expandedClassId}/assigned-courses`, {
+          cache: 'no-store', // Always fetch fresh data
+        });
         if (res.ok) {
           const json = await res.json();
           if (Array.isArray(json)) {

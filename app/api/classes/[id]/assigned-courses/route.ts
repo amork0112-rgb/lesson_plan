@@ -32,8 +32,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       section,
       book_id,
       priority,
-      total_sessions,
-      books:class_book_allocations_book_id_fkey (id,name,category,level)
+      books:class_book_allocations_book_id_fkey (
+        id,
+        name,
+        category,
+        level,
+        book_lesson_items(count)
+      )
     `
     )
     .eq('class_id', id)
@@ -47,6 +52,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   
   console.log(`📦 Found ${data?.length || 0} allocations for class ${id}`);
+  
+  // Define a more accurate type for the joined data
+  type BookJoinData = {
+    id: string;
+    name: string;
+    category: string;
+    level: string;
+    book_lesson_items: { count: number }[];
+  };
+
+  type AllocationRow = {
+    id: string;
+    class_id: string;
+    section: string | null;
+    book_id: string;
+    priority?: number;
+    books?: BookJoinData | BookJoinData[];
+  };
+
   const rows: AllocationRow[] = Array.isArray(data) ? (data as unknown as AllocationRow[]) : [];
   const ids = rows.map(r => r.id);
   
@@ -70,7 +94,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const result = rows.map((r) => {
     const b = Array.isArray(r.books) ? r.books?.[0] : r.books;
     const sessionsByMonth = byAlloc[r.id] || {};
-    const total = r.total_sessions ?? 0;
+    
+    // Get total_sessions from book_lesson_items count
+    const total = b?.book_lesson_items?.[0]?.count ?? 0;
+    
     const used = Object.values(sessionsByMonth).reduce((sum, v) => sum + (v || 0), 0);
     const remaining = total - used;
     return {
