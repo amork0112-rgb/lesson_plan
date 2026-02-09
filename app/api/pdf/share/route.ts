@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
     // Create or Update Notice
     // Title: {year} {className} 수업계획서
     const title = `${year} ${className} 수업계획서`;
-    const content = `📎 ${year} ${className} 수업계획서가 업로드되었습니다. 학부모님께서는 자녀의 학습 방향을
-확인하시는데 참고 부탁드립니다.)`;
+    const content = `📎 ${year} ${className} 수업계획서가 업로드되었습니다. 월별 학습 주제와 사용 교재가 함께 안내되어 있으니,
+수업계획서를 참고하시어
+해당 시기에 필요한 교재를 준비해 주시기를 부탁드립니다.
+
+원활한 수업 진행을 위한 학부모님의 협조에 감사드립니다.)`;
 
     // Check for existing notice
     const { data: existingPost } = await supabase

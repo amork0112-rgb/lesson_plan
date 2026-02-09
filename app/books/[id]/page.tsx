@@ -409,7 +409,7 @@ export default function BookDetailPage() {
                     >
                         {units.map((unit, index) => (
                             <>
-                            {(index === 0 || units[index - 1].unit_no !== unit.unit_no) && (
+                            {unit.unit_no !== null && (index === 0 || units[index - 1].unit_no !== unit.unit_no) && (
                                 <div className="px-2 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-md">
                                     {isTrophy ? `Volume ${unit.unit_no}` : `Unit ${unit.unit_no}`}
                                 </div>

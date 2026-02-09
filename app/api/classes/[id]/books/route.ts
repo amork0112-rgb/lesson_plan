@@ -1,3 +1,4 @@
+//app/api/classes/[id]/books/route.ts
 import { NextResponse } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase-service';
 
@@ -17,22 +18,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       id,
       priority,
       sessions_per_week,
-      books:class_book_allocations_book_id_fkey (id,name,total_units,days_per_unit)
+      books:class_book_allocations_book_id_fkey (id,name,total_sessions)
     `)
     .eq('class_id', id)
     .order('priority', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  type BookJoinLite = { id: string; name: string; total_units?: number | null; days_per_unit?: number | null };
+  type BookJoinLite = { id: string; name: string; total_sessions?: number | null };
   type AllocationRow = { id: string; priority: number; sessions_per_week: number; books: BookJoinLite | BookJoinLite[] };
   const rows: AllocationRow[] = Array.isArray(data) ? (data as AllocationRow[]) : [];
   const result = rows.map((r: AllocationRow) => {
     const b = Array.isArray(r.books) ? r.books?.[0] : r.books;
-    const total_sessions =
-      (b?.total_units ?? 0) && (b?.days_per_unit ?? 0)
-        ? (b.total_units as number) * (b.days_per_unit as number)
-        : 0;
+    
     return {
       allocation_id: r.id as string,
       priority: (r.priority as number) ?? 1,
@@ -40,7 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       book: {
         id: b?.id as string,
         name: (b?.name as string) ?? '',
-        total_sessions,
+        total_sessions: b?.total_sessions ?? 0,
       },
     };
   });
