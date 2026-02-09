@@ -28,7 +28,7 @@ type BookLite = {
 type CourseView = {
   id: string; // allocation_id
   section: string;
-  book: { id: string; name: string; category?: string; level?: string };
+  book: { id: string; name: string; category?: string; level?: string; role?: 'lesson' | 'homework' };
   total_sessions: number;
   remaining_sessions: number;
   sessions_by_month: Record<number, number>;
@@ -392,17 +392,24 @@ export default function ClassesPage() {
                                 <tr>
                                   <td className="px-4 py-3 text-sm">TOTAL</td>
                                   <td className="px-2 py-3 text-center text-sm">
-                                    {courses.reduce((sum, c) => sum + (c.total_sessions || 0), 0)}
+                                    {courses.reduce((sum, c) => {
+                                        if (c.book.role === 'homework') return sum;
+                                        return sum + (c.total_sessions || 0);
+                                    }, 0)}
                                   </td>
                                   <td className="px-2 py-3 text-center text-sm">
                                     {courses.reduce((sum, c) => {
+                                      if (c.book.role === 'homework') return sum;
                                       const used = Object.values(c.sessions_by_month).reduce((s, v) => s + (v || 0), 0);
                                       return sum + ((c.total_sessions || 0) - used);
                                     }, 0)}
                                   </td>
                                   {Array.from({ length: 6 }, (_, i) => i + 1).map(m => (
                                     <td key={m} className="px-2 py-3 text-center text-sm">
-                                      {courses.reduce((sum, c) => sum + (c.sessions_by_month[m] || 0), 0)}
+                                      {courses.reduce((sum, c) => {
+                                        if (c.book.role === 'homework') return sum;
+                                        return sum + (c.sessions_by_month[m] || 0);
+                                      }, 0)}
                                     </td>
                                   ))}
                                   <td className="px-4 py-3"></td>

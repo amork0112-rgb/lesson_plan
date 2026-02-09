@@ -37,6 +37,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         name,
         category,
         level,
+        role,
         book_lesson_items(count)
       )
     `
@@ -59,6 +60,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     name: string;
     category: string;
     level: string;
+    role?: 'lesson' | 'homework';
     book_lesson_items: { count: number }[];
   };
 
@@ -107,7 +109,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         id: b?.id ?? r.book_id, 
         name: b?.name ?? '',
         category: b?.category ?? 'General',
-        level: b?.level ?? ''
+        level: b?.level ?? '',
+        role: b?.role ?? 'lesson'
       },
       total_sessions: total,
       remaining_sessions: remaining,

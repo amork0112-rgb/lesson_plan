@@ -94,6 +94,7 @@ export interface Book {
   days_per_unit?: number; // Added: How many days per unit
   review_units?: number;
   total_sessions?: number;
+  role?: 'lesson' | 'homework';
   units?: LessonUnit[]; // Pre-defined structure
 }
 
