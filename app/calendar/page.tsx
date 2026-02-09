@@ -21,7 +21,7 @@ interface CalendarEvent {
 
 export default function CalendarPage() {
   const { holidays, deleteHoliday, classes, specialDates, updateSpecialDate } = useData();
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); // Start at Jan 2026
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [isAdding, setIsAdding] = useState(false);
   const [newHoliday, setNewHoliday] = useState<Partial<Holiday> & { dbType?: string }>({ 
       name: '', 

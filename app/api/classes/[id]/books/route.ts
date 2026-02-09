@@ -18,14 +18,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       id,
       priority,
       sessions_per_week,
-      books:class_book_allocations_book_id_fkey (id,name,total_sessions)
+      books:class_book_allocations_book_id_fkey (
+        id,
+        name,
+        book_lesson_items(count)
+      )
     `)
     .eq('class_id', id)
     .order('priority', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  type BookJoinLite = { id: string; name: string; total_sessions?: number | null };
+  type BookJoinLite = { id: string; name: string; book_lesson_items: { count: number }[] };
   type AllocationRow = { id: string; priority: number; sessions_per_week: number; books: BookJoinLite | BookJoinLite[] };
   const rows: AllocationRow[] = Array.isArray(data) ? (data as AllocationRow[]) : [];
   const result = rows.map((r: AllocationRow) => {
@@ -38,7 +42,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       book: {
         id: b?.id as string,
         name: (b?.name as string) ?? '',
-        total_sessions: b?.total_sessions ?? 0,
+        total_sessions: b?.book_lesson_items?.[0]?.count ?? 0,
       },
     };
   });
