@@ -1470,7 +1470,12 @@ export default function Home() {
                         // Calculate Assigned Sessions (Books) - Exclude SCP/Homework books
                         const assignedBookSessions = plan.allocations.reduce((sum, a) => {
                             const course = assignedCourses.find(c => c.book.id === a.book_id);
-                            const isHomework = course?.book?.role === 'homework' || course?.book?.name?.startsWith('SCP');
+                            const book = books.find(b => b.id === a.book_id);
+                            
+                            const role = course?.book?.role || book?.role;
+                            const name = course?.book?.name || book?.name;
+                            
+                            const isHomework = role === 'homework' || name?.startsWith('SCP');
                             if (isHomework) return sum;
                             return sum + (a.monthly_sessions || 0);
                         }, 0);
@@ -1970,7 +1975,12 @@ export default function Home() {
                                     // Calculate Assigned from Allocations (Books) - Exclude SCP/Homework books
                                     const assignedBooks = plan.allocations.reduce((sum, a) => {
                                         const course = assignedCourses.find(c => c.book.id === a.book_id);
-                                        const isHomework = course?.book?.role === 'homework' || course?.book?.name?.startsWith('SCP');
+                                        const book = books.find(b => b.id === a.book_id);
+                                        
+                                        const role = course?.book?.role || book?.role;
+                                        const name = course?.book?.name || book?.name;
+                                        
+                                        const isHomework = role === 'homework' || name?.startsWith('SCP');
                                         if (isHomework) return sum;
                                         return sum + (a.monthly_sessions || 0);
                                     }, 0);
