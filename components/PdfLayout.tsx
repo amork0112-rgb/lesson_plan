@@ -136,6 +136,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                  <div className="">
                   {(() => {
                     const cols = selectedDays.length === 3 ? 3 : 2;
+                    const slotsPerDay = selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
                     const gridColsClass = cols === 3 ? 'grid-cols-3' : 'grid-cols-2';
                     
                     const rows: string[][] = [];
@@ -151,6 +152,10 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                             const pb = typeof b.period === 'number' ? b.period : 0;
                             return pa - pb;
                           });
+                          
+                          const normalList = list.filter(l => (l.period || 0) <= slotsPerDay);
+                          const scpList = list.filter(l => (l.period || 0) > slotsPerDay);
+
                           const dd = parseLocalDate(dStr);
                           const dayName = dd.toLocaleDateString('en-US',{weekday:'short'}); 
                           const dateText = `${dd.getMonth()+1}/${dd.getDate()} ${dayName}`;
@@ -165,7 +170,7 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                               
                               {/* Content */}
                               <div className="space-y-3 flex-1 flex flex-col justify-start">
-                                {list.map(item => {
+                                {normalList.map(item => {
                                   if (item.book_id === 'no_class' || item.book_id === 'school_event') {
                                       const isNoClass = item.book_id === 'no_class';
                                       return (
@@ -193,6 +198,29 @@ export default function PdfLayout({ lessons, className, selectedDays, timeRange,
                                     </div>
                                   );
                                 })}
+
+                                {scpList.length > 0 && (
+                                  <div className="pt-2 border-t border-dashed border-gray-100 mt-2">
+                                    <div className="flex items-center gap-1 mb-1 opacity-60">
+                                      <div className="h-[0.5px] flex-1 bg-orange-200"></div>
+                                      <span className="text-[8px] font-bold text-orange-400 uppercase">SCP / Homework</span>
+                                      <div className="h-[0.5px] flex-1 bg-orange-200"></div>
+                                    </div>
+                                    {scpList.map(item => {
+                                      const displayName = item.books?.name || item.book_name || '';
+                                      return (
+                                        <div key={item.id} className="w-full leading-snug">
+                                          <div className="font-bold text-sm text-orange-600">
+                                            {displayName}
+                                          </div>
+                                          <div className="text-xs font-medium pl-1" style={{ color: '#ea580c', borderLeft: '2px solid #ffedd5' }}>
+                                            {item.content}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );

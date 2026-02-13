@@ -525,7 +525,12 @@ export async function POST(
 
         // Filter active allocations
         const activeItems = runningAllocations
-            .filter(a => a.remaining > 0 || (explicitSessions[a.id] || 0) > 0)
+            .filter(a => {
+                const isHomework = a.book?.role === 'homework' || a.book?.name?.startsWith('SCP');
+                // Homework books are ALWAYS active for generation if they are assigned
+                if (isHomework) return true;
+                return a.remaining > 0 || (explicitSessions[a.id] || 0) > 0;
+            })
             .sort((a, b) => a.priority - b.priority);
 
         // Distribute logic
@@ -577,11 +582,12 @@ export async function POST(
         }
 
         // 3. Handle Homework/SCP books
-        // They get 1 session per valid date, but limited by their remaining sessions
+        // They get 1 session per valid date (SCP slot), and they don't consume the normal sessionsToFill quota.
         homeworkItems.forEach(a => {
-            const actual = Math.min(capacity, a.remaining);
-            a.usedThisMonth = actual;
-            a.remaining -= actual;
+            // For SCP books, we always assign 1 session per class date in the month
+            a.usedThisMonth = capacity;
+            // We update remaining just for consistency, even if it goes negative for SCP
+            a.remaining -= capacity; 
         });
 
         // Store distribution for this month

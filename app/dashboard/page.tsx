@@ -1933,6 +1933,8 @@ export default function Home() {
                     const y = plan.year;
                     const m = plan.month;
                     const key = plan.id;
+                    const dates = planDates[plan.id] || [];
+                    const slotsPerDay = selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
                     
                     // Group by Date for grid
                     const byDate: Record<string, LessonPlan[]> = {};
@@ -1989,10 +1991,6 @@ export default function Home() {
                                     
                                     const assigned = assignedBooks + eventSessions;
                                     
-                                    // Calculate Capacity from Valid Calendar Dates
-                                    // We use the computed planDates which contains all valid dates (excluding holidays)
-                                    const dates = planDates[plan.id] || [];
-                                    const slotsPerDay = selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
                                     const capacity = dates.length * slotsPerDay;
                                     
                                     const isMatch = assigned === capacity;
@@ -2033,6 +2031,9 @@ export default function Home() {
                                                 return <div key={`empty-${ri}-${colIdx}`} className="invisible md:visible border-2 border-dashed border-gray-100 rounded-xl min-h-[150px]" />;
                                             }
                                             const dayLessons = (byDate[dateStr] || []).sort((a, b) => (a.period || 0) - (b.period || 0));
+                                            const normalLessons = dayLessons.filter(l => (l.period || 0) <= slotsPerDay);
+                                            const scpLessons = dayLessons.filter(l => (l.period || 0) > slotsPerDay);
+                                            
                                             const dateObj = parseLocalDate(dateStr);
                                             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
                                             
@@ -2049,12 +2050,17 @@ export default function Home() {
                                                             <span className="text-xl font-bold text-gray-900">{dateObj.getMonth() + 1}/{dateObj.getDate()}</span>
                                                             <span className="text-sm font-medium text-gray-500 uppercase">{dayName}</span>
                                                         </div>
-                                                        <span className="text-xs text-gray-400 font-medium">{dayLessons.length} Tasks</span>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="text-xs text-gray-400 font-medium">{normalLessons.length} Lessons</span>
+                                                            {scpLessons.length > 0 && (
+                                                                <span className="text-[10px] text-orange-500 font-bold tracking-tight">+ {scpLessons.length} SCP</span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     
                                                     {/* Lessons List */}
                                                     <div className="p-3 space-y-2 flex-1">
-                                                        {dayLessons.map(lesson => {
+                                                        {normalLessons.map(lesson => {
                                                             const isNoClass = lesson.book_id === 'no_class';
                                                             const isSchoolEvent = lesson.book_id === 'school_event';
                                                             
@@ -2099,6 +2105,39 @@ export default function Home() {
                                                                 </div>
                                                             );
                                                         })}
+
+                                                        {/* SCP Slot Separator */}
+                                                        {scpLessons.length > 0 && (
+                                                            <div className="pt-2 border-t border-dashed border-gray-200 mt-2">
+                                                                <div className="flex items-center gap-2 mb-2 px-1">
+                                                                    <div className="h-[1px] flex-1 bg-orange-100"></div>
+                                                                    <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">SCP / Homework</span>
+                                                                    <div className="h-[1px] flex-1 bg-orange-100"></div>
+                                                                </div>
+                                                                {scpLessons.map(lesson => (
+                                                                    <div
+                                                                        key={lesson.id}
+                                                                        draggable
+                                                                        onDragStart={(e) => handleDragStart(e, lesson.id)}
+                                                                        onDrop={(e) => handleDrop(e, dateStr, lesson.id)}
+                                                                        className="group relative p-3 rounded-lg border border-orange-100 bg-orange-50/30 hover:shadow-md hover:border-orange-300 cursor-move active:scale-[0.98] shadow-sm transition-all"
+                                                                    >
+                                                                        <div className="flex justify-between items-start gap-2">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="font-semibold text-sm truncate text-orange-900">
+                                                                                    {lesson.books?.name || lesson.book_name}
+                                                                                </p>
+                                                                                <p className="text-xs mt-0.5 text-orange-700">
+                                                                                    {lesson.content}
+                                                                                </p>
+                                                                            </div>
+                                                                            <GripVertical className="h-4 w-4 text-orange-200 group-hover:text-orange-400" />
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
                                                         {dayLessons.length === 0 && (
                                                             <div className="h-full flex items-center justify-center text-xs text-gray-300 italic py-4">
                                                                 Drop items here
