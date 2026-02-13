@@ -351,6 +351,11 @@ export default function ClassesPage() {
                                         <div className="flex items-center gap-2 text-sm text-slate-900 whitespace-nowrap">
                                             <span className="font-medium">{course.book.name}</span>
                                             {course.book.level && <span className="text-gray-500 text-xs">({course.book.level})</span>}
+                                            {(course.book.role === 'homework' || course.book.name?.startsWith('SCP')) && (
+                                                <span className="px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-bold text-[10px]">
+                                                    SCP
+                                                </span>
+                                            )}
                                             {course.book.category && (
                                                 <span className="px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium text-[10px]">
                                                     {course.book.category}
@@ -393,13 +398,13 @@ export default function ClassesPage() {
                                   <td className="px-4 py-3 text-sm">TOTAL</td>
                                   <td className="px-2 py-3 text-center text-sm">
                                     {courses.reduce((sum, c) => {
-                                        if (c.book.role === 'homework') return sum;
+                                        if (c.book.role === 'homework' || c.book.name?.startsWith('SCP')) return sum;
                                         return sum + (c.total_sessions || 0);
                                     }, 0)}
                                   </td>
                                   <td className="px-2 py-3 text-center text-sm">
                                     {courses.reduce((sum, c) => {
-                                      if (c.book.role === 'homework') return sum;
+                                      if (c.book.role === 'homework' || c.book.name?.startsWith('SCP')) return sum;
                                       const used = Object.values(c.sessions_by_month).reduce((s, v) => s + (v || 0), 0);
                                       return sum + ((c.total_sessions || 0) - used);
                                     }, 0)}
@@ -407,7 +412,7 @@ export default function ClassesPage() {
                                   {Array.from({ length: 6 }, (_, i) => i + 1).map(m => (
                                     <td key={m} className="px-2 py-3 text-center text-sm">
                                       {courses.reduce((sum, c) => {
-                                        if (c.book.role === 'homework') return sum;
+                                        if (c.book.role === 'homework' || c.book.name?.startsWith('SCP')) return sum;
                                         return sum + (c.sessions_by_month[m] || 0);
                                       }, 0)}
                                     </td>

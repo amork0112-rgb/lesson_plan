@@ -27,7 +27,7 @@ interface MonthPlan {
 interface CourseView {
   id: string;
   section: string;
-  book: { id: string; name: string; category?: string; level?: string };
+  book: { id: string; name: string; category?: string; level?: string; role?: 'lesson' | 'homework' };
   total_sessions: number;
   remaining_sessions: number;
   sessions_by_month: Record<number, number>;
@@ -1467,8 +1467,13 @@ export default function Home() {
                         {MONTH_NAMES[plan.month]} {plan.year}
                       </h3>
                       {(() => {
-                        // Calculate Assigned Sessions (Books)
-                        const assignedBookSessions = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                        // Calculate Assigned Sessions (Books) - Exclude SCP/Homework books
+                        const assignedBookSessions = plan.allocations.reduce((sum, a) => {
+                            const course = assignedCourses.find(c => c.book.id === a.book_id);
+                            const isHomework = course?.book?.role === 'homework' || course?.book?.name?.startsWith('SCP');
+                            if (isHomework) return sum;
+                            return sum + (a.monthly_sessions || 0);
+                        }, 0);
                         
                         // Calculate Event Sessions
                         const eventSessions = Object.entries(specialDates).reduce((sum, [dStr, sd]) => {
@@ -1748,17 +1753,20 @@ export default function Home() {
                          const usedCount = assignedCourse?.sessions_by_month?.[academicMonthIndex] || 0;
 
                          return (
-                          <tr key={alloc.id} className="group hover:bg-gray-50">
-                            <td className="px-6 py-3">
-                              <div className="flex flex-col">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {book?.name || 'Unknown Book'}
-                                </div>
-                                <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
-                                  {book?.level && <span>{book.level}</span>}
-                                </div>
-                              </div>
-                            </td>
+                           <tr key={alloc.id} className="group hover:bg-gray-50">
+                             <td className="px-6 py-3">
+                               <div className="flex flex-col">
+                                 <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                    {book?.name || 'Unknown Book'}
+                                    {(book?.role === 'homework' || book?.name?.startsWith('SCP')) && (
+                                      <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">SCP</span>
+                                    )}
+                                  </div>
+                                 <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                                   {book?.level && <span>{book.level}</span>}
+                                 </div>
+                               </div>
+                             </td>
                             <td className="px-4 py-3 text-center text-sm text-gray-600">
                                 {assignedCourse?.section || book?.category || '-'}
                             </td>
@@ -1957,8 +1965,13 @@ export default function Home() {
                                     const plan = monthPlans.find(p => p.year === y && p.month === m);
                                     if (!plan) return null;
                                     
-                                    // Calculate Assigned from Allocations (Books)
-                                    const assignedBooks = plan.allocations.reduce((sum, a) => sum + (a.monthly_sessions || 0), 0);
+                                    // Calculate Assigned from Allocations (Books) - Exclude SCP/Homework books
+                                    const assignedBooks = plan.allocations.reduce((sum, a) => {
+                                        const course = assignedCourses.find(c => c.book.id === a.book_id);
+                                        const isHomework = course?.book?.role === 'homework' || course?.book?.name?.startsWith('SCP');
+                                        if (isHomework) return sum;
+                                        return sum + (a.monthly_sessions || 0);
+                                    }, 0);
                                     
                                     // Calculate Event Sessions
                                     const eventSessions = Object.entries(specialDates).reduce((sum, [dStr, sd]) => {
@@ -1979,7 +1992,8 @@ export default function Home() {
                                     // Calculate Capacity from Valid Calendar Dates
                                     // We use the computed planDates which contains all valid dates (excluding holidays)
                                     const dates = planDates[plan.id] || [];
-                                    const capacity = dates.length * 2; // Assuming 2 periods per day
+                                    const slotsPerDay = selectedDays.length === 2 ? 3 : (selectedDays.length === 1 ? 4 : 2);
+                                    const capacity = dates.length * slotsPerDay;
                                     
                                     const isMatch = assigned === capacity;
                                     const isOver = assigned > capacity;

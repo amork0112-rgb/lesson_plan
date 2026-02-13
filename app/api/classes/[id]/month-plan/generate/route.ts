@@ -531,6 +531,12 @@ export async function POST(
         // Distribute logic
         const monthDistribution = activeItems.map(a => ({ ...a, usedThisMonth: 0 }));
         
+        // 🎯 SCP/Homework Logic:
+        // SCP books do not count towards the normal sessionsToFill.
+        // They are automatically assigned 1 session for each valid date.
+        const normalItems = monthDistribution.filter(a => a.book?.role !== 'homework' && !a.book?.name?.startsWith('SCP'));
+        const homeworkItems = monthDistribution.filter(a => a.book?.role === 'homework' || a.book?.name?.startsWith('SCP'));
+
         const hasExplicit = Object.keys(explicitSessions).length > 0;
         
         if (hasExplicit) {
@@ -539,11 +545,11 @@ export async function POST(
                 a.usedThisMonth = assigned;
                 a.remaining -= assigned; 
             });
-        } else if (monthDistribution.length > 0) {
-            const totalWeight = monthDistribution.reduce((sum, a) => sum + Math.max(1, a.sessions_per_week || 1), 0);
+        } else if (normalItems.length > 0) {
+            const totalWeight = normalItems.reduce((sum, a) => sum + Math.max(1, a.sessions_per_week || 1), 0);
             
-            // 1. Proportional Distribution
-            monthDistribution.forEach(a => {
+            // 1. Proportional Distribution for normal books
+            normalItems.forEach(a => {
                 const share = Math.max(1, a.sessions_per_week || 1) / totalWeight;
                 const target = Math.floor(sessionsToFill * share);
                 const actual = Math.min(target, a.remaining);
@@ -551,13 +557,13 @@ export async function POST(
                 a.remaining -= actual; 
             });
 
-            // 2. Distribute Leftover
-            let currentUsed = monthDistribution.reduce((sum, a) => sum + a.usedThisMonth, 0);
+            // 2. Distribute Leftover for normal books
+            let currentUsed = normalItems.reduce((sum, a) => sum + a.usedThisMonth, 0);
             let leftover = sessionsToFill - currentUsed;
 
             while (leftover > 0) {
                 let progressed = false;
-                for (const a of monthDistribution) {
+                for (const a of normalItems) {
                     if (leftover <= 0) break;
                     if (a.remaining > 0) {
                         a.usedThisMonth += 1;
@@ -569,6 +575,14 @@ export async function POST(
                 if (!progressed) break;
             }
         }
+
+        // 3. Handle Homework/SCP books
+        // They get 1 session per valid date, but limited by their remaining sessions
+        homeworkItems.forEach(a => {
+            const actual = Math.min(capacity, a.remaining);
+            a.usedThisMonth = actual;
+            a.remaining -= actual;
+        });
 
         // Store distribution for this month
         monthDistribution.forEach(d => {
